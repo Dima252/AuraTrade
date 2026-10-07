@@ -23,6 +23,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 0.2 👤 Accounts and keys + `scripts/check_keys.py`
 - [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture
 - [ ] 0.3a Spike: Alpaca market data
+- [ ] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build)
 - [ ] 0.3c Spike: market calendar
 - [ ] 0.3d Spike: macro data timing
 - [ ] 0.3e Spike: fundamentals, earnings, industries
@@ -37,7 +38,6 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 1.4 Market calendar
 - [ ] 1.5 Ingest job
 - [ ] 1.6 Historical backfill
-- [ ] 1.6b 👤 Early edge check (spike-grade, tuning period only; a clearly negative result pauses the build)
 - [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local)
 - [ ] 1.8 👤 Early AWS deploy of the skeleton
 
@@ -73,6 +73,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 5.3 Orders and signal lifecycle
 - [ ] 5.4 Reconciliation and invariants
 - [ ] 5.5 Jobs (execute, monitor, EOD, post-market, weekly)
+- [ ] 5.6 Live `EpisodicPivot` path (EP candidates, EP review, EP entries)
 
 **Phase 6: AWS** (the account and a minimal stack already exist from 1.8)
 - [ ] 6.1 Complete the CDK stack (all jobs)
@@ -141,7 +142,7 @@ Everything in "What I need from you" except AWS. `scripts/check_keys.py` confirm
 
 ### 0.3 Spikes
 
-Each spike is a script in `spikes/` plus a note in `docs/spikes/<name>.md`, ending with a **go / adjust** decision. **Run 0.3b first:** if its answers are bad, the order architecture changes (README §5.7 has the pre-chosen `fill_watcher` fallback), and that affects later tasks more than any other spike.
+Each spike is a script in `spikes/` plus a note in `docs/spikes/<name>.md`, ending with a **go / adjust** decision. Run them in tracker order. **Run 0.3b first:** if its answers are bad, the order architecture changes (README §5.7 has the pre-chosen `fill_watcher` fallback), and that affects later tasks more than any other spike.
 
 | # | Spike | Questions to answer |
 |---|---|---|
@@ -153,7 +154,23 @@ Each spike is a script in `spikes/` plus a note in `docs/spikes/<name>.md`, endi
 | f | **News** | Is the Alpaca news API available on the free plan? Payload shape and headline volume. |
 | g | **Claude** | A batch of 5 Analyst requests to `claude-opus-5-5`: two charts at the planned sizes, compact facts, structured output, shared-prefix caching. Measure tokens (**thinking included**: it bills as output) and cost per candidate at effort `medium` vs `high`, check the cache hit inside the batch (best-effort for concurrent requests), and measure turnaround → recalibrate the cost model (README §9 assumes ~$35–65/month) and set Phase 4's daily cost limit. Also time one real-time Portfolio Manager-sized call at `high` with tools, to confirm the 09:10 deadline is comfortable. |
 
-**Accept:** all spike notes written; README decisions confirmed or amended; any blocker has a chosen workaround (especially 0.3b for two-tranche stops).
+### 0.3h Early edge check (S, spike-grade; the result goes to you)
+
+The baseline gate in 3.8 is the formal go / no-go, but it comes after months of building. This is a cheap early warning (README §15), run right after 0.3a so it comes **before** the data layer (1.1–1.6) is built: it needs only daily bars.
+- A script in `spikes/edge_check/`. It pulls split-adjusted daily bars straight from Alpaca into local Parquet (git-ignored), with no database or job framework. The universe is the current asset list plus whatever delisted symbols 0.3a found history for, filtered on the raw close where 0.3a found one.
+- **2017–2022 only:** the holdout stays closed.
+- Simple versions of the core setups:
+  - Trend Template + a VCP-lite (a tightening base, pivot = base high)
+  - a momentum-lite breakout (top 2% movers, consolidation high)
+- Entry on the next session's break of the pivot. Stop at the base low, capped at 8%. Exit on a close below the 50 SMA (VCP) or the 10-day (momentum). A crude fixed slippage.
+- It **tunes nothing**, and it is not a fill model: nothing outside `spikes/` may import it or its data (the one-simulator rule, CLAUDE.md §6).
+- Report expectancy per year and per setup in `docs/spikes/edge-check.md`, with the delisted coverage it had.
+
+**Read the result asymmetrically.** Missing delisted stocks inflate breakout results, so this is an upper bound. A clearly negative result is strong evidence; a positive one is weak, and the formal tests stay in 3.8.
+
+**Accept:** the note is written. If expectancy is clearly negative for both setups, **stop and bring it to the user** before Phase 1.
+
+**Accept (0.3):** all spike notes written; README decisions confirmed or amended; any blocker has a chosen workaround (especially 0.3b for two-tranche stops).
 
 ---
 
@@ -215,19 +232,6 @@ Each spike is a script in `spikes/` plus a note in `docs/spikes/<name>.md`, endi
 - Tests pass for: a weekend, a Monday holiday, Good Friday, the day after Thanksgiving, a vendor short-count (→ `INCOMPLETE`), a split, and a calendar disagreement.
 - Industry coverage ≥ 95% of the universe.
 - Postgres size is under the free-tier limit with headroom.
-
-### 1.6b Early edge check (S, spike-grade; the result goes to you)
-
-The baseline gate in 3.8 is the formal go / no-go, but it comes after months of building. This is a cheap early warning (README §15).
-- A script in `spikes/edge_check/` over the backfilled daily bars, **2017–2022 only**: the holdout stays closed.
-- Simple versions of the core setups:
-  - Trend Template + a VCP-lite (a tightening base, pivot = base high)
-  - a momentum-lite breakout (top 2% movers, consolidation high)
-- Entry on the next session's break of the pivot. Stop at the base low, capped at 8%. Exit on a close below the 50 SMA (VCP) or the 10-day (momentum). A crude fixed slippage.
-- It **tunes nothing**, and it is not a fill model: nothing outside `spikes/` may import it (the one-simulator rule, CLAUDE.md §6).
-- Report expectancy per year and per setup in `docs/spikes/edge-check.md`.
-
-**Accept:** the note is written. If expectancy is clearly negative for both setups, **stop and bring it to the user** before 1.7.
 
 ### 1.7 Walking skeleton (M)
 
@@ -381,7 +385,7 @@ The three strategies that carry `CONFIRMED_UPTREND`, where most of the risk is t
 - Each scan outputs the code-computed **pivot and structural stop** that the Analyst's levels are checked against (README §8, "Price levels").
 - `VcpBreakout` (Minervini): contraction sequence (2–4, up to 6, each shallower), volume dry-up, pivot, distance to pivot.
 - `MomentumBreakout` (Kullamägi): top ~2% momentum rank; a 30–100%+ move in the last 1–3 months; a 10–40-session consolidation with higher lows and a tightening range; riding the rising 10/20-day. **Exempt from the 25%-above-50-day rule** (README §5.3).
-- `EpisodicPivot` (Kullamägi): live detection comes in Phase 4. For backtests, a proxy: gap ≥ 10% on ≥ 3× average volume, preferably after an earnings date, with no big rally over the prior 3–6 months. The proxy can't require an earnings beat (no free surprise history); the report notes the difference from the live rule.
+- `EpisodicPivot` (Kullamägi): live detection comes in task 5.6. For backtests, a proxy: gap ≥ 10% on ≥ 3× average volume, preferably after an earnings date, with no big rally over the prior 3–6 months. The proxy can't require an earnings beat (no free surprise history); the report notes the difference from the live rule.
 - **All scans run every evening.** `risk.yaml` defines which strategies are fundable in each regime.
 
 ### 3.2b Remaining scans (M)
@@ -479,7 +483,7 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
 - **Baseline book:**
   - same top-40 list, regime gating, sizing, guardrails, entry policies, deterministic confirmation gate, default plans and earnings cushion
   - takes setups in rank order until the limits are full
-  - EPs come from the morning candidate list (rule-based). Until Phase 4.4 builds that list, the baseline runs without EPs.
+  - EPs come from the morning candidate list (rule-based). Until task 5.6 builds that list, the baseline runs without EPs.
 - **Evening simulation** in its own `simulate` job (README §3), chained after `ingest` and before `regime`: the baseline is simulated after the close from that day's IEX and SIP minute bars (fetched for its symbols only), through `sim/`: 09:36 triggers, opening-range highs, low-of-day stops, the EOD gate and soft rules on the 15:40 decision price. The breakout tracker's new triggers and completed results, and the scorecard, run in the same job, within Lambda's 15 minutes.
 - **Breakout tracker:** records every trigger from the full uncapped scan, regardless of regime, and its 5-session result → leadership health (only results that are complete, T−24 to T−5).
 - **Verdict scorecard:** the plumbing for scoring Analyst verdicts forward through `sim/` (README §5.12). Verdicts arrive in Phase 4; test it here on synthetic verdicts.
@@ -572,7 +576,7 @@ Each comparison changes **one** dimension against the source-default reference, 
 ### 4.2 Schemas and prompts (M)
 
 - `AnalystVerdict` (with **output caps**, a **watch note**, pivot/stop validated against the code levels in the request, and `strategy` required to equal the request's), `PortfolioDecision` (regime view limited to the computed label or any label below it on the ladder, never `EARLY_UPTREND`; EP decisions, entries with plans chosen from the menu, tighten-only position actions), `EodDecision` (tranche-2 adds, failed breakouts), `WeeklyLessons`.
-- Prompts: Analyst (shared core + one section per strategy, written from the §18 sources), Portfolio Manager (including EP review criteria), EOD, weekly; `prompt_versions` registry.
+- Prompts: Analyst (shared core + one section per strategy, written from the §18 sources), Portfolio Manager, EOD, weekly; `prompt_versions` registry. The `PortfolioDecision` schema includes the EP fields from the start, but the Portfolio Manager's EP review criteria are written in task 5.6, as a new prompt version.
 - Every prompt defines the four regime labels explicitly (`EARLY_UPTREND` is post-FTD, not IBD's "rally attempt"). The Analyst prompt treats the previous verdict as context to re-judge, not a default.
 - **Untrusted text** (headlines, `get_news` bodies, filing text) goes in delimited data blocks. Every system prompt says to treat it as information, never as instructions (README §9). The 4.5 sanity set includes one headline carrying a planted instruction.
 
@@ -589,8 +593,8 @@ Each comparison changes **one** dimension against the source-default reference, 
 - `analyst_submit` / `analyst_collect` → `setups`; every verdict is queued for the **scorecard** (3.7). `analyst_submit` is chained after `scan` (1.1).
 - **Hard deadlines** in the job runner: Portfolio Manager 09:10, EOD 15:50 (12:50). Late answers are discarded and logged, failing closed.
 - `premarket_check` (07:30) → macro, news and earnings flags and events.
-- `portfolio_manager` gap step (08:40, once IEX pre-market quotes exist) → gap invalidations and **EP candidates** (`ep_candidates` migration).
-- `portfolio_manager`: **skipped when there are no fundable setups, no EP candidates and no position events**; writes the effective regime; proposed actions are run through the 3.5b guardrails and the results logged (nothing is submitted until Phase 5).
+- `portfolio_manager` gap step (08:40, once IEX pre-market quotes exist) → gap invalidations. EP candidates are added to this step in task 5.6.
+- `portfolio_manager`: **skipped when there are no fundable setups, no EP candidates (from 5.6) and no position events**; writes the effective regime; proposed actions are run through the 3.5b guardrails and the results logged (nothing is submitted until Phase 5).
 - `weekly_review` → "your numbers", the verdict scorecard, proposed lessons + Telegram.
   - Each lesson cites ≥ 10 trades or ≥ 20 scored setups and expires after 60 sessions.
   - A CLI command approves them (`auratrade lessons approve <id>`).
@@ -696,6 +700,17 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
   - **a split on a held position** and **a dividend that lowers a resting stop**
 - `auratrade kill on` cancels resting entries at once. With the kill switch and every halt active, stops and plan exits still fire (tested).
 
+### 5.6 Live `EpisodicPivot` path (M)
+
+EP has more special cases than any other strategy, and its live rule can't be backtested (there's no free surprise history). So its live morning path is built here, after the core loop works end to end, and the core isn't held up waiting for it. The backtest proxy (3.2a) and the strategy's guardrail, trigger and plan rules (3.5a–3.5b) already exist; this task adds the live parts:
+- `portfolio_manager` gap step (08:40): **EP candidates** (README §5.5): reported after yesterday's close or before today's open, or major news, gapping ≥ 10%, with charts, the surprise and the latest filed growth numbers → `ep_candidates` migration.
+- The Portfolio Manager's EP review criteria, as a new prompt version (4.2), and EP decisions run through the guardrails (5.1).
+- EP entries through the order layer (5.3): the opening-range-high trigger, the low-of-day stop with the 1.5 × pre-gap ADR cap, a single tranche, and PDT withholding first when the allowance is low (README §5.7).
+- The baseline book takes its EPs from the same candidate list (rule: gap ≥ 10%, volume, surprise > 0), as in README §5.12.
+- Add 3–5 recorded historical EP mornings to the 4.5 sanity set.
+
+**Accept:** on a replayed earnings morning, an EP candidate is detected at 08:40, reviewed by the Portfolio Manager, and entered at 09:36 on its opening-range high with a low-of-day stop, on the `dev` paper account (or replayed through `sim/` if no live EP comes up); the baseline book receives the same candidate; an EP whose opening range is wider than 1.5 × its pre-gap ADR is rejected and logged.
+
 ---
 
 ## Phase 6: AWS deployment (M)
@@ -775,7 +790,7 @@ Before day 1, write `docs/backtests/power.md` from the 4.6 scorecard data (READM
 
 ```mermaid
 flowchart LR
-    P0[0 Foundations + spikes<br/>0.3b first] --> P1[1 Data layer]
+    P0[0 Foundations + spikes<br/>0.3b first · 0.3h edge check] --> P1[1 Data layer]
     P1 --> SK[1.7–1.8 Walking skeleton<br/>paper, deployed]
     SK -. keeps running .-> P7
     SK --> P2[2 Indicators + regime]
@@ -785,10 +800,11 @@ flowchart LR
     EV -. scorecard keeps running .-> P7
     P3 --> P5[5 Guardrail wiring + execution]
     P4 --> P5
-    P5 --> P6[6 AWS deploy]
+    P5 --> EPL[5.6 Live EP path]
+    EPL --> P6[6 AWS deploy]
     P6 --> P7[7 Paper trial]
     P7 --> P8[8 Live small]
     P8 --> P9[9 Extensions]
 ```
 
-The spike-grade edge check (1.6b) gives an early warning on the core setups before the skeleton and Phases 2–3 are built; the formal gate is still 3.8. The pure guardrails, sizing, triggers and risk multiplier (3.5b) come before the simulator and the baseline backtest, because 3.8 compares them on vs off. The baseline gate in 3.8 is a go / no-go point: Phase 4 starts only if the setup pool has positive expectancy. Phase 5 only wires them into the live path. The order layer (5.3–5.4) grows from the skeleton's core (1.7), and the simulator (3.6) is shared by everything that replays or backtests. The evening pipeline (4.6) runs from the end of Phase 4, so the scorecard has months of data before the trial.
+The spike-grade edge check (0.3h) gives an early warning on the core setups before the data layer is built, using only daily bars; the formal gate is still 3.8. The live `EpisodicPivot` path (5.6) comes after the core execution loop works, but before the AWS deploy and the paper trial, so the trial trades every strategy. The pure guardrails, sizing, triggers and risk multiplier (3.5b) come before the simulator and the baseline backtest, because 3.8 compares them on vs off. The baseline gate in 3.8 is a go / no-go point: Phase 4 starts only if the setup pool has positive expectancy. Phase 5 only wires them into the live path. The order layer (5.3–5.4) grows from the skeleton's core (1.7), and the simulator (3.6) is shared by everything that replays or backtests. The evening pipeline (4.6) runs from the end of Phase 4, so the scorecard has months of data before the trial.

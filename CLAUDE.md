@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (104 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth) | Don't reopen a logged decision unless the user asks. |
+| README §16 "Decision log" | **Why** things are the way they are (107 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
@@ -54,7 +54,7 @@ Phase 0 spikes exist to test assumptions. When a spike or a later finding contra
 - **Python 3.13**, managed with **uv**; `src/` layout (`src/auratrade/`), structure as in README §13.
 - **Typing:** full type hints; `mypy --strict` on `src/`. Pydantic v2 for config, API payloads and LLM schemas.
 - **Pure logic is pure:** indicators, regime scoring, plans, guardrails and sizing are pure functions with no I/O, unit-tested on hand-built data with known answers. Guardrails need 100% branch coverage.
-- **One simulator:** backtests, the baseline book, the verdict scorecard and replay tests all go through `sim/`, which calls the live pure functions. Never write a second fill model. The one exception is the spike-grade edge check (task 1.6b): it lives in `spikes/`, tunes nothing, and nothing outside `spikes/` may import it.
+- **One simulator:** backtests, the baseline book, the verdict scorecard and replay tests all go through `sim/`, which calls the live pure functions. Never write a second fill model. The one exception is the spike-grade edge check (spike 0.3h): it lives in `spikes/`, tunes nothing, and nothing outside `spikes/` may import it or its data.
 - **Backtests follow README §15 "Backtest validity":** point-in-time universe, raw-price filters, the fill model, the 2016–2022 tune / 2023+ holdout, and source defaults unless clearly beaten on both periods.
 - **Time:** store UTC; compute in `America/New_York`; timezone-aware datetimes only. **Count trading sessions, never calendar days** (use the calendar helpers, never `timedelta(days=...)` for market windows).
 - **Money and prices:** round order prices to the valid tick ($0.01 for stocks ≥ $1). Share counts are integers, floored.
