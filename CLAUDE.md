@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (78 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up) | Don't reopen a logged decision unless the user asks. |
+| README §16 "Decision log" | **Why** things are the way they are (91 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day) | Don't reopen a logged decision unless the user asks. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.

@@ -149,7 +149,7 @@ Each spike is a script in `spikes/` plus a note in `docs/spikes/<name>.md`, endi
 | d | **Macro** | When do the CBOE VIX/VIX3M files update (is the value ready by 17:15 ET)? How far does FRED lag? |
 | e | **Fundamentals, earnings, industries** | How accurate is Finnhub's earnings calendar for 50 names, and are **earnings surprises** (actual vs estimate) on the free tier? What share of the universe has **no known next date** (that sets how often the estimated-date blackout applies)? **Earnings history for backtests:** how far back do Finnhub's free dates go? Do EDGAR 8-K Item 2.02 filings (acceptance time → before-open / after-close) match the true report dates for 50 names across 2016–2025? How reliable is EPS/revenue extraction from EDGAR company facts? Do **SIC codes from EDGAR submissions** cover the universe, and what mapping to ~100 industry groups should we use? What are the rate limits? |
 | f | **News** | Is the Alpaca news API available on the free plan? Payload shape and headline volume. |
-| g | **Claude** | A batch of 5 Analyst requests to `claude-opus-5-5`: two charts at the planned sizes, compact facts, structured output, shared-prefix caching. Measure tokens (**thinking included**: it bills as output) and cost per candidate at effort `medium` vs `high`, check the cache hit inside the batch (best-effort for concurrent requests), and measure turnaround → recalibrate the cost model (README §9 assumes ~$30–50/month) and set Phase 4's daily cost limit. Also time one real-time Portfolio Manager-sized call at `high` with tools, to confirm the 09:10 deadline is comfortable. |
+| g | **Claude** | A batch of 5 Analyst requests to `claude-opus-5-5`: two charts at the planned sizes, compact facts, structured output, shared-prefix caching. Measure tokens (**thinking included**: it bills as output) and cost per candidate at effort `medium` vs `high`, check the cache hit inside the batch (best-effort for concurrent requests), and measure turnaround → recalibrate the cost model (README §9 assumes ~$35–65/month) and set Phase 4's daily cost limit. Also time one real-time Portfolio Manager-sized call at `high` with tools, to confirm the 09:10 deadline is comfortable. |
 
 **Accept:** all spike notes written; README decisions confirmed or amended; any blocker has a chosen workaround (especially 0.3b for two-tranche stops).
 
@@ -222,10 +222,10 @@ One thin pass through the **whole daily loop**, built from the real modules in m
   - OTO entry at 09:36 (or the `fill_watcher` fallback, per 0.3b)
   - GTC stop conversion
   - reconcile + **stop invariant** in every order-touching job, plus the 09:31 check run
-  - the **single-writer lock** (account-wide advisory lock on a direct connection, README §5.7)
-  - the **price-through-the-stop** path: sell at once instead of placing a stop above the market
+  - the **single-writer lock** (account-wide advisory lock on a direct connection, released in `finally`, with a server-side idle timeout as a backstop, README §5.7)
+  - the **price-through-the-stop** path: sell at once instead of placing a stop above the market, escalating within the run (marketable limit → one re-price → market)
   - partial-fill handling (the filled quantity is the position)
-  - kill switch (entries only) as the `system_flags` row, with `auratrade kill on|off`
+  - kill switch (entries only) as the `system_flags` row, with `auratrade kill on|off`; `kill on` cancels resting entry orders at once
 - **Exits:** the hard stop, plus a single soft rule (close below the 21 EMA at the 15:40 decision price) using the **sell sequence**.
 - **`post_market`:** a journal row, the Telegram daily report, and the nightly backup export to storage.
 - `TRADING_MODE` stays `dry_run` by default; paper orders need the explicit `paper` flag.
@@ -293,20 +293,23 @@ Every function is unit-tested on hand-built series with known answers.
 ### 2.3 Regime classifier (M)
 
 - Pillars, with SPY/QQQ combined as **both for +1, either for −1**. Distribution days counted per index, the higher count used; an FTD on either index; quarterly-expiration and index-rebalance sessions flagged.
-- The **leadership-health** pillar reads the **ungated breakout tracker** (task 3.7). It scores 0 with fewer than 10 tracked breakouts in the window; the backtest computes the tracker from history.
+- The **leadership-health** pillar reads the **ungated breakout tracker** (task 3.7), over the 20 sessions whose 5-session result is complete (T−24 to T−5). It scores 0 with fewer than 10 tracked breakouts in the window; the backtest computes the tracker from history.
 - State machine following the README **transition table**, including:
   - a new uptrend via a follow-through day, or the 10-session `no_ftd` fallback
-  - `EARLY_UPTREND` → `CORRECTION` on a score ≤ −1 or a rally-low undercut; no timeout
+  - `EARLY_UPTREND` → `CORRECTION` only on a rally-low undercut or ≥ 6 distribution days since entering it, never on the score; no timeout
+  - upgrade counters count only sessions in the current state; at least 10 sessions in `EARLY_UPTREND` before `CONFIRMED_UPTREND`
   - the 2-session debounce on `CONFIRMED_UPTREND` → `UNDER_PRESSURE`
   - hysteresis, the crisis override, and macro staleness → neutral
   - the **conservatism ladder** (README §5.2) as one function, used by the LLM-view clip and the `premarket_check` downgrade
 - Rally-attempt tracking (day count, rally low per index) as a sub-state of `CORRECTION`.
 - Unit tests for every transition, including the edge cases:
-  - an FTD while the score is still negative
+  - an FTD while the score is still negative: the state is `EARLY_UPTREND` and stays there while the score stays ≤ −1
   - a rally-low undercut on the day of an upgrade
   - a single pillar flickering across a threshold
   - the fallback firing one session before an FTD would have
+  - the `no_ftd` path at a score ≥ +3 staying in `EARLY_UPTREND` for its 10 sessions before upgrading
   - a stalled `EARLY_UPTREND` (score stays at +1/+2) staying put for 40+ sessions
+  - leadership health ignoring breakouts from the last 5 sessions
 - `market_regime` migration.
 - `jobs/regime.py` writes the **computed** regime. The LLM view is added in Phase 4 through the Portfolio Manager.
 
@@ -317,7 +320,7 @@ Every function is unit-tested on hand-built series with known answers.
 - time spent in each regime
 - switches per year
 - SPY forward returns and drawdowns by regime
-- comparisons: excluding expiration/rebalance distribution days vs not; the `no_ftd` fallback after 10 sessions vs other lengths
+- comparisons: excluding expiration/rebalance distribution days vs not; the `no_ftd` fallback after 10 sessions vs other lengths; the 10-session minimum in `EARLY_UPTREND` vs none
 
 Thresholds are **tuned on 2016–2022 only** (trading effectively from early 2017, after the warm-up). Only about 4–5 major episodes exist in the data, so prefer IBD's published thresholds unless a change clearly helps on both periods. The report goes to `docs/backtests/regime.md`.
 
@@ -370,7 +373,9 @@ Daily (1 year, ~800×600, 10/21/50/150/200 MAs, volume, pivot, RS line) and week
   - the plan model and its bounded menus (from `risk.yaml`)
   - **tighten-only versioning**
 - **Entry policies:** pivot vs 5-min opening-range-high triggers; single vs two tranches; the confirmation gate.
-- **Early-behaviour rules:** heavy-volume reversal → exit; a light-volume dip below the pivot → hold, no tranche 2; time stops at 10/20 sessions.
+- **Early-behaviour rules:** heavy-volume reversal → exit (a down day = a close below the prior close; volume vs the 50-day average); a light-volume dip below the pivot → hold, no tranche 2; time stops at 10/20 sessions (high < +1R).
+- **Default exit sets** (README §7.3): Kullamägi (momentum, EP), Minervini (VCP, pullback), O'Neil (emerging leader), plus the safety rules; every other rule switchable on and off per strategy, so 3.8 can add them one at a time.
+- **Regime-downgrade tightening** (README §7.3): one trail step on a downgrade to `UNDER_PRESSURE`; the 10-day trail and the end of an 8-week hold on a downgrade to `CORRECTION`.
 - **Rule precedence** (README §7.3) in one place (`plans/resolve.py`): full exits end evaluation; partial sales stack in order on the remaining shares; constraints suppress the rules they name. Unit-tested with days where several rules fire.
 - **Exit menu:**
   - partial sales: Kullamägi 3–5 days / O'Neil 20–25% / Minervini 2–3R
@@ -381,7 +386,7 @@ Daily (1 year, ~800×600, 10/21/50/150/200 MAs, volume, pivot, RS line) and week
   - **climax sales** (≥ 2 signals → ½, ≥ 3 → all)
   - selling into a late-stage (4th) base breakout
   - faltering-RS events
-- The earnings-cushion table; hard-stop vs soft-rule levels; `position_events`.
+- The earnings-cushion table, including the estimated date for held positions with no known next date; hard-stop vs soft-rule levels; `position_events`.
 - Migrations: `position_plans`, `position_events`.
 - Fully unit-tested, including "a loosening change is rejected" and every rule's trigger and non-trigger cases.
 
@@ -389,11 +394,11 @@ Daily (1 year, ~800×600, 10/21/50/150/200 MAs, volume, pivot, RS line) and week
 
 These are pure functions, and the 3.8 backtest compares several of them on vs off: the heat cap, clusters and the multiplier. So they're built here, not in Phase 5. Phase 5 wires them into the live LLM and order pipeline.
 - `guardrails/`: one pure function per README §8 rule, including:
-  - **tighten-only** (with the round-trip rule) and the **tranche-2 rules** (incl. the earnings blackout)
+  - **tighten-only** (with the round-trip rule) and the **tranche-2 rules** (incl. the earnings blackout, and the strategy still fundable with no crisis override)
   - **per-strategy stop width** and the **base-count limits**
   - **keep losses small vs gains**, in its precise form: min(default, ½ avg gain), below the strategy's **noise floor** (1 × ATR, or 0.5 × ATR for momentum / EP) → reject
   - the 25%-above-50-day limit and the **earnings cushion**
-  - **price levels** (LLM pivot ±3%, stop tighter only, trigger above the market; an EP's pivot is its opening-range high)
+  - **price levels** (LLM pivot ±3%, stop tighter only, trigger above the market; an EP's pivot is its opening-range high; max chase measured from the code pivot)
   - the **open-risk (heat) cap** and **correlated clusters**
   - the **unknown-earnings-date** blackout
   - the **regime ceiling** on the conservatism ladder
@@ -406,11 +411,11 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
   - a property test that a momentum / EP stop at 1 × ADR passes the noise floor whenever ATR ≤ 2 × ADR (the regression test for the old 1 × ATR floor, which rejected them all)
 - **100% branch coverage.**
 - `execution/sizing.py`: planned size on the worst fill; tranche split; tranche-2 re-sizing on the actual price and tranche 1's actual (possibly partial) fill.
-- `execution/triggers.py` (pure): pivot vs **5-min opening-range high** from 1-min bars, low-of-day stops for momentum and EPs, max-chase checks, and the skip when a VCP's opening-range high is above pivot × 1.05.
+- `execution/triggers.py` (pure): pivot vs **5-min opening-range high** from 1-min bars (the opening-range high whenever the range traded above the level, README §7.1), low-of-day stops for momentum and EPs, max-chase checks, the skip when the opening-range high is above pivot × 1.05 or the price at 09:36 is already above the trigger, and the limit price min(trigger × (1 + min(2%, ½ × ADR%)), code pivot × 1.05). Tested with a stock that opens below its pivot and breaks it before 09:36.
 - `journal/risk_multiplier.py`: progressive-exposure state from the journal and equity peak, following the README §8 table exactly:
   - win / loss / scratch definitions
   - the first matching row wins
-  - drawdown tiers apply while the drawdown lasts
+  - drawdown tiers apply until the drawdown recovers or after 3 wins in the tier, stepping up one tier at a time, and re-apply only on a new equity low
   - "unproven regime" (live only) and "trading well" (needs ≥ 10 closed trades)
 
   Unit-tested on every row boundary.
@@ -422,7 +427,8 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
 - It calls the live pure functions (plans, triggers, sizing, guardrails, multiplier from 3.5a–3.5b), never copies of them.
 - The fake broker models what 0.3b found about partial fills, stops above the market and PDT rejections, so replay and chaos tests exercise those paths.
 - **Fill model** (README §5.12):
-  - buy-stops fill at max(trigger, open) + liquidity-scaled slippage, capped at the limit
+  - entries placed at 09:36 on 1-minute bars, as live (incl. pivot triggers and the skip when the trigger is already below the market)
+  - buy-stops fill at max(trigger, the minute bar's open) + liquidity-scaled slippage, capped at the limit
   - stops fill at min(stop, open), so gaps go through
   - soft-rule exits fill at the decision price − slippage
 - Used by: the evening baseline, the verdict scorecard, the 3.8 backtest and the Phase 5 replay and chaos tests.
@@ -436,14 +442,15 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
   - takes setups in rank order until the limits are full
   - EPs come from the morning candidate list (rule-based). Until Phase 4.4 builds that list, the baseline runs without EPs.
 - **Evening simulation:** the baseline is simulated after the close from that day's SIP minute bars (fetched for its symbols only), through `sim/`: 09:36 triggers, opening-range highs, low-of-day stops, the EOD gate and soft rules on the 15:40 decision price.
-- **Breakout tracker:** records every trigger from the full uncapped scan, regardless of regime, and its 5-session result → leadership health.
+- **Breakout tracker:** records every trigger from the full uncapped scan, regardless of regime, and its 5-session result → leadership health (only results that are complete, T−24 to T−5).
 - **Verdict scorecard:** the plumbing for scoring Analyst verdicts forward through `sim/` (README §5.12). Verdicts arrive in Phase 4; test it here on synthetic verdicts.
   - one unit per setup (ticker, strategy, code pivot), labelled with the verdict in force at its trigger
   - BUY vs SKIP on triggered setups; trigger rates separately
+  - triggered only while a verdict is in force (≤ 3 sessions after its latest review), the same window for every verdict
   - session-block bootstrap confidence intervals, with setup and session counts
   - tagged with prompt version and answering model
   - a test that re-reviewing the same setup 5 times doesn't create 5 observations
-- **Plan counterfactual:** the plumbing to replay a closed trade under its strategy's default plan and risk → the default-plan R in `trade_journal` (used from Phase 5).
+- **Plan counterfactual and like-for-like replay:** the plumbing to replay a closed trade through `sim/` as decided (→ sim R) and under its strategy's default plan and risk (→ default-plan R), both in `trade_journal` (used from Phase 5). The LLM-vs-baseline comparison uses sim R, never paper fills (README §5.12).
 
 ### 3.8 Baseline backtest: choosing defaults from evidence (L)
 
@@ -453,17 +460,24 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
 - **Tune on 2016–2022** (effectively 2017 on, after the warm-up); **report 2023–present once.**
 - Cells with fewer than 30 trades keep the source default.
 - Daily bars drive most rules.
-- **Intraday-dependent rules** (opening-range-high triggers, low-of-day stops, the 15:40 confirmation gate, heavy-volume reversals) use **SIP 1-minute bars fetched only for trigger days** of candidate symbols, cached in Parquet. This keeps the data volume and rate-limit use small.
+- **Intraday-dependent rules** (every 09:36 entry, pivot triggers included, opening-range-high triggers, low-of-day stops, the 15:40 confirmation gate, heavy-volume reversals) use **SIP 1-minute bars fetched only for trigger days** of candidate symbols, cached in Parquet. This keeps the data volume and rate-limit use small.
 - On a sample of about 200 held position-days, compare soft-rule decisions on the 15:40 price vs the close, and report the disagreement rate.
+
+**Baseline gate (go / no-go, README §15) — evaluated first:**
+- The pool: triggered top-40 setups, played under default plans after slippage, overall and per strategy. The baseline book (rank-order fill) is reported next to it.
+- **Pass:** the session-block bootstrap 90% interval for expectancy excludes zero on the tuning period, and the holdout point estimate is positive.
+- A strategy that fails is removed from the fundable lists in `risk.yaml`, with the reason.
+- If the pool fails as a whole: **stop**. Write the finding to `docs/backtests/baseline.md` and bring it to the user before Phase 4. Note in the report that the holdout has now been used.
 
 Outputs:
 - expectancy, win rate, average gain vs average loss, average R, max drawdown
-- **Comparisons** (each against a reference setup):
+- **Comparisons** (each against a reference setup; for exits the reference is the strategy's **single-trader exit set**, README §7.3):
   - **entries:** a pivot trigger vs an opening-range-high trigger on gap opens; one tranche vs two
-  - **early behaviour:** heavy-volume-reversal exit on vs off; time stops 10/20 vs none
+  - **exit sets:** the single-trader set vs the full combination vs a floor (hard stop + trail only), per strategy. This measures what stacking early exits costs, which one-rule-at-a-time changes can't show
+  - **rules added to the set one at a time:** the round-trip rule, breakeven, time stops 10/20, the heavy-volume-reversal exit, climax sales, the 8-week hold (each where it isn't already in the set)
+  - **safety rules, on vs off:** the earnings cushion and regime-downgrade tightening (kept unless they cut expectancy by more than noise without reducing max drawdown, on both periods)
   - **partial styles:** Kullamägi (3–5 days) vs O'Neil (20–25%) vs Minervini (2–3R) vs none
   - **trails:** 10-day vs 21 EMA vs 50 SMA
-  - **8-week hold and climax sales:** on vs off
   - **base count:** a 3rd stage at half risk and a 4th stage excluded, vs no filter
   - **risk scaling:** the progressive-exposure multiplier on vs off
   - **regime:** the leadership-health pillar on vs off
@@ -472,19 +486,21 @@ Outputs:
 - **Diagnostics** (reported, not tuned):
   - how often each guardrail rejects, per strategy, especially the stop-width rules for momentum and EPs (gap-day ranges are often wider than the pre-gap ADR)
   - how often the cluster rule fires
+  - how often an entry triggers but misses its limit (the tighter limit of README §7.1), and how often the opening-range rule replaces the pivot
 
 **Regime re-run (finishes 2.4):** re-run `backtest/regime.py` with the leadership-health pillar from the breakout tracker. **Only now** is the regime holdout (2023–present) opened, once, for the final 5-pillar model. It must pick up the 2023 recovery with reasonable lag and stay at ≤ ~12 switches a year. Final thresholds go to `risk.yaml`.
 
 **"More than noise"** means the session-block bootstrap 90% interval for the difference in expectancy (or max drawdown) excludes zero on the tuning period, and the holdout difference has the same sign.
 
-Each comparison changes **one** dimension against the source-default reference; interactions are checked only for the adopted combination. Adopted defaults go to `risk.yaml`. The report goes to `docs/backtests/baseline.md` and includes:
+Each comparison changes **one** dimension against the source-default reference, except the exit-set runs, which compare whole sets. Interactions are checked only for the adopted combination. **All of these comparisons are fixed here, before 3.8 runs.** Adding one after seeing the results would be tuning on the holdout. Adopted defaults go to `risk.yaml`. The report goes to `docs/backtests/baseline.md` and includes:
 - the source for each rule tested
 - the train and holdout results side by side
 - the delisted-coverage gap and the slippage assumptions
 
 **Accept:**
+- **The baseline gate passes**, overall and for every strategy left in the fundable lists. If it doesn't, Phase 4 doesn't start until the user has decided what to do.
 - Watchlists, pivots and base counts match a visual read on 10 hand-picked sessions; textbook VCPs and momentum breakouts chosen in advance are detected.
-- **Defaults:** a non-default option is adopted only if it beats the source default on **both** the tuning and the holdout periods, by more than noise. Otherwise the source default stays (or a rule is kept for safety, with the reason noted).
+- **Defaults:** a non-default option is adopted only if it beats the source default (for exits, the single-trader set) on **both** the tuning and the holdout periods, by more than noise. Each single-trader cell still needs ≥ 30 trades; below that, the cell keeps the set unchanged. Otherwise the source default stays (or a rule is kept for safety, with the reason noted).
 - **Risk controls:** regime gating, the multiplier and the heat cap reduce drawdown on both periods. If not, revisit before going on.
 - **Survivorship:** if delisted coverage is poor (from 0.3a), the report says how much that likely inflates expectancy, and adopted options that favour long holds get extra scrutiny.
 - Default entry policies and exit plans per strategy are chosen from evidence.
@@ -510,7 +526,7 @@ Each comparison changes **one** dimension against the source-default reference; 
 
 ### 4.2 Schemas and prompts (M)
 
-- `AnalystVerdict` (with **output caps**, a **watch note**, pivot/stop validated against the code levels in the request, and `strategy` required to equal the request's), `PortfolioDecision` (regime view limited to the computed label or one below it on the ladder, never `EARLY_UPTREND`; EP decisions, entries with plans chosen from the menu, tighten-only position actions), `EodDecision` (tranche-2 adds, failed breakouts), `WeeklyLessons`.
+- `AnalystVerdict` (with **output caps**, a **watch note**, pivot/stop validated against the code levels in the request, and `strategy` required to equal the request's), `PortfolioDecision` (regime view limited to the computed label or any label below it on the ladder, never `EARLY_UPTREND`; EP decisions, entries with plans chosen from the menu, tighten-only position actions), `EodDecision` (tranche-2 adds, failed breakouts), `WeeklyLessons`.
 - Prompts: Analyst (shared core + one section per strategy, written from the §18 sources), Portfolio Manager (including EP review criteria), EOD, weekly; `prompt_versions` registry.
 - Every prompt defines the four regime labels explicitly (`EARLY_UPTREND` is post-FTD, not IBD's "rally attempt"). The Analyst prompt treats the previous verdict as context to re-judge, not a default.
 
@@ -549,6 +565,7 @@ Each comparison changes **one** dimension against the source-default reference; 
 
 Whether the LLM adds value is the core bet, and the scorecard answers it. So it should start collecting as soon as it can, not at the paper trial.
 - Deploy `ingest` → `regime` → `scan` → `analyst_submit` / `analyst_collect` and the evening scorecard to the AWS stack from 1.8, in `dry_run` (no orders), against the `paper` Neon branch.
+  - The full `ingest` **replaces** the skeleton's, so one ingest writes each Neon branch. The skeleton keeps its scan-lite and rule-only picks, tagged with their own strategy name, so its rows never mix with the full scan's.
 - It keeps running through Phases 5–7. The weekly review reports the scorecard from the first week.
 - A prompt change during this period is a new prompt version, and the scorecard reports versions separately.
 
@@ -575,8 +592,8 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
 ### 5.3 Orders and signal lifecycle (M)
 
 - Extends the 1.7 order-layer core (same modules).
-- Tranche-1 or single-tranche OTO entry placed at 09:36 (or the `fill_watcher` path if 0.3b required it); limit prices per README §7.1 (pivot × 1.05, or trigger × (1 + min(2%, ½ ADR%))); tranche-2 marketable-limit add; **full-quantity stop replacement** and **GTC conversion** of child stops (per the 0.3b findings).
-- **Sell sequencing** for every OPG trim, intraday partial and EOD exit: reduce the stop → sell → restore the stop on rejection or no fill. If the price is already through the stop level, sell at once instead (README §5.7).
+- Tranche-1 or single-tranche OTO entry placed at 09:36 (or the `fill_watcher` path if 0.3b required it); limit prices per README §7.1 (min(trigger × (1 + min(2%, ½ ADR%)), code pivot × 1.05), from `execution/triggers.py`); tranche-2 marketable-limit add; **full-quantity stop replacement** and **GTC conversion** of child stops (per the 0.3b findings).
+- **Sell sequencing** for every OPG trim, intraday partial and EOD exit: reduce the stop → sell → restore the stop on rejection or no fill. If the price is already through the stop level, sell at once instead, escalating within the same run: marketable limit → one re-price → market; still unfilled at the close → OPG next morning + alert (README §5.7).
 - **Partial fills** (README §5.7): the filled quantity is the position; partly filled entries are cancelled at the EOD review and their reservation released; a partly filled sell restores the stop on what's left and retries.
 - **PDT:** exits are never withheld; a PDT-rejected same-day exit keeps its stop and goes in as an OPG order the next morning.
 - Exposure reservation for the full planned position at tranche 1.
@@ -602,8 +619,8 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
 - `eod_review`:
   - code: trailing-MA closes, heavy-volume reversals, climax sales, 8-week-hold state, cushion exits, decided on the **15:40 decision price** (IEX real-time) and executed at once through the sell sequence
   - LLM, only when needed: tranche-2 adds that passed the gate, failed breakouts
-- `post_market`: journal (incl. the **default-plan R** counterfactual from 3.7), MAE/MFE, snapshots, risk multiplier, report, nightly backup.
-- `weekly_review`: calibration, the LLM-vs-baseline section, the plan counterfactual, and fallback-model answers reported separately.
+- `post_market`: journal (incl. the **sim R** and **default-plan R** replays from 3.7), MAE/MFE, snapshots, risk multiplier, report, nightly backup.
+- `weekly_review`: calibration, the LLM-vs-baseline section (on sim R, with paper fills alongside), the plan counterfactual (sim R vs default-plan R), and fallback-model answers reported separately.
 - Kill switch and loss halts wired into every **entry** path, with the README §5.13 semantics: they block entries and adds only, and never touch stops or plan exits.
 - **Operator CLI** (`src/auratrade/cli.py`, README §5.13): `kill on|off`, `halt status|reset`, `mismatches` / `resolve <id>`, `lessons approve|reject`, and `flatten --confirm` (manual only; sells everything with the sell sequence).
 - **`docs/runbook.md`:** for each alert type, what it means and what to do, using the CLI.
@@ -623,11 +640,13 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
   - a stop deleted at the broker
   - **a rejected OPG exit**, and **an OPG exit that doesn't fill** (caught by the 09:31 check)
   - **a failed sell after the stop was reduced**, including when the price has already fallen through the stop level
+  - **a marketable-limit exit at 15:40 that doesn't fill** (the run escalates to a market order before releasing the lock)
+  - **a Lambda that dies holding the lock** (the next order job gets the lock after the backstop timeout)
   - **a gap below the plan stop** before a stop raise
   - **a partly filled entry** and **a partly filled sell**
   - **a PDT-rejected same-day exit**
   - **a split on a held position** and **a dividend that lowers a resting stop**
-- The kill switch cancels resting entries within one run. With the kill switch and every halt active, stops and plan exits still fire (tested).
+- `auratrade kill on` cancels resting entries at once. With the kill switch and every halt active, stops and plan exits still fire (tested).
 
 ---
 
@@ -658,10 +677,10 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
 - **Weekly ritual:** Saturday report + your review:
   - R-multiples and trades with the LLM's reasoning
   - guardrail events
-  - LLM vs baseline, overall and on disagreements
+  - LLM vs baseline, overall and on disagreements (on sim R; paper fills alongside)
   - the verdict scorecard (BUY vs SKIP outcomes) and conviction calibration
   - regime timeline, and which regimes have been traded in (regime coverage)
-  - the plan counterfactual (actual R vs default-plan R)
+  - the plan counterfactual (sim R vs default-plan R)
   - cost
   - **approve or reject proposed lessons**
 - **Prompt changes:** at most one versioned change per week. **Risk config changes:** via `risk.yaml` commits with the reason noted.
@@ -712,4 +731,4 @@ flowchart LR
     P8 --> P9[9 Extensions]
 ```
 
-The pure guardrails, sizing, triggers and risk multiplier (3.5b) come before the simulator and the baseline backtest, because 3.8 compares them on vs off. Phase 5 only wires them into the live path. The order layer (5.3–5.4) grows from the skeleton's core (1.7), and the simulator (3.6) is shared by everything that replays or backtests. The evening pipeline (4.6) runs from the end of Phase 4, so the scorecard has months of data before the trial.
+The pure guardrails, sizing, triggers and risk multiplier (3.5b) come before the simulator and the baseline backtest, because 3.8 compares them on vs off. The baseline gate in 3.8 is a go / no-go point: Phase 4 starts only if the setup pool has positive expectancy. Phase 5 only wires them into the live path. The order layer (5.3–5.4) grows from the skeleton's core (1.7), and the simulator (3.6) is shared by everything that replays or backtests. The evening pipeline (4.6) runs from the end of Phase 4, so the scorecard has months of data before the trial.
