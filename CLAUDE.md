@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (50 decisions) | Don't reopen a logged decision unless the user asks. |
+| README §16 "Decision log" | **Why** things are the way they are (65 decisions; #51–65 come from the 2026-10-07 design review) | Don't reopen a logged decision unless the user asks. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
@@ -25,8 +25,8 @@ If code and README disagree, the README wins until the user approves a change. T
 1. **No live trading.** Only Alpaca **paper** keys are used until the user explicitly starts Phase 8. `TRADING_MODE` defaults to `dry_run`. Never write code that silently falls back to `live`.
 2. **No secrets in git.** Keys live in `.env` (git-ignored) locally and SSM Parameter Store in AWS. Never print keys in logs or chat.
 3. **No paid API calls in tests or CI.** Use recorded HTTP fixtures. Anything that costs money (Claude calls, especially batches; AWS resources) needs the user's OK first, with an estimated cost.
-4. **The LLM decides; code enforces limits.** Don't redesign the system as rules-only and don't suggest a "deterministic-first" approach; the user rejected it. Guardrails must never be bypassable by LLM output.
-5. **Protective stops always rest at the broker.** Any order code must preserve the invariant: every position has a GTC stop covering its full quantity at or above its plan level. Sells follow the sequence: reduce the stop, sell, restore it on failure.
+4. **The LLM decides; code enforces limits.** Don't redesign the system as rules-only and don't suggest a "deterministic-first" approach; the user rejected it. Guardrails must never be bypassable by LLM output. **Price levels come from code:** the LLM may only nudge a pivot within the guardrail tolerance or tighten a stop, never supply an unchecked price.
+5. **Protective stops always rest at the broker.** Any order code must preserve the invariant: every position has a GTC stop covering its full quantity at or above its plan level. Sells follow the sequence: reduce the stop, sell, restore it on failure. **No kill switch, halt or error path may cancel a protective stop or block a plan exit**; halts block entries and adds only.
 6. **Fail closed.** On uncertainty (missing data, LLM error, calendar disagreement, reconciliation mismatch), open no new positions.
 7. **Don't push, deploy, or create AWS resources** unless the user asks. Committing on a feature branch is fine.
 
@@ -53,6 +53,8 @@ Phase 0 spikes exist to test assumptions. When a spike or a later finding contra
 - **Python 3.13**, managed with **uv**; `src/` layout (`src/auratrade/`), structure as in README §13.
 - **Typing:** full type hints; `mypy --strict` on `src/`. Pydantic v2 for config, API payloads and LLM schemas.
 - **Pure logic is pure:** indicators, regime scoring, plans, guardrails and sizing are pure functions with no I/O, unit-tested on hand-built data with known answers. Guardrails need 100% branch coverage.
+- **One simulator:** backtests, the baseline book, the verdict scorecard and replay tests all go through `sim/`, which calls the live pure functions. Never write a second fill model.
+- **Backtests follow README §15 "Backtest validity":** point-in-time universe, raw-price filters, the fill model, the 2016–2022 tune / 2023+ holdout, and source defaults unless clearly beaten on both periods.
 - **Time:** store UTC; compute in `America/New_York`; timezone-aware datetimes only. **Count trading sessions, never calendar days** (use the calendar helpers, never `timedelta(days=...)` for market windows).
 - **Money and prices:** round order prices to the valid tick ($0.01 for stocks ≥ $1). Share counts are integers, floored.
 - **Config:** every threshold lives in `config/risk.yaml` (typed and hashed), never hard-coded.
@@ -94,4 +96,7 @@ These become valid as Phase 0.1 creates the project. Keep this section up to dat
 | **Hard stop / soft rule** | The broker-side GTC stop / a close-based rule checked by code at the EOD review. |
 | **Baseline book** | A simulated rule-only portfolio used as the benchmark for the LLM. |
 | **Breakout tracker** | Every scan trigger, ungated, used for the leadership-health regime pillar. |
-| **Regime** | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` / `RALLY_ATTEMPT` / `CORRECTION`. |
+| **Regime** | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` / `EARLY_UPTREND` (after a follow-through day) / `CORRECTION` (IBD's pre-FTD "rally attempt" is a sub-state of it). |
+| **Heat** | Total open risk: Σ max(0, entry − hard stop) × shares across positions, plus pending entries. Capped at 6% of equity. |
+| **Decision price** | The 15:40 IEX price on which "close-based" soft rules decide (12:40 on half days). |
+| **Verdict scorecard** | Every Analyst verdict simulated forward under the default plan: the main evidence for whether the LLM adds value. |
