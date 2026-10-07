@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (65 decisions; #51–65 come from the 2026-10-07 design review) | Don't reopen a logged decision unless the user asks. |
+| README §16 "Decision log" | **Why** things are the way they are (78 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up) | Don't reopen a logged decision unless the user asks. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
@@ -26,13 +26,14 @@ If code and README disagree, the README wins until the user approves a change. T
 2. **No secrets in git.** Keys live in `.env` (git-ignored) locally and SSM Parameter Store in AWS. Never print keys in logs or chat.
 3. **No paid API calls in tests or CI.** Use recorded HTTP fixtures. Anything that costs money (Claude calls, especially batches; AWS resources) needs the user's OK first, with an estimated cost.
 4. **The LLM decides; code enforces limits.** Don't redesign the system as rules-only and don't suggest a "deterministic-first" approach; the user rejected it. Guardrails must never be bypassable by LLM output. **Price levels come from code:** the LLM may only nudge a pivot within the guardrail tolerance or tighten a stop, never supply an unchecked price.
-5. **Protective stops always rest at the broker.** Any order code must preserve the invariant: every position has a GTC stop covering its full quantity at or above its plan level. Sells follow the sequence: reduce the stop, sell, restore it on failure. **No kill switch, halt or error path may cancel a protective stop or block a plan exit**; halts block entries and adds only.
+5. **Protective stops always rest at the broker.** Any order code must preserve the invariant: every position has a GTC stop covering its full quantity at or above its plan level. Sells follow the sequence: reduce the stop, sell, restore it on failure (or sell at once if the price is already through the stop level). Every order change runs under the single-writer lock. **No kill switch, halt or error path may cancel a protective stop or block a plan exit**; halts block entries and adds only.
 6. **Fail closed.** On uncertainty (missing data, LLM error, calendar disagreement, reconciliation mismatch), open no new positions.
 7. **Don't push, deploy, or create AWS resources** unless the user asks. Committing on a feature branch is fine.
 
 ## 4. How to work in a session
 
 1. **Find the current task:** open the progress tracker at the top of `docs/execution-plan.md` and take the first unchecked task. Say which task you're starting.
+   - First check `git branch` for an unmerged `phase-*` branch. Its task may be done and ticked there but not on `main`. If there is one, ask the user to merge it, or branch from it, before starting.
 2. **Read** the matching README sections and the task's acceptance criteria before writing code.
 3. **Branch:** `phase-<n>/<short-task-name>`, e.g. `phase-1/market-calendar`.
 4. **Build in small steps** with tests alongside. Run the checks (§7) before saying anything is done.
@@ -96,7 +97,7 @@ These become valid as Phase 0.1 creates the project. Keep this section up to dat
 | **Hard stop / soft rule** | The broker-side GTC stop / a close-based rule checked by code at the EOD review. |
 | **Baseline book** | A simulated rule-only portfolio used as the benchmark for the LLM. |
 | **Breakout tracker** | Every scan trigger, ungated, used for the leadership-health regime pillar. |
-| **Regime** | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` / `EARLY_UPTREND` (after a follow-through day) / `CORRECTION` (IBD's pre-FTD "rally attempt" is a sub-state of it). |
+| **Regime** | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` / `EARLY_UPTREND` (after a follow-through day) / `CORRECTION` (IBD's pre-FTD "rally attempt" is a sub-state of it). "More conservative" means lower on the ladder `CORRECTION` < `EARLY_UPTREND` < `UNDER_PRESSURE` < `CONFIRMED_UPTREND`. |
 | **Heat** | Total open risk: Σ max(0, entry − hard stop) × shares across positions, plus pending entries. Capped at 6% of equity. |
 | **Decision price** | The 15:40 IEX price on which "close-based" soft rules decide (12:40 on half days). |
 | **Verdict scorecard** | Every Analyst verdict simulated forward under the default plan: the main evidence for whether the LLM adds value. |
