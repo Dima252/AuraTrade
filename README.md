@@ -848,6 +848,7 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 ```text
 AuraTrade/
 ├── README.md
+├── .github/workflows/            # CI: lint → type-check → tests (deploy added in 6.2)
 ├── docs/                         # execution plan, spikes, backtests, incidents, runbook
 ├── web/                          # public project site: static HTML/CSS (§12)
 ├── pyproject.toml / uv.lock
@@ -876,6 +877,7 @@ AuraTrade/
 │   ├── notify/
 │   └── jobs/
 ├── backtest/                     # regime, baseline, entry and exit-policy comparisons
+├── scripts/                      # one-off operator tools: check_keys.py, backfill.py
 ├── spikes/
 ├── infra/                        # CDK app: app.py, stacks/ (public_site; the trading stack from 1.8)
 └── tests/
