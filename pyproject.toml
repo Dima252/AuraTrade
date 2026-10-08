@@ -72,7 +72,7 @@ select = [
 python_version = "3.13"
 strict = true
 warn_unreachable = true
-files = ["src", "scripts"]
+files = ["src", "scripts", "infra"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

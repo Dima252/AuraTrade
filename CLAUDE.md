@@ -73,7 +73,7 @@ uv run pre-commit install                 # once per clone: lint, format, mypy, 
 docker compose up -d                      # local Postgres for tests
 uv run pytest                             # tests (add --cov for branch coverage)
 uv run ruff check . && uv run ruff format --check .
-uv run mypy                               # src/ and scripts/ (strict)
+uv run mypy                               # src/, scripts/ and infra/ (strict)
 uv run pre-commit run --all-files         # every hook, as on commit
 uv run python scripts/check_keys.py       # confirm every key in .env works (free calls only)
 uv run alembic upgrade head               # apply migrations (from task 1.2)

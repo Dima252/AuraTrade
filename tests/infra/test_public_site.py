@@ -204,7 +204,8 @@ def test_pages_fit_the_content_security_policy(page: str) -> None:
         assert not re.match(r"[a-z]+:|//", url), url
 
 
-def test_pages_carry_the_disclaimer() -> None:
-    html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
+@pytest.mark.parametrize("page", ["index.html", "404.html"])
+def test_pages_carry_the_disclaimer(page: str) -> None:
+    html = (WEB_DIR / page).read_text(encoding="utf-8")
     assert "Not financial advice" in html
     assert "paper" in html.lower()
