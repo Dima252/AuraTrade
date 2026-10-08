@@ -21,13 +21,13 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 **Phase 0: Foundations and spikes**
 - [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
 - [ ] 0.2 👤 Accounts and keys + `scripts/check_keys.py`
-- [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture
-- [ ] 0.3a Spike: Alpaca market data
-- [ ] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build)
-- [ ] 0.3c Spike: market calendar
+- [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture *(part 1 done 2026-10-08; part 2 needs market hours, see `docs/spikes/alpaca-orders.md`)*
+- [ ] 0.3a Spike: Alpaca market data *(note written; real-time and bar-revision checks pending; 3 findings await your decision)*
+- [ ] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build) *(note written: ~breakeven before costs, slightly negative after; awaits your call)*
+- [x] 0.3c Spike: market calendar
 - [ ] 0.3d Spike: macro data timing
 - [ ] 0.3e Spike: fundamentals, earnings, industries
-- [ ] 0.3f Spike: news
+- [x] 0.3f Spike: news
 - [ ] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK)
 - [ ] 0.4 👤 Review spike findings; amend README/decisions
 - [x] 0.5 Public project site (landing page + S3/CloudFront stack; deployed in 1.8)

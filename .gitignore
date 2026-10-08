@@ -26,6 +26,7 @@ htmlcov/
 *.parquet
 spikes/**/data/
 spikes/**/output/
+spikes/**/*.out
 
 # AWS CDK
 cdk.out/
