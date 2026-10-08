@@ -4,7 +4,12 @@ version = "0.1.0"
 description = "Autonomous swing-trading system for US stocks: an LLM decides inside hard risk limits enforced by code."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "alpaca-py>=0.44.0",
+    "anthropic>=1.12.1",
+    "httpx>=0.28.1",
+    "psycopg[binary]>=3.3.6",
+]
 
 [build-system]
 requires = ["uv_build>=0.10,<0.11"]
@@ -17,6 +22,7 @@ dev = [
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "python-dotenv>=1.2.4",
     "ruff>=0.16.10",
 ]
 # Research-only dependencies for backtest/ (filled in by Phases 2-3).
@@ -61,13 +67,18 @@ select = [
 python_version = "3.13"
 strict = true
 warn_unreachable = true
-files = ["src"]
+files = ["src", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 xfail_strict = true
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # alpaca-py still imports websockets.legacy (third-party; not our code).
+    "ignore:websockets.legacy is deprecated:DeprecationWarning",
+]
 
 [tool.coverage.run]
 branch = true
