@@ -2,7 +2,7 @@
 
 **Run:** 2026-10-08, after the close. Script: `spikes/alpaca_data/` (`uv run --group spikes python -m spikes.alpaca_data <scenario>`; raw output in `spikes/alpaca_data/output/`, git-ignored). The checks of real-time freshness need market hours (`realtime` scenario, run sheet at the end).
 
-**Decision: GO, with three findings for you (CLAUDE.md §5)** and several implementation notes:
+**Decision: GO.** Three findings changed the design (adopted 2026-10-09 as decisions #109–111), plus implementation notes:
 1. **IEX often has no opening range.** In the thinner half of the eligible universe, IEX prints no trade in the first 5 minutes on about half the days, so there's no IEX opening-range high to trigger on (below, with options).
 2. **IEX pre-market is too thin to find gaps at 08:40.** Delayed SIP is the fix (below).
 3. **Survivorship needs a workaround, and there is a cheap one.** Alpaca's asset list forgets most pre-2018 delistings, but the bars endpoint still serves them. Enumerating every 1–4 letter ticker recovers them in about 3 minutes per snapshot week.
@@ -47,7 +47,7 @@ The 5-minute opening-range high (ORH) is a trigger for VCP / pullback / emerging
 
 More than half the eligible universe is in the last bucket. **There, an IEX opening range is missing about half the time.**
 
-**Options** (needs your choice; the design is frozen, so this is a spike-driven change):
+**Options** (adopted: **B**, decision #109):
 - **A: fail closed per symbol.** If IEX printed nothing in 09:30–09:34, an ORH-triggered entry for that symbol is skipped today. Pivot triggers are unaffected (they come from daily bars). This is the simplest option and matches §3 rule 6, but it drops about half the ORH entries in the thinner half of the universe. Those are mostly momentum breakouts and EPs, the strategies that always use the ORH.
 - **B (recommended): fall back to delayed SIP.** Use IEX at 09:36 where it has the range (all of the top 500 names, 85% of the next 500). Where it doesn't, take the **consolidated** 09:30–09:34 high from 15-minute-delayed SIP, which is available at 09:50, and place that symbol's entry at **09:51** with the same "already through the trigger" rule (§7.1). Nothing is skipped for lack of data. The SIP level is the true consolidated range, and the simulator can reproduce the rule exactly (from minute history it knows whether IEX traded). The cost is a 15-minute later entry for those symbols (some fast breakouts become limit-or-skip), and `execute_entries` needs a second run at 09:51.
 

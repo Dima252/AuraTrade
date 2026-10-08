@@ -2,7 +2,7 @@
 
 **Run:** 2026-10-08/09. `uv run --group spikes python -m spikes.edge_check.fetch` (data), then `… .repair`, then `… .run`. Spike-grade: it **tunes nothing**, it isn't a fill model, and nothing outside `spikes/` may import it. Holdout (2023+) **not touched**: the data stops at 2022-12-31.
 
-**Result: both simple setups are about breakeven before costs and slightly negative after a crude 0.2%-a-side slippage.** The 90% intervals exclude zero after costs. Per the plan this goes to you before Phase 1. **My reading: weak and borderline, not "clearly negative"** (details and a recommendation at the end). It's your call whether to continue.
+**Decision: continue to Phase 1 (#112).** Result: both simple setups are about breakeven before costs and slightly negative after a crude 0.2%-a-side slippage. The 90% intervals exclude zero after costs. Per the plan this goes to you before Phase 1. **My reading: weak and borderline, not "clearly negative"** (details and a recommendation at the end). It's your call whether to continue.
 
 ## Setup
 
