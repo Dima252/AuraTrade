@@ -19,7 +19,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 ## Progress tracker
 
 **Phase 0: Foundations and spikes**
-- [ ] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
+- [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
 - [ ] 0.2 👤 Accounts and keys + `scripts/check_keys.py`
 - [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture
 - [ ] 0.3a Spike: Alpaca market data
