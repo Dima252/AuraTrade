@@ -830,12 +830,14 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 - **Least-privilege IAM** per function; secrets in SSM. Environments: `dev`, `paper`, later `live`.
   - **Each environment has its own Alpaca account and Neon branch.** If two systems share one paper account, each one's reconciliation sees the other's positions as mismatches and "repairs" stops it doesn't own. `dev` (local work and Phase 5 end-to-end tests) and `paper` (the deployed skeleton, then the trial) therefore use separate Alpaca paper accounts.
 - **AWS budget alarms** at $10 and $25.
+- **Public project site** (`AuraTradePublicSite`, decision #108): static files from `web/` in a **private** S3 bucket, served by **CloudFront** with origin access control, so the bucket is readable only through CloudFront. It is HTTPS only, has security headers with a strict content-security policy, and has no backend: nothing on the internet reaches Neon, Alpaca or SSM. The optional custom domain uses an ACM certificate (us-east-1) and Route 53 records for the apex and `www`. Data panels read one allow-listed file, `data/snapshot.json`, written nightly by `post_market` (task 5.7). It publishes closed trades only, never open positions, stops or IDs, and site deploys never prune it.
 - **Neon free-tier compute:** the watchdog and any `fill_watcher` keep the database awake for much of the day. Compute hours are checked against the free allowance in 1.8. The `fill_watcher` and `stop_guard` ask the broker first and open a database connection only when there is something to do.
 
 | Item | Monthly estimate |
 |---|---|
 | Claude API | ~$35–65 (upper estimate, §9) |
 | AWS | ~$1–5 |
+| Public site domain (optional) | ~$1.50 (about $13/year for a `.com`, plus $0.50 for the Route 53 zone); CloudFront and S3 stay in the free tier |
 | Data, database, alerts | $0 (free tiers) |
 | **Total** | **~$40–70** (budget: < $150) |
 
@@ -847,6 +849,7 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 AuraTrade/
 ├── README.md
 ├── docs/                         # execution plan, spikes, backtests, incidents, runbook
+├── web/                          # public project site: static HTML/CSS (§12)
 ├── pyproject.toml / uv.lock
 ├── Dockerfile
 ├── docker-compose.yml
@@ -874,7 +877,7 @@ AuraTrade/
 │   └── jobs/
 ├── backtest/                     # regime, baseline, entry and exit-policy comparisons
 ├── spikes/
-├── infra/
+├── infra/                        # CDK app: app.py, stacks/ (public_site; the trading stack from 1.8)
 └── tests/
 ```
 
@@ -1064,6 +1067,8 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 | 105 | Design freeze | No further paper design reviews. From here, the design changes only on a spike or backtest finding (CLAUDE.md §5) or at the user's request. *Why:* four reviews produced 54 decisions in two days, and the remaining open questions (order mechanics, data coverage, IEX vs SIP, real token cost) can only be answered empirically |
 | 106 | Edge check first | The spike-grade edge check moves from task 1.6b to spike 0.3h, right after the market-data spike, on daily bars pulled straight to Parquet (no database or job framework). Amends #100. *Why:* it needs only daily bars, so it can run before the data layer (1.1–1.6) is built; a clearly negative result, even with survivorship inflating it, then saves that work |
 | 107 | Live EP path later | The live `EpisodicPivot` path (08:40 EP candidates, the Portfolio Manager's EP review, EP entries) is built in task 5.6, after the core execution loop and before the AWS deploy. The EP backtest proxy, guardrails and plan rules stay where they were. No behaviour changes; the paper trial still trades every strategy. Amends #64. *Why:* EP has the most special cases and a live rule that can't be backtested, so it shouldn't hold up the core loop |
+| | *Public site, 2026-10-08 (user request, allowed under #105)* | |
+| 108 | Public project site | A static site (`web/`) in a private S3 bucket behind CloudFront with origin access control, in its own CDK stack (§12); no backend. Later data comes from one nightly, allow-listed `data/snapshot.json` written by `post_market` that publishes **closed trades only**, never open positions, stops or IDs. Pages say "paper trading" and "not financial advice". It pulls forward Phase 9's read-only dashboard (tasks 0.5 and 5.7). *Why:* the user wants a public page with a link. A static site costs about nothing and can't touch the trading system, whereas an API on Neon would wake the free-tier database on every visit and put it on the internet. Publishing open positions would reveal stop levels and read like a signal service |
 
 ---
 

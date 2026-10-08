@@ -27,9 +27,14 @@ dev = [
 ]
 # Research-only dependencies for backtest/ (filled in by Phases 2-3).
 backtest = []
+infra = [
+    "aws-cdk-lib>=2.272.0",
+    "constructs>=10.8.1",
+]
 
 [tool.uv]
-default-groups = ["dev"]
+# infra is a default group so CI synthesizes and tests the CDK stacks.
+default-groups = ["dev", "infra"]
 
 [tool.ruff]
 line-length = 100
@@ -71,7 +76,8 @@ files = ["src", "scripts"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+# "." for scripts/; "infra" because CDK stacks live outside src/ (README §13) and are imported as `stacks.*`.
+pythonpath = [".", "infra"]
 addopts = ["--strict-markers", "--strict-config", "-ra"]
 xfail_strict = true
 filterwarnings = [
