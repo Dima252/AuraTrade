@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (107 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
+| README §16 "Decision log" | **Why** things are the way they are (108 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review, #108 the public site) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
@@ -68,7 +68,7 @@ Phase 0 spikes exist to test assumptions. When a spike or a later finding contra
 ## 7. Commands
 
 ```bash
-uv sync                                   # install dependencies (dev group by default)
+uv sync                                   # install dependencies (dev + infra groups by default)
 uv run pre-commit install                 # once per clone: lint, format, mypy, secret check on commit
 docker compose up -d                      # local Postgres for tests
 uv run pytest                             # tests (add --cov for branch coverage)
@@ -78,6 +78,7 @@ uv run pre-commit run --all-files         # every hook, as on commit
 uv run python scripts/check_keys.py       # confirm every key in .env works (free calls only)
 uv run alembic upgrade head               # apply migrations (from task 1.2)
 uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
+cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same lint → type-check → test steps on every PR. Keep this section up to date.

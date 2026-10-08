@@ -30,6 +30,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 0.3f Spike: news
 - [ ] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK)
 - [ ] 0.4 👤 Review spike findings; amend README/decisions
+- [x] 0.5 Public project site (landing page + S3/CloudFront stack; deployed in 1.8)
 
 **Phase 1: Data layer**
 - [ ] 1.1 Config and job framework
@@ -74,6 +75,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 5.4 Reconciliation and invariants
 - [ ] 5.5 Jobs (execute, monitor, EOD, post-market, weekly)
 - [ ] 5.6 Live `EpisodicPivot` path (EP candidates, EP review, EP entries)
+- [ ] 5.7 Public site data (nightly snapshot: equity, regime, closed trades)
 
 **Phase 6: AWS** (the account and a minimal stack already exist from 1.8)
 - [ ] 6.1 Complete the CDK stack (all jobs)
@@ -119,6 +121,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 | GitHub remote repository | Phase 0 | Private repo |
 | AWS account | Phase 1 (task 1.8) | Root MFA, an admin user via IAM Identity Center, budget alarms |
 | Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | Not currently installed on this machine |
+| Domain name (optional) | Task 1.8 | For the public site (0.5). Buying it through Route 53 (about $13/year for a `.com`) creates the hosted zone the stack needs. Without one, the site lives on its `*.cloudfront.net` address |
 
 ---
 
@@ -171,6 +174,15 @@ The baseline gate in 3.8 is the formal go / no-go, but it comes after months of 
 **Accept:** the note is written. If expectancy is clearly negative for both setups, **stop and bring it to the user** before Phase 1.
 
 **Accept (0.3):** all spike notes written; README decisions confirmed or amended; any blocker has a chosen workaround (especially 0.3b for two-tranche stops).
+
+### 0.5 Public project site (S)
+
+Added at the user's request (decision #108). A public page with a link, explaining the project; data panels follow in 5.7.
+- `web/`: a static landing page (plain HTML and CSS, no scripts, no third-party assets), a 404 page and a favicon.
+- `infra/stacks/public_site.py`: the `AuraTradePublicSite` CDK stack (README §12): private S3 bucket, CloudFront with origin access control, HTTPS only, security headers with a strict content-security policy, an optional custom domain (ACM certificate + Route 53 records for the apex and `www`), and a deployment that never prunes `data/`.
+- Offline tests: the synthesized template (private bucket, TLS-only policy, CloudFront-only read, headers, domain on/off), and the pages fitting the content-security policy and carrying the disclaimer.
+
+**Accept:** `cdk synth` succeeds with and without a domain; tests pass. Deployed in 1.8, once the AWS account exists.
 
 ---
 
@@ -269,6 +281,7 @@ What was 6.1, plus the core of the CDK stack, moved forward so deployment proble
 - **Account:** root MFA, Identity Center admin, AWS CLI, budget alarms at $10 / $25, `cdk bootstrap`.
 - **Minimal stack:** ECR image, one Lambda per skeleton job (order jobs with async retries on), EventBridge Scheduler (`America/New_York`), the `stop_guard` schedule, SSM parameters, the `watchdog` with its external dead-man's-switch ping, and a Neon `paper` branch.
 - Runs against the **`paper`** Alpaca account, never the `dev` one.
+- Deploy the public site stack from 0.5 (`AuraTradePublicSite`), on the custom domain if one was bought.
 
 **Accept:**
 - 10 unattended sessions on Alpaca paper.
@@ -711,6 +724,16 @@ EP has more special cases than any other strategy, and its live rule can't be ba
 
 **Accept:** on a replayed earnings morning, an EP candidate is detected at 08:40, reviewed by the Portfolio Manager, and entered at 09:36 on its opening-range high with a low-of-day stop, on the `dev` paper account (or replayed through `sim/` if no live EP comes up); the baseline book receives the same candidate; an EP whose opening range is wider than 1.5 × its pre-gap ADR is rejected and logged.
 
+### 5.7 Public site data (S)
+
+The public site (0.5) gets its numbers from one file, so the internet never reaches the trading system (decision #108):
+- `post_market` writes `data/snapshot.json` to the site bucket every night, with `Cache-Control: max-age=300`. Its IAM role may only put objects under `data/`.
+- The snapshot is a Pydantic model and an **allow-list**: equity curve vs SPY and the baseline book (sim R, README §5.12), the effective regime and pillar scores, **closed** trades (R, holding sessions, exit reason, the Analyst's stated thesis), and the verdict-scorecard summary once it has data.
+- Never in it: open positions, pending entries, stop levels, order or account IDs, raw prompts or LLM payloads.
+- `web/` renders the panels from the snapshot and falls back to the static page when it is missing (the content-security policy already allows same-origin `connect-src`; scripts must stay same-origin files).
+
+**Accept:** a test proves no open-position, stop or ID field can reach the snapshot; the page renders a recorded snapshot and the missing-snapshot case; a closed trade appears the night after it closes, not before.
+
 ---
 
 ## Phase 6: AWS deployment (M)
@@ -782,7 +805,7 @@ Before day 1, write `docs/backtests/power.md` from the 4.6 scorecard data (READM
 - A two-stage Analyst (cheap triage → full review) if costs rise.
 - A hidden-Markov-model regime probability as extra LLM context.
 - Pyramiding winners (adding on a first pullback to the 10-week line).
-- An IPO-base strategy; a read-only dashboard.
+- An IPO-base strategy. (The read-only dashboard became the public site: tasks 0.5 and 5.7.)
 
 ---
 
