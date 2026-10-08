@@ -1,0 +1,37 @@
+# Secrets: keys live in .env locally and SSM in AWS (CLAUDE.md §3).
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.hypothesis/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Local data: Parquet bars, spike downloads, charts, recorded payloads
+/data/
+*.parquet
+spikes/**/data/
+spikes/**/output/
+
+# AWS CDK
+cdk.out/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

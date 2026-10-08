@@ -1,0 +1,79 @@
+[project]
+name = "auratrade"
+version = "0.1.0"
+description = "Autonomous swing-trading system for US stocks: an LLM decides inside hard risk limits enforced by code."
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = []
+
+[build-system]
+requires = ["uv_build>=0.10,<0.11"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.168.5",
+    "mypy>=2.4.0",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
+]
+# Research-only dependencies for backtest/ (filled in by Phases 2-3).
+backtest = []
+
+[tool.uv]
+default-groups = ["dev"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.format]
+# Code blocks in the README/docs are illustrative spec text, not formatted code.
+exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # isort
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplify
+    "RUF",     # ruff-specific
+    "DTZ",     # naive datetimes are banned (CLAUDE.md §6: timezone-aware only)
+    "PT",      # pytest style
+    "N",       # naming
+    "S",       # bandit
+    "C4",      # comprehensions
+    "PTH",     # pathlib
+    "T20",     # no print() in library code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+"spikes/**" = ["T20"]
+"scripts/**" = ["T20"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+warn_unreachable = true
+files = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["--strict-markers", "--strict-config", "-ra"]
+xfail_strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+branch = true
+source = ["auratrade"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError", "\\.\\.\\."]

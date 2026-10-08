@@ -68,16 +68,18 @@ Phase 0 spikes exist to test assumptions. When a spike or a later finding contra
 ## 7. Commands
 
 ```bash
-uv sync                                   # install dependencies
+uv sync                                   # install dependencies (dev group by default)
+uv run pre-commit install                 # once per clone: lint, format, mypy, secret check on commit
 docker compose up -d                      # local Postgres for tests
-uv run pytest                             # tests
+uv run pytest                             # tests (add --cov for branch coverage)
 uv run ruff check . && uv run ruff format --check .
 uv run mypy src
-uv run alembic upgrade head               # apply migrations
-uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run
+uv run pre-commit run --all-files         # every hook, as on commit
+uv run alembic upgrade head               # apply migrations (from task 1.2)
+uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
 ```
 
-These become valid as Phase 0.1 creates the project. Keep this section up to date.
+CI (`.github/workflows/ci.yml`) runs the same lint → type-check → test steps on every PR. Keep this section up to date.
 
 ## 8. Glossary
 
