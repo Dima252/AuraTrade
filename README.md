@@ -132,11 +132,12 @@ All times are US/Eastern (EventBridge Scheduler, `America/New_York`). **Every jo
 | 19:00, 21:00, 06:00 | `analyst_collect` | Collect results (idempotent). Not done by 06:00 → no new evening-pipeline entries tomorrow, plus an alert |
 | **Trading day (session T+1)** | | |
 | 07:30 | `premarket_check` | Macro refresh (computed regime may only **downgrade**); overnight news; earnings-date changes |
-| 08:40 | `portfolio_manager` (gap step) | IEX pre-market trading starts at 08:00, so gaps are measured here, not at 07:30. Setups gapping > 5% above their pivot are invalid today (EPs excepted: their gap is the signal, §7.1). **Episodic-pivot candidates**: gap ≥ 10% on earnings/news |
+| 08:40 | `portfolio_manager` (gap step) | Gaps are measured from **15-minute-delayed SIP** pre-market trades (to 08:25); IEX pre-market is too thin (spike 0.3a, #110). Setups gapping > 5% above their pivot are invalid today (EPs excepted: their gap is the signal, §7.1). **Episodic-pivot candidates**: pre-market gap ≥ 7% on earnings/news, confirmed ≥ 10% at the open |
 | 08:45 | `portfolio_manager` (decision step) | **Only if there's something to decide.** LLM regime view, **EP review**, allocation, exit plans for new entries, tightening of existing plans → guardrails → `signals`. **Hard deadline 09:10:** no valid decision by then → no new entries today (existing plans still run) |
 | 09:20 | `execute_open` | Reconcile → OPG exits/trims (stop quantity reduced first, §5.7) → hard-stop replacements |
 | 09:31 | `execute_open` (check run) | Reconcile + stop invariant only. Catches an OPG exit that was rejected or didn't fill at the open, so the shares aren't left without a stop until 09:36 |
-| 09:36 | `execute_entries` | Reconcile + stop invariant (catches any rejected OPG order) → re-check the actual open vs each pivot → place entry orders with their triggers: pivot, or the **5-minute opening-range high** when the opening range traded above the pivot, and for momentum breakouts and EPs. Skip anything more than 5% above its pivot |
+| 09:36 | `execute_entries` | Reconcile + stop invariant (catches any rejected OPG order) → re-check the actual open vs each pivot → place entry orders with their triggers: pivot, or the **5-minute opening-range high** when the opening range traded above the pivot, and for momentum breakouts and EPs. Skip anything more than 5% above its pivot. An opening-range entry whose symbol had **no IEX trade in 09:30–09:34** waits for 09:51 (#109) |
+| 09:51 | `execute_entries` (delayed-SIP run) | Opening-range entries without an IEX range: trigger = the consolidated 09:30–09:34 high from delayed SIP; same trigger, limit and "already through the trigger" rules (§7.1) |
 | 10:30, 12:30, 14:00 | `intraday_monitor` | Reconcile fills; volume pace; **early-behaviour rules** (§7); raise hard stops when a milestone was hit intraday (breakeven, round-trip); cancel invalid entries; crisis check |
 | Every 5 min, 09:35–16:00 | `stop_guard` | Invariant-only check (§5.7): every position has a GTC stop covering its full quantity. It asks the broker first and opens a database connection and takes the lock only to repair. This bounds the unprotected time after a job dies mid-sequence to about 5 minutes, not the hours until the next scheduled order job. Merged into the `fill_watcher` if 0.3b requires one |
 | 15:40 (12:40 on half days) | `eod_review` | Code: soft-rule exits (trailing MA closes, heavy-volume reversals, climax and cushion actions), decided on the **15:40 decision price** and executed at once (§7.3). LLM, **only if needed**: tranche-2 adds that passed the gate, failed breakouts. **Hard deadline 15:50 (12:50):** no valid LLM decision → no adds, and failed breakouts follow their default (hold) |
@@ -187,7 +188,7 @@ if session is None:
 
 **Macro staleness:** "latest value on or before" each session; more than 2 sessions stale → volatility pillar scores 0.
 
-**Intraday prices:** current prices and opening ranges from **real-time IEX**; volume from **15-minute-delayed SIP**.
+**Intraday prices:** current prices and opening ranges from **real-time IEX**; volume from **15-minute-delayed SIP**. Two exceptions (spike 0.3a): pre-market gaps come from delayed SIP (#110), and when IEX printed nothing in the first 5 minutes, the opening range comes from delayed SIP at 09:51 (#109).
 
 **Long weekends:** the Portfolio Manager receives `sessions_until_next_open` and `is_long_weekend`.
 
@@ -197,9 +198,13 @@ if session is None:
 
 ### 5.1 Ingest (`ingest`)
 
-- **Universe:** active, tradable US common stocks (NYSE, NASDAQ, AMEX). Price ≥ $10, 50-day average dollar volume ≥ $10M, ≥ 252 sessions of history. This also screens out the thinly traded stocks IBD found perform poorly (under ~400k shares a day).
+- **Universe:** active, tradable US common stocks (NYSE, NASDAQ, AMEX), **ADRs included** (#111). Price ≥ $10, 50-day average dollar volume ≥ $10M, ≥ 252 sessions of history. This also screens out the thinly traded stocks IBD found perform poorly (under ~400k shares a day).
   - The price and dollar-volume filters use **raw (unadjusted) prices as they traded that day**. Split-adjusted history would misstate past prices: a $50 stock before a 10:1 split shows as $5.
+  - **Classification** (Alpaca's asset API has no type flag; #111): the Nasdaq Trader symbol directory's ETF flag → symbol suffix (preferreds, units, warrants, rights; single-letter class shares such as `BRK.B` stay) → name rules (funds, notes, SPAC-style names; "Common Stock / Ordinary Shares / Depositary Shares" kept) → EDGAR SIC 6770 (blank checks).
   - **Point in time:** backtests rebuild the universe for each historical session from the symbols that were listed then, **including later-delisted ones**, as far as the vendor covers them. Coverage is measured in spike 0.3a and its gap is reported in every backtest (§15).
+    - Alpaca's asset list forgets most delistings before ~2018, but its bars endpoint still serves them. The backfill adds **ticker-enumeration snapshots** (every 1–4 letter ticker that traded in a given week; ~3 minutes each) to the asset list.
+    - **Zero-volume bars are dropped:** Alpaca repeats the last close with volume 0 for months after a delisting.
+    - History is keyed by ticker, and tickers get reused, so securities are keyed by Alpaca asset id / CUSIP where known, and a ticker with a trading gap of more than 30 sessions is split into separate securities.
 - **Bars:** Alpaca SIP daily bars, `adjustment=split`, plus the raw close (for the universe filter); rolling **2 years** in Postgres, full history (2016 onward) in **Parquet**.
   - **Split-only adjustment, not dividend adjustment:** pivots and stops computed from the bars become broker orders, so they must be in the prices the stock actually traded at. Dividend-adjusted history sits below real prices, and it changes all earlier bars on every ex-date, which gap-fill ingest would never re-fetch. RS and momentum use price returns, as IBD's RS rating does.
 - **Corporate actions:** splits, reverse splits, mergers and symbol changes for held symbols and open orders (§5.7).
@@ -342,10 +347,10 @@ The 8 rules:
 ### 5.5 Pre-market check (`premarket_check`)
 
 - **07:30:** macro refresh (downgrade-only), overnight news, earnings-date changes.
-- **08:40** (first step of `portfolio_manager`, once IEX pre-market quotes exist):
+- **08:40** (first step of `portfolio_manager`), from **delayed-SIP pre-market trades up to 08:25** (#110; by 08:40 IEX had a pre-market print for only 17 of 80 sampled ≥ 10% gappers, delayed SIP for 78):
   - pre-market gap vs pivot: above pivot + 5% → invalid today
-  - **EP candidates:** stocks that reported after yesterday's close or before today's open, or had major news, gapping ≥ 10%, with charts, the surprise and the latest filed growth numbers. EDGAR lags the earnings release, so the new quarter is represented by the surprise and the headlines.
-- Pre-market gaps are estimates (thin IEX pre-market liquidity), so `execute_entries` re-checks against the actual open.
+  - **EP candidates:** stocks that reported after yesterday's close or before today's open, or had major news, with a pre-market gap ≥ 7% (the screen; ≥ 10% is confirmed at the open), with charts, the surprise and the latest filed growth numbers. EDGAR lags the earnings release, so the new quarter is represented by the surprise and the headlines.
+- Pre-market gaps are estimates (15 minutes old, thin pre-market liquidity), so `execute_entries` re-checks against the actual open; an EP needs an actual gap ≥ 10%.
 
 ### 5.6 Portfolio Manager (`portfolio_manager`, LLM, real-time)
 
@@ -439,7 +444,7 @@ Deterministic. Reconciles fills; computes volume pace (delayed SIP); applies the
 - **Same inputs:** the same capped top-40 list, regime gating, sizing, guardrails, entry policies and default exit plans. EPs come from the same morning candidate list (rule: gap ≥ 10%, volume, surprise > 0).
 - **Rules instead of the LLM:** it takes setups in **rank order** until the position and exposure limits are full, and makes tranche-2 adds purely on the gate.
 - **Simulated each evening** by the `simulate` job, from that day's minute bars for its symbols only: 09:36 triggers, opening-range highs, low-of-day stops, the EOD gate and soft rules (on the same 15:40 decision price as live). It therefore needs no extra intraday jobs.
-- **Same feeds as live.** Live trading sets its levels from **IEX**: the opening-range high, the 09:36 last price and the 15:40 decision price. IEX prints only part of the volume, so its opening-range high is usually below the consolidated one. The simulator therefore takes those levels from **IEX minute bars**, and fills and volume from **SIP minute bars** (orders execute on the consolidated tape). Historical backtests use IEX bars where Alpaca's IEX history exists (spike 0.3a), and SIP before that, with the report saying so.
+- **Same feeds as live.** Live trading sets its levels from **IEX**: the opening-range high, the 09:36 last price and the 15:40 decision price. IEX prints only part of the volume, so its opening-range high is usually below the consolidated one. The simulator therefore takes those levels from **IEX minute bars**, and fills and volume from **SIP minute bars** (orders execute on the consolidated tape). Historical backtests use IEX bars where Alpaca's IEX history exists (from **2020-07-27**, spike 0.3a), and SIP before that, with the report saying so. The 09:51 delayed-SIP opening range (#109) is simulated the same way: where IEX minute bars show no trade in 09:30–09:34, the trigger is the SIP high and the entry starts at 09:51.
 - **Like for like.** The LLM book trades on Alpaca paper fills, which are optimistic (§17); the baseline is simulated with slippage. Comparing the two directly would favour the LLM book. So every comparison with the baseline uses the LLM book's decisions replayed through `sim/` (the **sim R**, §5.10), and the paper fills are reported alongside.
 
 **Breakout tracker** (feeds the leadership-health pillar):
@@ -533,6 +538,8 @@ Regime changes never force liquidation. A downgrade of the computed regime tight
 **EP stop cap.** A gap day's opening range is often wider than the pre-gap ADR, so a 1 × ADR cap would reject most EPs and effectively switch the strategy off. Kullamägi's ADR limit is stated for breakouts; for EPs he uses the low of the day. The default cap is therefore 1.5 × the pre-gap ADR, and the baseline backtest compares 1 × and 1.5 × and reports each one's rejection rate.
 
 **Pivot crossed before 09:36.** Orders go in at 09:36. A stock that opened below its pivot and broke through it in the first five minutes would have a trigger below the market, and the "Price levels" guardrail (§8) would skip it. Those are often the strongest breakouts. So any pivot strategy whose opening range traded above its level uses the opening-range high as its trigger.
+
+**No IEX opening range.** IEX prints only ~5% of volume, and in the thinner half of the universe it has no trade at all in 09:30–09:34 on about half the days (spike 0.3a). An opening-range entry for such a symbol isn't skipped: at 09:51 it takes the consolidated 09:30–09:34 high from delayed SIP as its trigger, with the same limit and "already through the trigger" rules (#109). Pivot triggers are unaffected.
 
 **Already through the trigger at 09:36.** The 5-minute range ends at 09:35, so a stock can break its opening-range high in the minute before the order goes in. If the last price is above the trigger but at or below the limit, the entry goes in as a **limit buy at the limit**: the same worst fill it was sized on, never a market buy. Above the limit, it is skipped.
 
@@ -848,6 +855,7 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 ```text
 AuraTrade/
 ├── README.md
+├── .github/workflows/            # CI: lint → type-check → tests (deploy added in 6.2)
 ├── docs/                         # execution plan, spikes, backtests, incidents, runbook
 ├── web/                          # public project site: static HTML/CSS (§12)
 ├── pyproject.toml / uv.lock
@@ -876,6 +884,7 @@ AuraTrade/
 │   ├── notify/
 │   └── jobs/
 ├── backtest/                     # regime, baseline, entry and exit-policy comparisons
+├── scripts/                      # one-off operator tools: check_keys.py, backfill.py
 ├── spikes/
 ├── infra/                        # CDK app: app.py, stacks/ (public_site; the trading stack from 1.8)
 └── tests/
@@ -1069,6 +1078,11 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 | 107 | Live EP path later | The live `EpisodicPivot` path (08:40 EP candidates, the Portfolio Manager's EP review, EP entries) is built in task 5.6, after the core execution loop and before the AWS deploy. The EP backtest proxy, guardrails and plan rules stay where they were. No behaviour changes; the paper trial still trades every strategy. Amends #64. *Why:* EP has the most special cases and a live rule that can't be backtested, so it shouldn't hold up the core loop |
 | | *Public site, 2026-10-08 (user request, allowed under #105)* | |
 | 108 | Public project site | A static site (`web/`) in a private S3 bucket behind CloudFront with origin access control, in its own CDK stack (§12); no backend. Later data comes from one nightly, allow-listed `data/snapshot.json` written by `post_market` that publishes **closed trades only**, never open positions, stops or IDs. Pages say "paper trading" and "not financial advice". It pulls forward Phase 9's read-only dashboard (tasks 0.5 and 5.7). *Why:* the user wants a public page with a link. A static site costs about nothing and can't touch the trading system, whereas an API on Neon would wake the free-tier database on every visit and put it on the internet. Publishing open positions would reveal stop levels and read like a signal service |
+| | *Spike findings, 2026-10-09 (0.3a, 0.3h; allowed under #105)* | |
+| 109 | No IEX opening range | Opening-range entries use the IEX 09:30–09:34 high at 09:36 when IEX traded; otherwise the consolidated high from delayed SIP at 09:51 (a second `execute_entries` run), with the same limit rules. The simulator reproduces the rule from IEX minute history. Amends #22, #99. *Why:* spike 0.3a found no IEX trade in the first 5 minutes on 48% of symbol-days for names with $10–94M daily volume (over half the universe), 15% for the next tier and 0% for the top 100. Skipping them would drop about half the momentum and EP entries in those names |
+| 110 | Pre-market gap source | The 08:40 gap step reads 15-minute-delayed SIP pre-market trades (to 08:25), not IEX; EP candidates are screened at ≥ 7% and confirmed ≥ 10% at the open. Amends #44. *Why:* by 08:40 only 17 of 80 sampled ≥ 10% gappers had any IEX pre-market print (10 flagged), against 78 with delayed SIP (54 flagged at ≥ 10%, 64 at ≥ 7%, 4 false alarms in 79 near-misses) |
+| 111 | Universe and survivorship | ADRs are in the universe; classification = Nasdaq Trader ETF flag → symbol suffix → name rules → SIC 6770; the backtest universe adds ticker-enumeration snapshots to Alpaca's asset list; zero-volume bars are dropped; securities are keyed by asset id / CUSIP, with long trading gaps splitting a ticker. *Why:* Alpaca's asset API has no type flag; its asset list misses ~20% of the liquid 2016–17 universe although the bars exist; it emits zero-volume bars after delistings; tickers are reused. IBD and Minervini trade ADRs |
+| 112 | Edge check: continue | The 0.3h result (both simple setups ≈ 0R before costs, −0.08R after 0.2% a side; 34% delisted names in the universe) does not pause the build. The 3.8 baseline gate must clearly beat this naive reference, with liquidity-scaled slippage. *Why:* the result is borderline, not clearly negative, and regime-shaped (VCP +0.25R in 2017, −0.70R in 2022); the design never trades these setups ungated or without ranking and plan exits |
 
 ---
 
@@ -1080,8 +1094,8 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 - **Prompt injection.** News and filing text reach the LLM. They are passed as delimited data (§9), and the guardrails bound the damage, but a planted headline could still bias a choice among valid setups.
 - **Statistical power.** The BUY-vs-SKIP comparison may need more than a year of triggered setups to reach significance. The rules for an inconclusive result are fixed before the trial (§15).
 - **Paper fills are optimistic.**
-- **Survivorship bias:** delisted coverage is limited, so backtests that miss failed and delisted stocks overstate breakout results. Each report quantifies the gap (§15); treat backtested expectancy as an upper bound.
-- **Free-tier data limits:** IEX-only opening ranges and pre-market gaps are approximations of the consolidated tape; intraday volume is 15 minutes delayed; history starts in 2016; EP backtests use a gap + volume proxy for "news"; EDGAR fundamentals lag earnings releases; IBD measures distribution and follow-through on index exchange volume, approximated here with SPY/QQQ volume.
+- **Survivorship bias:** delisted coverage is good but not complete (ticker enumeration misses 5-letter tickers, and ticker reuse can mix securities), so backtests may still miss some failed and delisted stocks and overstate breakout results. Each report quantifies the gap (§15); treat backtested expectancy as an upper bound.
+- **Free-tier data limits:** IEX opening ranges sit slightly below the consolidated ones, and some opening-range entries wait until 09:51 for delayed SIP (#109); pre-market gaps are 15 minutes old (#110); intraday volume is 15 minutes delayed; history starts in 2016; EP backtests use a gap + volume proxy for "news"; EDGAR fundamentals lag earnings releases; IBD measures distribution and follow-through on index exchange volume, approximated here with SPY/QQQ volume.
 - **Gap risk:** stops don't protect against overnight gaps.
 - **Regime lag:** trend-based detection reacts after the turn.
 - **Breakout strategies** expect roughly a 40–50% win rate; returns depend on a few large winners.
