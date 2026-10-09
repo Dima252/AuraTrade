@@ -28,7 +28,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 0.3d Spike: macro data timing
 - [x] 0.3e Spike: fundamentals, earnings, industries *(ADJUST proposed: earnings timing = earlier of 8-K and headline; decided at 0.4)*
 - [x] 0.3f Spike: news
-- [ ] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK)
+- [x] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK) *(approved 2026-10-09; spent ~$0.26; ~$0.016 per Analyst request, ~$17–22/month; ADJUST proposed for README §9)*
 - [ ] 0.4 👤 Review spike findings; amend README/decisions
 - [x] 0.5 Public project site (landing page + S3/CloudFront stack; deployed in 1.8)
 
