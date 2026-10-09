@@ -20,7 +20,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 **Phase 0: Foundations and spikes**
 - [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
-- [ ] 0.2 👤 Accounts and keys + `scripts/check_keys.py`
+- [x] 0.2 👤 Accounts and keys + `scripts/check_keys.py` *(all keys verified 2026-10-09; local Postgres via Docker until Neon at 1.2; paper capital $5,000 confirmed)*
 - [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture *(part 1 done 2026-10-08; part 2 needs market hours, see `docs/spikes/alpaca-orders.md`)*
 - [ ] 0.3a Spike: Alpaca market data *(findings adopted as #109–111; real-time and bar-revision checks pending)*
 - [x] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build) *(≈ 0R before costs, −0.08R after; continue, decision #112)*
