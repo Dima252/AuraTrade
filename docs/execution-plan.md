@@ -43,7 +43,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 1.8 👤 Early AWS deploy of the skeleton
 
 **Phase 2: Indicators and regime**
-- [ ] 2.1 Indicators
+- [x] 2.1 Indicators *(built out of plan order with the user's approval: pure functions, no config dependency)*
 - [ ] 2.2 Base detection and base count
 - [ ] 2.3 Regime classifier
 - [ ] 2.4 Regime backtest
