@@ -24,7 +24,10 @@ def make_alerter(settings: Settings) -> Alerter:
 
 
 def make_job_run_store(settings: Settings) -> JobRunStore:
-    raise NotImplementedError("the Postgres job_runs store arrives with task 1.2")
+    from auratrade.db.engine import engine_from_settings
+    from auratrade.db.job_runs import SqlJobRunStore
+
+    return SqlJobRunStore(engine_from_settings(settings))
 
 
 def make_calendar(settings: Settings) -> SessionCalendar:
@@ -45,8 +48,8 @@ def build_deps(settings: Settings, invoker: JobInvoker | None) -> RunnerDeps:
     return RunnerDeps(
         settings=settings,
         risk=load_risk_config(settings.risk_config_path),
-        calendar=make_calendar(settings),
         store=make_job_run_store(settings),
+        calendar=make_calendar(settings),
         alerter=make_alerter(settings),
         invoker=invoker,
         storage=make_store(settings),

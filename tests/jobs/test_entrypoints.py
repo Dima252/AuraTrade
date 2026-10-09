@@ -12,6 +12,7 @@ import pytest
 from botocore.stub import Stubber
 
 from auratrade.config import Settings
+from auratrade.db.job_runs import SqlJobRunStore
 from auratrade.jobs import base, schedule, wiring
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, RunnerDeps
 from auratrade.jobs.invoke import JobInvoker, LambdaInvoker, LocalInvoker, NoChainInvoker
@@ -224,8 +225,18 @@ class TestWiring:
         assert isinstance(wiring.make_alerter(both), TelegramNotifier)
 
     def test_unbuilt_parts_fail_loudly(self) -> None:
-        settings = Settings(_env_file=None)  # type: ignore[call-arg]
+        settings = Settings(  # type: ignore[call-arg]
+            _env_file=None, database_url="postgresql+psycopg://u:p@localhost:1/x"
+        )
         with pytest.raises(NotImplementedError, match=r"task 1\.4"):
             wiring.build_deps(settings, NoChainInvoker())
-        with pytest.raises(NotImplementedError, match=r"task 1\.2"):
-            wiring.make_job_run_store(settings)
+
+    def test_store_needs_a_database_url(self) -> None:
+        with pytest.raises(ValueError, match="DATABASE_URL"):
+            wiring.make_job_run_store(Settings(_env_file=None))  # type: ignore[call-arg]
+
+    def test_store_is_postgres(self) -> None:
+        settings = Settings(  # type: ignore[call-arg]
+            _env_file=None, database_url="postgresql+psycopg://u:p@localhost:1/x"
+        )
+        assert isinstance(wiring.make_job_run_store(settings), SqlJobRunStore)

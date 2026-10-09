@@ -88,6 +88,21 @@ multiplier:  # README §8, progressive exposure
   trading_well_trades: 10
   trading_well_multiplier: 1.25
 
+climax:  # README §7.3 "Climax sale"
+  up_day_clusters:                   # >= 7 up days in 8, or >= 8 in 10
+    - {up_days: 7, of_sessions: 8}
+    - {up_days: 8, of_sessions: 10}
+  min_above_long_average: 0.70       # >= 70% above the 200-day
+  fast_gain_min: 0.25                # >= 25% gain ...
+  fast_gain_window: 15               # ... in <= 15 sessions ...
+  # ... "after an extended run": only once the move is this many sessions old. Provisional:
+  # the first 15 sessions after the breakout are the 8-week-hold window (+20% in 15), where
+  # a fast gain is a strength signal, not a climax. Tuned only on backtest evidence (3.8).
+  fast_gain_min_move_sessions: 15
+  # The exhaustion-gap minimum has no README value yet; it is added with the plan engine (3.5a).
+  sell_half_signals: 2
+  sell_all_signals: 3
+
 data:  # README §4
   min_coverage: 0.90
   macro_stale_sessions: 2

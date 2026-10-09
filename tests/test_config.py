@@ -16,6 +16,8 @@ from auratrade.config import (
     load_risk_config,
     load_settings,
 )
+from auratrade.indicators.bars import Bar
+from auratrade.indicators.climax import climax_signals
 
 ENV_VARS = [
     "TRADING_MODE",
@@ -166,3 +168,44 @@ class TestRiskConfig:
         path.write_text("- just a list\n", encoding="utf-8")
         with pytest.raises(ValueError, match="mapping"):
             load_risk_config(path)
+
+
+class TestClimaxConfig:
+    def test_readme_values(self) -> None:
+        climax = load_risk_config().climax
+        assert [(c.up_days, c.of_sessions) for c in climax.up_day_clusters] == [(7, 8), (8, 10)]
+        assert climax.min_above_long_average == 0.70
+        assert (climax.fast_gain_min, climax.fast_gain_window) == (0.25, 15)
+        assert climax.fast_gain_min_move_sessions == 15
+        assert (climax.sell_half_signals, climax.sell_all_signals) == (2, 3)
+
+    def test_keys_match_the_indicator(self) -> None:
+        climax = load_risk_config().climax
+        bars = [Bar(open=10, high=10, low=10, close=10, volume=1000) for _ in range(30)]
+        signals = climax_signals(
+            bars,
+            at=29,
+            move_start=0,
+            long_average=None,
+            exhaustion_min_gap=0.0,  # not in risk.yaml yet (3.5a)
+            up_day_clusters=[(c.up_days, c.of_sessions) for c in climax.up_day_clusters],
+            min_above_long_average=climax.min_above_long_average,
+            fast_gain_min=climax.fast_gain_min,
+            fast_gain_window=climax.fast_gain_window,
+            fast_gain_min_move_sessions=climax.fast_gain_min_move_sessions,
+        )
+        assert signals.count == 0
+
+    @pytest.mark.parametrize(
+        ("field", "value", "error"),
+        [
+            ("up_day_clusters", [{"up_days": 9, "of_sessions": 8}], "cannot exceed"),
+            ("sell_all_signals", 1, "sell_all_signals"),
+            ("fast_gain_min_move_sessions", -1, "fast_gain_min_move_sessions"),
+        ],
+    )
+    def test_invalid(self, field: str, value: object, error: str) -> None:
+        raw = risk_dict()
+        raw["climax"] = {**raw["climax"], field: value}  # type: ignore[dict-item]
+        with pytest.raises(ValidationError, match=error):
+            RiskConfig.model_validate(raw)

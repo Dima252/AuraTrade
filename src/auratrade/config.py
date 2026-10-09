@@ -233,6 +233,35 @@ class MultiplierConfig(_Strict):
     trading_well_multiplier: Positive
 
 
+class UpDayCluster(_Strict):
+    up_days: PositiveInt
+    of_sessions: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.up_days > self.of_sessions:
+            raise ValueError("up_days cannot exceed of_sessions")
+        return self
+
+
+class ClimaxConfig(_Strict):
+    """Climax-sale signals and actions (README §7.3); see `indicators.climax`."""
+
+    up_day_clusters: tuple[UpDayCluster, ...]
+    min_above_long_average: Positive
+    fast_gain_min: Positive
+    fast_gain_window: PositiveInt
+    fast_gain_min_move_sessions: Annotated[int, Field(ge=0)]
+    sell_half_signals: PositiveInt
+    sell_all_signals: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.sell_all_signals < self.sell_half_signals:
+            raise ValueError("sell_all_signals must be >= sell_half_signals")
+        return self
+
+
 class DataConfig(_Strict):
     min_coverage: Fraction
     macro_stale_sessions: PositiveInt
@@ -250,6 +279,7 @@ class RiskConfig(_Strict):
     guardrails: GuardrailsConfig
     halts: HaltsConfig
     multiplier: MultiplierConfig
+    climax: ClimaxConfig
     data: DataConfig
     jobs: JobsConfig
 

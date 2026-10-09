@@ -34,7 +34,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 **Phase 1: Data layer**
 - [x] 1.1 Config and job framework *(runner wired to the `job_runs` store in 1.2 and the calendar in 1.4)*
-- [ ] 1.2 Database and initial migration
+- [x] 1.2 Database and initial migration *(Neon `dev` branch: you add its URL to `.env` and run `alembic upgrade head`; tests run on Docker Postgres)*
 - [ ] 1.3 Data clients
 - [ ] 1.4 Market calendar
 - [ ] 1.5 Ingest job
