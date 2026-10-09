@@ -43,6 +43,7 @@ infra = [
     "constructs>=10.8.1",
 ]
 spikes = [
+    "mplfinance>=0.12.10b0",
     "pandas>=3.0.6",
     "pandas-market-calendars>=5.5.0",
     "pyarrow>=25.0.1",
