@@ -1,0 +1,98 @@
+# Every trading threshold lives here (CLAUDE.md §6), loaded into `auratrade.config.RiskConfig`.
+# Unknown keys are rejected. The hash of the validated values is logged with every job run,
+# so a change here is visible in every log line that follows it.
+#
+# Fractions are of equity (0.01 = 1%). Windows count sessions, never calendar days.
+# Sections for scans, entry rules, exit-plan menus, early-behaviour rules and the earnings
+# cushion are added with the tasks that implement them (3.x).
+
+regimes:  # README §6
+  CONFIRMED_UPTREND:
+    strategies:
+      - {strategy: VCP_BREAKOUT}
+      - {strategy: MOMENTUM_BREAKOUT}
+      - {strategy: EPISODIC_PIVOT}
+      - {strategy: LEADER_PULLBACK}
+    base_risk: 0.01
+    max_exposure: 1.0
+    max_positions: 6
+    max_positions_large_account: 8
+  UNDER_PRESSURE:
+    strategies:
+      - {strategy: LEADER_PULLBACK, min_conviction: 4}
+      - {strategy: VCP_BREAKOUT, min_conviction: 4}
+      - {strategy: EPISODIC_PIVOT, min_conviction: 4}
+    base_risk: 0.005
+    max_exposure: 0.5
+    max_positions: 4
+  EARLY_UPTREND:  # starter limits; see early_uptrend_step
+    strategies:
+      - {strategy: EMERGING_LEADER}
+      - {strategy: EPISODIC_PIVOT}
+    base_risk: 0.0025
+    max_exposure: 0.25
+    max_positions: 3
+  CORRECTION:  # cash: existing positions only
+    strategies: []
+    base_risk: 0.0
+    max_exposure: 0.0
+    max_positions: 0
+  early_uptrend_step:  # never applies to a `no_ftd` entry
+    starter_sessions: 10
+    min_score_to_step_up: 1
+    stepped_base_risk: 0.005
+    stepped_max_exposure: 0.5
+  large_account_equity: 100000
+
+guardrails:  # README §8
+  max_risk_per_trade: 0.015          # hard cap on effective risk
+  max_position_size: 0.25
+  max_heat: 0.06
+  heat_min_room_of_planned: 0.5      # clip to the room left; reject below half the planned risk
+  max_per_cluster: 2
+  cluster_correlation: 0.7
+  cluster_correlation_sessions: 60
+  pivot_tolerance: 0.03              # LLM pivot within ±3% of the code pivot
+  min_stop_below_pivot_atr: 0.5
+  max_chase_above_pivot: 0.05
+  max_above_50d: 0.25                # momentum and EPs exempt
+  late_stage_base_count: 3           # risk × late_stage_risk_factor
+  late_stage_risk_factor: 0.5
+  max_base_count: 3                  # a 4th-stage base or later is not fundable
+  earnings_blackout_sessions: 5
+  earnings_estimate_sessions: 63     # unknown next date: last report + 63 sessions
+  earnings_estimate_window_sessions: 10
+  tranche2_max_sessions: 3
+
+halts:  # README §8, §5.13
+  daily_loss: 0.02
+  weekly_loss: 0.05
+  drawdown: 0.15
+
+multiplier:  # README §8, progressive exposure
+  win_r: 0.5
+  loss_r: 0.5
+  deep_drawdown: 0.10
+  deep_drawdown_multiplier: 0.25
+  drawdown: 0.05
+  drawdown_multiplier: 0.5
+  tier_exit_wins: 3
+  losing_streak: 3
+  losing_streak_exit_wins: 2
+  losing_streak_multiplier: 0.5
+  prove_it_wins: 2
+  prove_it_multiplier: 0.5
+  unproven_regime_trades: 5
+  unproven_regime_multiplier: 0.5
+  trading_well_high_sessions: 5
+  trading_well_trades: 10
+  trading_well_multiplier: 1.25
+
+data:  # README §4
+  min_coverage: 0.90
+  macro_stale_sessions: 2
+
+jobs:  # README §2
+  chain_wait_minutes: 30
+  duration_alert_minutes: 10
+  stale_running_minutes: 20

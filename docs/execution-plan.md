@@ -33,7 +33,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 0.5 Public project site (landing page + S3/CloudFront stack; deployed in 1.8)
 
 **Phase 1: Data layer**
-- [ ] 1.1 Config and job framework
+- [x] 1.1 Config and job framework *(runner wired to the `job_runs` store in 1.2 and the calendar in 1.4)*
 - [ ] 1.2 Database and initial migration
 - [ ] 1.3 Data clients
 - [ ] 1.4 Market calendar
