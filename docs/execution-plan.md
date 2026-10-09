@@ -26,7 +26,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build) *(≈ 0R before costs, −0.08R after; continue, decision #112)*
 - [x] 0.3c Spike: market calendar
 - [ ] 0.3d Spike: macro data timing
-- [ ] 0.3e Spike: fundamentals, earnings, industries
+- [x] 0.3e Spike: fundamentals, earnings, industries *(ADJUST proposed: earnings timing = earlier of 8-K and headline; decided at 0.4)*
 - [x] 0.3f Spike: news
 - [ ] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK)
 - [ ] 0.4 👤 Review spike findings; amend README/decisions
