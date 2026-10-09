@@ -6,11 +6,13 @@ import types
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date
+from pathlib import Path
 
 import boto3
 import pytest
 from botocore.stub import Stubber
 
+from auratrade.calendar.sessions import DbCalendar
 from auratrade.config import Settings
 from auratrade.db.job_runs import SqlJobRunStore
 from auratrade.jobs import base, schedule, wiring
@@ -224,19 +226,23 @@ class TestWiring:
         both = Settings(_env_file=None, telegram_bot_token="t", telegram_chat_id="1")  # type: ignore[call-arg]
         assert isinstance(wiring.make_alerter(both), TelegramNotifier)
 
-    def test_unbuilt_parts_fail_loudly(self) -> None:
+    def test_build_deps_wires_postgres_and_the_calendar(
+        self, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    ) -> None:
+        monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
         settings = Settings(  # type: ignore[call-arg]
-            _env_file=None, database_url="postgresql+psycopg://u:p@localhost:1/x"
+            _env_file=None,
+            database_url="postgresql+psycopg://u:p@localhost:1/x",
+            storage_local_dir=tmp_path,
         )
-        with pytest.raises(NotImplementedError, match=r"task 1\.4"):
-            wiring.build_deps(settings, NoChainInvoker())
+        deps = wiring.build_deps(settings, NoChainInvoker())
+        assert isinstance(deps.store, SqlJobRunStore)
+        assert isinstance(deps.calendar, DbCalendar)
+        assert isinstance(deps.invoker, NoChainInvoker)
+        # Nothing connects until the runner asks (port 1 is closed).
+        lambda_deps = wiring.build_deps(settings, None)
+        assert isinstance(lambda_deps.invoker, LambdaInvoker)
 
-    def test_store_needs_a_database_url(self) -> None:
+    def test_needs_a_database_url(self) -> None:
         with pytest.raises(ValueError, match="DATABASE_URL"):
-            wiring.make_job_run_store(Settings(_env_file=None))  # type: ignore[call-arg]
-
-    def test_store_is_postgres(self) -> None:
-        settings = Settings(  # type: ignore[call-arg]
-            _env_file=None, database_url="postgresql+psycopg://u:p@localhost:1/x"
-        )
-        assert isinstance(wiring.make_job_run_store(settings), SqlJobRunStore)
+            wiring.build_deps(Settings(_env_file=None), NoChainInvoker())  # type: ignore[call-arg]
