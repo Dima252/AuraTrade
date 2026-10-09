@@ -3,6 +3,8 @@ from collections.abc import Iterator
 import pytest
 import structlog
 
+pytest_plugins = ["tests.pg"]
+
 
 @pytest.fixture(autouse=True)
 def _reset_structlog() -> Iterator[None]:

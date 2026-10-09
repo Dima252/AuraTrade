@@ -5,6 +5,7 @@ description = "Autonomous swing-trading system for US stocks: an LLM decides ins
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "alembic>=1.20.0",
     "alpaca-py>=0.44.0",
     "anthropic>=1.12.1",
     "boto3>=1.43.110",
@@ -13,6 +14,7 @@ dependencies = [
     "pydantic>=2.14.0",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
+    "sqlalchemy>=2.1.4",
     "structlog>=26.1.0",
     "tenacity>=9.2.1",
 ]
@@ -53,6 +55,8 @@ default-groups = ["dev", "infra"]
 line-length = 100
 target-version = "py313"
 extend-exclude = ["alembic/versions"]
+# Honour the excludes when pre-commit passes file names explicitly.
+force-exclude = true
 
 [tool.ruff.format]
 # Code blocks in the README/docs are illustrative spec text, not formatted code.
@@ -75,6 +79,10 @@ select = [
     "PTH",     # pathlib
     "T20",     # no print() in library code
 ]
+
+[tool.ruff.lint.isort]
+# The repo's alembic/ folder (migrations) would otherwise make the library look first-party.
+known-third-party = ["alembic"]
 
 [tool.ruff.lint.per-file-ignores]
 # Fake tokens in tests are fixtures, not credentials.

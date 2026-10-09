@@ -775,7 +775,7 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 |---|---|
 | `tickers` | Universe metadata: int `id`, symbol, exchange, type, SIC, industry group, active, delisted_at |
 | `industry_groups` | Group, SIC ranges, daily group RS rank |
-| `market_sessions` | Calendar: open/close, early close, minutes, data status |
+| `market_sessions` | Calendar: open/close, early close, minutes, data status and coverage, calendar cross-check result |
 | `daily_bars` | Split-adjusted OHLCV `(ticker_id, date)` + raw close (for point-in-time filters), rolling 2 years |
 | `corporate_actions` | Splits, reverse splits, mergers, symbol changes: ex-date, ratio / terms, handled flag |
 | `macro_series` | VIX, VIX3M, credit spread, with `fetched_at` |
@@ -895,7 +895,7 @@ AuraTrade/
 ## 14. Configuration
 
 - **`TRADING_MODE`:** `dry_run` | `paper` | `live` (live needs an explicit flag and separate credentials, added with the Phase 8 live stack; until then the settings refuse `live` outright). A job's `--dry-run` flag forces `dry_run` for that run; nothing can raise the mode.
-- **Kill switch:** `system_flags.trading_enabled` in the database (§5.13), flipped with `auratrade kill on|off`. It is deliberately not an environment variable, so it works without a redeploy.
+- **Kill switch:** `system_flags.trading_enabled` in the database (§5.13), flipped with `auratrade kill on|off`. It is deliberately not an environment variable, so it works without a redeploy. A new database starts with it on (entries disabled; a missing flag row reads the same way), so a fresh environment trades only after someone runs `auratrade kill off`.
 - **Models / effort:** `ANALYST_MODEL`, `PM_MODEL`, `EOD_MODEL`, `WEEKLY_MODEL`, `*_EFFORT`; `ANALYST_MAX_CANDIDATES=40`.
 - **`config/risk.yaml`:** regime thresholds, fundable strategies, entry rules, exit-plan menus and defaults, guardrails, multiplier rules, early-behaviour rules, the cushion table. Its hash is logged with every run.
 - **Paper account:** set the Alpaca paper equity to the intended live capital.
