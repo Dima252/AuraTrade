@@ -7,8 +7,14 @@ requires-python = ">=3.13,<3.14"
 dependencies = [
     "alpaca-py>=0.44.0",
     "anthropic>=1.12.1",
+    "boto3>=1.43.110",
     "httpx>=0.28.1",
     "psycopg[binary]>=3.3.6",
+    "pydantic>=2.14.0",
+    "pydantic-settings>=2.15.0",
+    "pyyaml>=6.0.3",
+    "structlog>=26.1.0",
+    "tenacity>=9.2.1",
 ]
 
 [build-system]
@@ -17,6 +23,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "boto3-stubs[lambda,s3]>=1.43.110",
     "hypothesis>=6.168.5",
     "mypy>=2.4.0",
     "pre-commit>=4.6.2",
@@ -24,6 +31,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "python-dotenv>=1.2.4",
     "ruff>=0.16.10",
+    "types-pyyaml>=6.0.12.20260906",
 ]
 # Research-only dependencies for backtest/ (filled in by Phases 2-3).
 backtest = []
@@ -69,7 +77,8 @@ select = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101"]
+# Fake tokens in tests are fixtures, not credentials.
+"tests/**" = ["S101", "S105", "S106"]
 "spikes/**" = ["T20", "S101"]
 "scripts/**" = ["T20"]
 

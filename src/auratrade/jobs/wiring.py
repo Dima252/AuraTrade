@@ -1,0 +1,54 @@
+"""Production wiring for the job runner: settings → concrete dependencies."""
+
+from __future__ import annotations
+
+from auratrade.config import Settings, load_risk_config, load_settings
+from auratrade.jobs.base import RunnerDeps, SessionCalendar
+from auratrade.jobs.invoke import JobInvoker, LambdaInvoker
+from auratrade.jobs.runs import JobRunStore
+from auratrade.log import configure_logging
+from auratrade.notify.alerts import Alerter, LogAlerter
+from auratrade.notify.telegram import TelegramNotifier
+from auratrade.storage import make_store
+
+
+def load_runtime_settings() -> Settings:
+    return load_settings()
+
+
+def make_alerter(settings: Settings) -> Alerter:
+    if settings.telegram_bot_token is None or not settings.telegram_chat_id:
+        return LogAlerter()
+    token = settings.telegram_bot_token.get_secret_value()
+    return TelegramNotifier(token, settings.telegram_chat_id)
+
+
+def make_job_run_store(settings: Settings) -> JobRunStore:
+    raise NotImplementedError("the Postgres job_runs store arrives with task 1.2")
+
+
+def make_calendar(settings: Settings) -> SessionCalendar:
+    raise NotImplementedError("the market_sessions calendar arrives with task 1.4")
+
+
+def build_deps(settings: Settings, invoker: JobInvoker | None) -> RunnerDeps:
+    """`invoker=None` means Lambda: chained successors are invoked asynchronously."""
+    redactor = configure_logging(settings.secret_values())
+    if invoker is None:
+        import boto3
+
+        invoker = LambdaInvoker(
+            boto3.client("lambda"),
+            function_template=settings.job_function_template,
+            environment=settings.environment,
+        )
+    return RunnerDeps(
+        settings=settings,
+        risk=load_risk_config(settings.risk_config_path),
+        calendar=make_calendar(settings),
+        store=make_job_run_store(settings),
+        alerter=make_alerter(settings),
+        invoker=invoker,
+        storage=make_store(settings),
+        redactor=redactor,
+    )

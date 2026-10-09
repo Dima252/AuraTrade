@@ -23,8 +23,12 @@ htmlcov/
 
 # Local data: Parquet bars, spike downloads, charts, recorded payloads
 /data/
+# STORAGE_BACKEND=local writes here
+/var/
 *.parquet
 spikes/**/data/
+# STORAGE_BACKEND=local writes here
+/var/
 spikes/**/output/
 spikes/**/*.out
 
