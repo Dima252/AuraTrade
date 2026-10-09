@@ -1,6 +1,6 @@
 # Spike 0.3a: Alpaca market data (free plan)
 
-**Run:** 2026-10-08, after the close. Script: `spikes/alpaca_data/` (`uv run --group spikes python -m spikes.alpaca_data <scenario>`; raw output in `spikes/alpaca_data/output/`, git-ignored). The checks of real-time freshness need market hours (`realtime` scenario, run sheet at the end).
+**Run:** 2026-10-08, after the close. Script: `spikes/alpaca_data/` (`uv run --group spikes python -m spikes.alpaca_data <scenario>`; raw output in `spikes/alpaca_data/output/`, git-ignored). Completed 2026-10-09 during the session: real-time freshness and bar revisions (both below).
 
 **Decision: GO.** Three findings changed the design (adopted 2026-10-09 as decisions #109–111), plus implementation notes:
 1. **IEX often has no opening range.** In the thinner half of the eligible universe, IEX prints no trade in the first 5 minutes on about half the days, so there's no IEX opening-range high to trigger on (below, with options).
@@ -16,7 +16,7 @@
 | Rate limits | **200 requests/minute** (`x-ratelimit-limit: 200`), shared across the data endpoints. **Latency, not the limit, dominates:** a full 10k-bar page takes ~7 s |
 | Recent SIP | `403 subscription does not permit querying recent SIP data` for anything newer than 15 minutes. **A date-only `end` for today counts as recent**: the 17:00 ingest must pass an explicit `end` (e.g. now − 16 min, or `T20:00:00Z`) to get session T's bar |
 | Do 1-day bars match regular-session OHLC? | **OHLC: yes.** In 50 of 50 symbol-days, the daily high/low lay within the 09:30–16:00 minute range, though extended hours went beyond it on 27. The open is the official open (median difference from the first regular-session minute: $0.00), and the close is the official closing print (median $0.025 from the 15:59 minute's close). **Volume: no.** Daily volume ≈ the 04:00–20:00 minute total (median ratio 1.004) and is 1.29× the 09:30–16:00 minute total (the closing auction, which prints at 16:00, plus extended hours) |
-| Real-time IEX quotes and 1-min bars | Latest quote/trade/bar endpoints answer on the free plan (`feed=iex`). Freshness during the session is unconfirmed (`realtime`, run sheet) |
+| Real-time IEX quotes and 1-min bars | Latest quote/trade/bar endpoints answer on the free plan (`feed=iex`). **Quotes are fresh; the last trade often isn't** outside the most liquid names ("Real-time freshness" below) |
 | IEX vs SIP opening range, 50 symbols | **IEX ORH below SIP in 182 of 211 symbol-days with IEX trades; equal in 29.** Shortfall median 0.22%, p90 0.88%, max 1.95%. **No IEX trade at all in 09:30–09:34 on 39 of 250 symbol-days (16%)**. By liquidity: see "Opening range" below |
 | IEX vs SIP at 15:40 | Median absolute difference 0.024%, p90 0.14%, max 1.06%: fine for the decision price |
 | IEX share of volume | Median 5.4% (p10 3.2%, p90 7.9%). IEX has a trade in 57% of the minutes SIP does (median) |
@@ -111,7 +111,22 @@ So about a fifth of the liquid 2016–17 universe is invisible through the asset
 - **`adjustment=split` doesn't adjust spin-offs:** GE's 2021 history under `all` is ~40% lower than under `split` (the later GEHC and GE Vernova spin-offs). That's the intended behaviour for broker prices (§5.1), but a spin-off ex-date then appears as a real price drop in RS and 52-week ranges.
 - Daily volume includes extended hours (above). **The volume-pace curve (§5.8) must be built from the same definition as the 50-day average it is compared with.** Either build both from SIP 09:30–16:00 minutes, or project full-day volume including the closing auction.
 
-- **Bar revision after 17:00 (pending):** daily volume includes extended hours, so a bar fetched by the 17:00 ingest may grow later. 195 of the 2026-10-08 bars were saved at 16:58 ET; `bar_revision compare` (run sheet) shows whether they changed. If they did, the gap-fill ingest should re-fetch session T−1's bar the next evening.
+- **Bar revision after 17:00:** daily volume includes extended hours, so a bar fetched by the 17:00 ingest grows later. 195 bars of 2026-10-08 were saved at 16:58 ET and fetched again on 2026-10-09: **OHLC and VWAP never changed; volume (and trade count) changed on 187 of 195.** Volume ratio later/16:58: median 1.0005, p90 1.032, **max 1.625**. So the 17:00 ingest's session-T volume is short by up to 60% on a few names, and the distribution-day rule (an index down on *higher volume than the prior session*) would compare a full prior-session bar with a partial current one. **Proposal: the evening ingest re-fetches session T−1's bar** (one extra request of ≤ 1,000 symbols); the regime compares T with T−1 as fetched at the same time of day, or uses T−1's final bar and accepts that T's is slightly short (the regime backtest can measure which).
+
+## Real-time freshness (2026-10-09)
+
+`realtime` scenario at 09:47 and 12:30 ET (53 symbols spread over the 5,018-symbol unfiltered list, plus SPY, AAPL, NVDA), and a second sample at 12:30 on the **filtered** universe (2,191 symbols ≥ $10, ≥ $10M a day; 60 from the 500 most liquid, 60 from the rest). Age = now minus the timestamp of the latest IEX trade or quote.
+
+| Sample (12:30 ET) | Latest trade age: median / p75 / p90 | Trades > 5 min / > 15 min old | Latest quote age: median / p90 |
+|---|---|---|---|
+| Top 500 by dollar volume | **29 s** / 76 s / 3 min | 3 / 0 of 60 | **0 s** / 22 s |
+| The other 1,691 | **4 min** / 12 min / 66 min | **27 / 12 of 60** | **6 s** / 2.3 min |
+| Unfiltered list (incl. thin names) | 4.5 min / – / 2 h | – | 13 s / 22 min |
+
+- **SIP's delay is confirmed at 15–16 minutes:** at 12:30 the newest SIP minute bar was 12:14.
+- **IEX quotes stay fresh** even where trades are rare: a resting IEX bid/ask is updated as the market moves, whereas a trade needs someone to trade on IEX.
+
+**Consequence for the decision price (README §7.3, 15:40) and the 09:36 "last price" (§7.1):** "the IEX real-time price" read as the last IEX trade is minutes to an hour old for about half of the eligible universe (spike 0.3a's earlier finding that IEX tracks SIP within 0.024% at 15:40 held only where IEX had a recent trade). **Proposal:** price = the latest IEX trade if it is at most 2 minutes old; otherwise the IEX quote midpoint if the quote is at most 1 minute old and its spread is reasonable (a `risk.yaml` limit, e.g. ≤ 0.5%); otherwise there is no reliable price: entries are skipped (fail closed) and a soft-rule exit waits for the next check while the hard stop keeps resting at the broker. The simulator uses the same rule on IEX minute bars (§5.12).
 
 ## README impact (for task 0.4)
 
@@ -120,11 +135,12 @@ So about a fifth of the liquid 2016–17 universe is invisible through the asset
 - §5.1 / §15: the universe source for backtests = asset list + enumeration snapshots; drop zero-volume bars; split securities on long gaps; report the residual gap (5-letter tickers, ticker reuse).
 - §5.1: classification order (directory ETF flag → symbol → name → SIC 6770); decide on ADRs.
 - §5.12: IEX minute history starts 2020-07-27, so the tuning period 2016–2022 is mostly SIP-only (expected by the README's "SIP before that").
-- §3 / 1.5: the ingest passes an explicit `end` for session T.
+- §3 / 1.5: the ingest passes an explicit `end` for session T, **and re-fetches session T−1's bar** (volume grows after 17:00).
+- §7.1 / §7.3: the "IEX real-time price" needs a staleness rule (trade → quote midpoint → no price), see "Real-time freshness".
 
 ## Run sheet (market hours)
 
 | When (ET) | Command | Answers |
 |---|---|---|
-| Fri 2026-10-09, during the session | `uv run --group spikes python -m spikes.alpaca_data realtime` | Real-time IEX freshness (age of the latest quote/trade/bar for 50 symbols); confirms SIP's 15-minute delay |
-| Fri 2026-10-09 or later | `uv run python -m spikes.alpaca_data.bar_revision compare` | Whether the 2026-10-08 daily bars fetched at 16:58 ET changed later (after-hours volume) |
+| ✅ Fri 2026-10-09, 09:47 and 12:30 | `uv run --group spikes python -m spikes.alpaca_data realtime` | Real-time IEX freshness (age of the latest quote/trade/bar for 50 symbols); confirms SIP's 15-minute delay |
+| ✅ Fri 2026-10-09 | `uv run python -m spikes.alpaca_data.bar_revision compare` | Whether the 2026-10-08 daily bars fetched at 16:58 ET changed later (after-hours volume) |
