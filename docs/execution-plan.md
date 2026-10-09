@@ -36,7 +36,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 1.1 Config and job framework *(runner wired to the `job_runs` store in 1.2 and the calendar in 1.4)*
 - [x] 1.2 Database and initial migration *(Neon `dev` branch: you add its URL to `.env` and run `alembic upgrade head`; tests run on Docker Postgres)*
 - [ ] 1.3 Data clients
-- [ ] 1.4 Market calendar
+- [x] 1.4 Market calendar *(daily re-sync wired into `ingest` at 1.5; run `python -m auratrade.calendar.sync` once against the Neon `dev` branch)*
 - [ ] 1.5 Ingest job
 - [ ] 1.6 Historical backfill
 - [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local)

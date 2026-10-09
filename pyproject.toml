@@ -10,6 +10,7 @@ dependencies = [
     "anthropic>=1.12.1",
     "boto3>=1.43.110",
     "httpx>=0.28.1",
+    "pandas-market-calendars>=5.5.0",
     "psycopg[binary]>=3.3.6",
     "pydantic>=2.14.0",
     "pydantic-settings>=2.15.0",
@@ -95,6 +96,11 @@ python_version = "3.13"
 strict = true
 warn_unreachable = true
 files = ["src", "scripts", "infra"]
+
+[[tool.mypy.overrides]]
+# No type information shipped; only sources.exchange_calendar_sessions touches it.
+module = ["pandas_market_calendars"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

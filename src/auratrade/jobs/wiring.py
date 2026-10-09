@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from sqlalchemy import Engine
+
 from auratrade.config import Settings, load_risk_config, load_settings
+from auratrade.db.engine import engine_from_settings
 from auratrade.jobs.base import RunnerDeps, SessionCalendar
 from auratrade.jobs.invoke import JobInvoker, LambdaInvoker
 from auratrade.jobs.runs import JobRunStore
@@ -23,15 +26,16 @@ def make_alerter(settings: Settings) -> Alerter:
     return TelegramNotifier(token, settings.telegram_chat_id)
 
 
-def make_job_run_store(settings: Settings) -> JobRunStore:
-    from auratrade.db.engine import engine_from_settings
+def make_job_run_store(engine: Engine) -> JobRunStore:
     from auratrade.db.job_runs import SqlJobRunStore
 
-    return SqlJobRunStore(engine_from_settings(settings))
+    return SqlJobRunStore(engine)
 
 
-def make_calendar(settings: Settings) -> SessionCalendar:
-    raise NotImplementedError("the market_sessions calendar arrives with task 1.4")
+def make_calendar(engine: Engine) -> SessionCalendar:
+    from auratrade.calendar.sessions import DbCalendar
+
+    return DbCalendar(engine)
 
 
 def build_deps(settings: Settings, invoker: JobInvoker | None) -> RunnerDeps:
@@ -45,11 +49,14 @@ def build_deps(settings: Settings, invoker: JobInvoker | None) -> RunnerDeps:
             function_template=settings.job_function_template,
             environment=settings.environment,
         )
+    # One engine (and pool) for the store and the calendar; it connects lazily, so a
+    # database outage surfaces inside the runner, which records and alerts it.
+    engine = engine_from_settings(settings)
     return RunnerDeps(
         settings=settings,
         risk=load_risk_config(settings.risk_config_path),
-        store=make_job_run_store(settings),
-        calendar=make_calendar(settings),
+        store=make_job_run_store(engine),
+        calendar=make_calendar(engine),
         alerter=make_alerter(settings),
         invoker=invoker,
         storage=make_store(settings),

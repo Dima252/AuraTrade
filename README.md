@@ -159,7 +159,8 @@ if session is None:
 ```
 
 - **Calendar authority:** Alpaca's calendar API is primary; `pandas_market_calendars` is the cross-check. **If they disagree, no new entries today** (stops still managed), plus an alert.
-- **`market_sessions` table:** date, open/close, `is_early_close`, minutes, data status.
+- **`market_sessions` table:** date, open/close, `is_early_close`, minutes, data status, and the cross-check result per session.
+- **Sync:** `python -m auratrade.calendar.sync` writes Alpaca's sessions (2016 through the end of next year), re-run daily. It is idempotent, removes a session Alpaca drops (an unscheduled closure), and refuses to drop more than 3 at once, so a vendor glitch can't empty the calendar. **A date outside the synced range is unknown, not closed:** jobs fail closed and alert instead of skipping as "market closed".
 - **Guard policy per job type:**
 
   | Job type | Runs when |
@@ -190,7 +191,7 @@ if session is None:
 
 **Intraday prices:** current prices and opening ranges from **real-time IEX**; volume from **15-minute-delayed SIP**. Two exceptions (spike 0.3a): pre-market gaps come from delayed SIP (#110), and when IEX printed nothing in the first 5 minutes, the opening range comes from delayed SIP at 09:51 (#109).
 
-**Long weekends:** the Portfolio Manager receives `sessions_until_next_open` and `is_long_weekend`.
+**Long weekends:** the Portfolio Manager receives the calendar days until the next open (`days_until_next_open`: Fri → Mon = 3; counted in sessions the next open is always 1 away) and `is_long_weekend` (more than 3).
 
 ---
 

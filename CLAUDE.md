@@ -77,6 +77,7 @@ uv run mypy                               # src/, scripts/ and infra/ (strict)
 uv run pre-commit run --all-files         # every hook, as on commit
 uv run python scripts/check_keys.py       # confirm every key in .env works (free calls only)
 uv run alembic upgrade head               # apply migrations (from task 1.2)
+uv run python -m auratrade.calendar.sync  # sync market_sessions from Alpaca + cross-check (from task 1.4)
 uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
 cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 ```
