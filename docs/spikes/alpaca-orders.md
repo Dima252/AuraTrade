@@ -1,6 +1,6 @@
 # Spike 0.3b: Alpaca orders (paper)
 
-**Status: PART 1 of 2 done** (2026-10-08, after the close). The after-hours checks are below. The fills, sell sequences, stops through the market, OPG exits, PDT and the split/dividend checks need market hours and overnight holds. They are scripted and listed in the [run sheet](#run-sheet-part-2).
+**Status: PART 1 done** (2026-10-08, after the close); **PART 2 mostly done** (2026-10-09, market hours: `session`, the DXJ split check, `corp_setup QDTE`, `pdt`; results below). Remaining: the overnight OPG exit (weekend), its check on Monday 10-12, the QDTE dividend check on Thursday 10-15, cleanup. The after-hours checks are below. The fills, sell sequences, stops through the market, OPG exits, PDT and the split/dividend checks need market hours and overnight holds. They are scripted and listed in the [run sheet](#run-sheet-part-2).
 **Decision so far: GO on OTO, with one adjustment** (entry parents are GTC, so the stop leg is GTC; below). The final go / adjust waits for part 2.
 
 Script: `spikes/alpaca_orders/` (`uv run python -m spikes.alpaca_orders <scenario>`). Every order uses a `spk-` `client_order_id`. Raw events are in `spikes/alpaca_orders/output/*.jsonl` (git-ignored). Accounts: `dev` (...JG3C) and `paper` (...CDFD), $5,000 each.
@@ -46,7 +46,7 @@ Raw `GET /v2/account` keys (both accounts): `account_number, status, crypto_stat
 
 **The PDT fields are gone.** There is no `pattern_day_trader`, `daytrade_count` or `daytrading_buying_power`. `alpaca-py` 0.44 still models them, so they read as `None` (which is why `check_keys.py` printed "PDT flag None"). `GET /v2/account/configurations` has no `pdt_check` / `dtbp_check` either. A **$5,000** account shows `multiplier: 4` and `buying_power: 20000` (4× equity), where classic Reg T for a non-PDT account under $25k would give 2×.
 
-This looks like the FINRA pattern-day-trader rule change that the plan says to check ("they have been under revision"). If confirmed, it **contradicts README §5.7.9 / §8** ("if PDT-restricted, entries are limited by the remaining day trades"; the $25k threshold in the plan's "What I need from you"). **Not concluded yet:** the `pdt` scenario in part 2 runs four same-day round trips on the `dev` account and shows whether a 4th day trade is rejected. Per CLAUDE.md §5 this goes to you with the results, not into the README yet.
+This looks like the FINRA pattern-day-trader rule change that the plan says to check ("they have been under revision"). If confirmed, it **contradicts README §5.7.9 / §8** ("if PDT-restricted, entries are limited by the remaining day trades"; the $25k threshold in the plan's "What I need from you"). **Concluded in part 2:** the PDT rule is gone (see "PDT" below). Per CLAUDE.md §5 this goes to the user at 0.4, not into the README yet.
 
 ### Account independence (`independence`)
 
@@ -57,18 +57,59 @@ The `dev` and `paper` keys are different and reach different accounts (...JG3C v
 - **After-hours fills on paper:** an extended-hours limit buy of DXJ filled in 0.3 s at $184.67 while the IEX quote was $174.69 × $190.21. Paper fills are optimistic, as §17 says.
 - After hours, orders are `accepted`, not `new`: they can be cancelled but not replaced.
 
+## Part 2 results (2026-10-09, market hours, `dev` account)
+
+### `session` on F (09:40–09:44 ET), 2 tranches of 6 shares, plan stop $11.34
+
+| Test | Result | For the design |
+|---|---|---|
+| Buy stop-limit with the trigger **below** the market (OTO, day) | **Accepted and rested untriggered** (status `new` for 20 s, then cancelled by the script) | Confirms §7.1: past the trigger, enter with a limit buy at the limit; a stop-limit would just sit there |
+| Tranche 1: OTO buy stop-limit, `day` parent | Filled in 25 s (`partially_filled` 5/6, then filled 2 s later). **The leg stayed `held` while the parent was partly filled** and went `new` (active) only when the parent filled | A partly filled entry has no active stop on its filled shares (agenda #3) |
+| Change the filled leg's TIF to GTC | `422 time_in_force cannot be changed for advanced orders` | Confirms part 1: a `day` parent's leg expires at 16:00 |
+| Tranche 2 with a **GTC parent** | Its leg is **GTC** from the start, and stayed so after the fill | Option A from part 1 works on a real fill |
+| Grow the GTC leg to the full position (12) | **`422 qty cannot be changed for advanced orders`**, both while leg 1 rested and after leg 1 was cancelled | **New:** a leg's *quantity* is fixed too, so the sell sequence's "reduce the stop" can't act on a leg (agenda #1) |
+| Merge into one stop | Cancel both legs, place a standalone GTC stop for 12: **about 1 s with no stop** on tranche 2's shares (09:43:48 → 09:43:50) | The only way to merge; do it once, under the lock |
+| Sell 1 while the full stop rests | `403 insufficient qty available for order (requested: 1, available: 0)`, `held_for_orders: 12` | Confirms share reservation (§5.7.2) |
+| Sell sequence, success: reduce stop 12 → 11 (replace), sell 1 (marketable limit) | Replace accepted at once; the sale filled in 2 s | ✅ |
+| Sell sequence, failure: reduce to 10, a limit sell that won't fill, cancel, restore to 11 | ✅ All steps accepted; the stop was back on the full quantity within 1 s of the cancel | ✅ |
+| Sell **stop above** the market | **`422 stop price must be less than current price`** | Settles §5.7.2's open question: Alpaca rejects, it doesn't trigger, so "price already through the stop → sell at once" is required |
+| Marketable-limit **add** (plain buy) while the sell stop rests | **`403 potential wash trade detected. use complex orders`** (`reject_reason: opposite side market/stop order exists`). The OTO buy for tranche 2 had been accepted with a sell stop resting | **New:** every buy in a held symbol must be an OTO (agenda #2) |
+| Raise the stop 11.34 → 11.63 (replace on the standalone stop) | ✅ Accepted at once | ✅ §5.7.5 |
+
+The position kept over the weekend: **F 11 shares, standalone GTC stop $11.63** (input for the OPG test).
+
+### Split: DXJ 3-for-1, ex-date 2026-10-09 (`corp_check`, 09:31 ET)
+
+- The GTC sell stop placed on 10-08 (1 share at $156.97) is **`rejected`**, with `failed_at` **2026-10-09 08:00 UTC (04:00 ET)**. Alpaca removes resting stops on the ex-date before the open; it neither adjusts nor keeps them.
+- The paper **position wasn't adjusted** by 09:31: still 1 share at $184.67 average cost, priced at $60.34. Alpaca's corporate-actions API lists the split (`old_rate 1`, `new_rate 3`, ex/process/payable date 10-09). Whether paper applies it later is to be checked on Monday.
+- **For the design (agenda #4):** README §5.7.10's "re-place a scaled stop at 09:20 on the ex-date" is needed on every split. And invariant repair must look up the corporate-actions feed first: an unadjusted position plus an unscaled plan stop ($156.97 against a $60 price) would otherwise read as "price through the stop" and be sold.
+
+### PDT (`pdt` on SOFI, 14:30 ET)
+
+- **Four same-day round trips (buy 1, sell 1), then two more same-day exits: all filled, none rejected**, on a $4,875 account.
+- An OTO entry, a plain buy, a standalone GTC stop on same-day shares, and a same-day exit were all accepted. A sell stop above the market was rejected as before (`422`).
+- The account still has no PDT fields (`daytrade_count` / `pattern_day_trader` absent), only margin fields (`multiplier` 4, `buying_power` 4× equity, `regt_buying_power` 2×).
+- **Why:** the SEC approved FINRA's amendment to Rule 4210 on 2026-04-14 (Release 34-105226, FINRA Regulatory Notice 26-10). The day-trading provisions (4 day trades in 5 days, the $25,000 minimum) are replaced by an intraday margin standard for all margin accounts, effective 2026-06-04 with a phase-in to 2027-10-20.
+- **For the design (agenda #10):** drop the PDT allowance (§5.7.9, §8, the "PDT status" input in §5.6). Check instead that entries never create an intraday margin deficit; the design never uses margin (exposure ≤ 100%). Confirm the live-account behaviour with Alpaca before Phase 8.
+- Left open: SOFI 1 share with its OTO `day` leg, which expired at 16:00 (Monday's check confirms the expiry).
+
+### Dividend setup (`corp_setup QDTE`, 09:45 ET)
+
+1 share of QDTE bought, with a GTC stop at $25.05 (15% below). QDTE goes ex-dividend weekly (Thursdays): Thursday 10-15's `corp_check` shows whether the stop is lowered by the dividend (FINRA Rule 5330).
+
 ## Run sheet (part 2)
 
 All on the `dev` account. The positions are small (≈ $80 a tranche) and every one has a GTC stop.
 
 | When (ET) | Command | Answers |
 |---|---|---|
-| Fri 2026-10-09, after 09:31 | `uv run python -m spikes.alpaca_orders corp_check` | **Split:** DXJ 3:1, ex-date 10-09. Holding 1 share + a GTC sell stop at $156.97 (placed 10-08). Is the stop cancelled, left at $156.97 × 1 (it would then trigger at once on the post-split price), or adjusted to $52.32 × 3? |
-| Fri, 09:40–15:00 | `uv run python -m spikes.alpaca_orders session --symbol F` (≈ 20 min) | Buy stop at/below the market; OTO fill → the leg after the fill (TIF, can it be changed?); tranche 2 with a GTC parent → merge into one full stop; share reservation; the sell sequence (success and failure); a sell stop above the market; a marketable-limit add; a stop raise. Leaves a position with a GTC stop overnight |
-| Fri, market hours | `uv run python -m spikes.alpaca_orders corp_setup QDTE` | **Dividend:** QDTE pays weekly (ex-date Thursdays; its after-hours buy didn't fill on 10-08) |
-| Fri, after `session` | `uv run python -m spikes.alpaca_orders pdt --symbol SOFI` | Four same-day round trips: is the 4th rejected? Is a stop leg / standalone stop on same-day shares rejected? Is a same-day exit rejected? **Uses up the day trades for 5 sessions if PDT still applies**, so run it last |
-| Fri 19:00 – Mon 09:28 | `uv run python -m spikes.alpaca_orders opg_exit` | Did the GTC stop survive overnight? An OPG trim via the sell sequence (the window's start: run once just before 19:00 to see the 403, then after) |
-| Mon 2026-10-12, after 09:31 | `uv run python -m spikes.alpaca_orders opg_check` | The OPG fill; restore the stop; also look at the `pdt` scenario's day leg (expired at 16:00?) |
+| ✅ Fri 2026-10-09, 09:31 | `uv run python -m spikes.alpaca_orders corp_check` | **Split:** DXJ 3:1, ex-date 10-09. Holding 1 share + a GTC sell stop at $156.97 (placed 10-08). Is the stop cancelled, left at $156.97 × 1 (it would then trigger at once on the post-split price), or adjusted to $52.32 × 3? |
+| ✅ Fri, 09:40 | `uv run python -m spikes.alpaca_orders session --symbol F` (≈ 20 min) | Buy stop at/below the market; OTO fill → the leg after the fill (TIF, can it be changed?); tranche 2 with a GTC parent → merge into one full stop; share reservation; the sell sequence (success and failure); a sell stop above the market; a marketable-limit add; a stop raise. Leaves a position with a GTC stop overnight |
+| ✅ Fri, 09:45 | `uv run python -m spikes.alpaca_orders corp_setup QDTE` | **Dividend:** QDTE pays weekly (ex-date Thursdays; its after-hours buy didn't fill on 10-08) |
+| ✅ Fri, 14:30 | `uv run python -m spikes.alpaca_orders pdt --symbol SOFI` | Four same-day round trips: is the 4th rejected? Is a stop leg / standalone stop on same-day shares rejected? Is a same-day exit rejected? **Uses up the day trades for 5 sessions if PDT still applies**, so run it last |
+| **Sat 10-10 or Sun 10-11** (any time; the window runs to Mon 09:28) | `uv run python -m spikes.alpaca_orders opg_exit` | Did the GTC stop survive the night and weekend? An OPG trim via the sell sequence. (Moved from Friday evening: the machine was offline. Is an OPG order accepted on a weekend?) |
+| Mon 10-12, 18:55 then 19:05 (optional) | `uv run python -m spikes.alpaca_orders opg_exit` | The window's start: a 403 just before 19:00, accepted after |
+| Mon 2026-10-12, after 09:31 | `uv run python -m spikes.alpaca_orders opg_check`, then `corp_check` | The OPG fill; restore the stop; the `pdt` scenario's SOFI day leg (expired at 16:00?); has paper applied the DXJ split to the position (1 → 3 shares)? |
 | Thu 2026-10-15, after 09:31 | `uv run python -m spikes.alpaca_orders corp_check` | **Dividend:** QDTE's stop lowered by the dividend (FINRA 5330) or not? |
 | Afterwards | `uv run python -m spikes.alpaca_orders cleanup --flatten` | Cancels `spk-` orders and closes the spike positions |
 
