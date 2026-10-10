@@ -325,6 +325,16 @@ class TestCounting:
             True,
         )
 
+    def test_after_a_failure_even_another_failure_is_reliable(self) -> None:
+        closes = [100, *seg(100, 45, 6), *seg(45, 20, 6), *seg(20, 30, 3)]
+        scan = detect_bases(bars(closes), RULES)
+        assert [(b.status, b.count_reliable) for b in scan.bases] == [
+            (BaseStatus.FAILED, False),
+            (BaseStatus.FAILED, True),
+        ]
+        assert scan.state.count_reliable
+        assert scan.state.reset_pending
+
     def test_a_reset_makes_later_counts_reliable(self) -> None:
         closes = [
             80,

@@ -322,6 +322,7 @@ def detect_bases(
                 state,
                 low_since_last=_lower(state.low_since_last, cand.low),
                 high_since_last=_higher(state.high_since_last, cand.high),
+                count_reliable=True,  # the count restarts here, so it no longer depends on history
                 reset_pending=True,
             )
             cand = _Candidate(t, bar, rules.swing_reversal)
