@@ -40,6 +40,7 @@ TABLES = {
     "system_flags",
     "mismatches",
     "bases",
+    "market_regime",
 }
 
 

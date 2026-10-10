@@ -362,3 +362,51 @@ class DetectedBase(Base):
     reset: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
     detected_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
+
+
+REGIMES = ("CORRECTION", "EARLY_UPTREND", "UNDER_PRESSURE", "CONFIRMED_UPTREND")
+
+
+class MarketRegimeRow(Base):
+    """One row per session (README §5.2, task 2.3), written at the close; it governs the next
+    session. `state` carries the state machine to the next evening. Kept forever (small)."""
+
+    __tablename__ = "market_regime"
+    __table_args__ = (
+        CheckConstraint(_in("computed_regime", REGIMES), name="computed_regime"),
+        CheckConstraint(_in("effective_regime", REGIMES), name="effective_regime"),
+        CheckConstraint(f"llm_regime IS NULL OR {_in('llm_regime', REGIMES)}", name="llm_regime"),
+        CheckConstraint(
+            "index_trend BETWEEN -1 AND 1 AND breadth BETWEEN -1 AND 1 "
+            "AND volatility BETWEEN -1 AND 1 AND distribution BETWEEN -1 AND 1 "
+            "AND leadership BETWEEN -1 AND 1",
+            name="pillars",
+        ),
+        CheckConstraint(
+            "score = index_trend + breadth + volatility + distribution + leadership",
+            name="score",
+        ),
+        CheckConstraint("sessions_in_state >= 1", name="sessions_in_state"),
+        CheckConstraint("NOT no_ftd OR computed_regime = 'EARLY_UPTREND'", name="no_ftd"),
+    )
+
+    session_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    index_trend: Mapped[int] = mapped_column(SmallInteger)
+    breadth: Mapped[int] = mapped_column(SmallInteger)
+    volatility: Mapped[int] = mapped_column(SmallInteger)
+    distribution: Mapped[int] = mapped_column(SmallInteger)
+    leadership: Mapped[int] = mapped_column(SmallInteger)
+    score: Mapped[int] = mapped_column(SmallInteger)
+    computed_regime: Mapped[str] = mapped_column(Text)
+    # The Portfolio Manager's view arrives in Phase 4; effective = the lower of the two.
+    llm_regime: Mapped[str | None] = mapped_column(Text)
+    effective_regime: Mapped[str] = mapped_column(Text)
+    crisis: Mapped[bool] = mapped_column(Boolean)
+    follow_through_day: Mapped[bool] = mapped_column(Boolean)
+    no_ftd: Mapped[bool] = mapped_column(Boolean)
+    sessions_in_state: Mapped[int] = mapped_column(SmallInteger)
+    expiration_session: Mapped[bool] = mapped_column(Boolean)
+    features: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    state: Mapped[dict[str, Any]]
+    risk_hash: Mapped[str] = mapped_column(String(64))
+    computed_at: Mapped[datetime] = _created()

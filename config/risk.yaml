@@ -139,3 +139,59 @@ bases:  # README §5.3 base count (IBD); see indicators/bases.py
   swing_reversal: 0.03               # a contraction is a >= 3% pullback from a swing high
   pivot_min_position: 0.5            # the final contraction's high is the pivot only in the upper half
   new_stage_advance: 0.20            # a new stage needs >= 20% from the prior base's pivot
+
+regime:  # README §5.2; provisional until the 2.4 regime backtest (final after the 3.8 re-run)
+  indexes: [SPY, QQQ]                # both for +1, either for -1; distribution counted per index
+  index_trend:
+    short_sma: 50
+    long_sma: 200
+    slope_sessions: 10               # "50 SMA rising / falling": vs its value 10 sessions ago
+  breadth:
+    sma: 50
+    up_min_above: 0.60               # +1: > 60% above the 50 SMA and net new highs > 0
+    down_max_above: 0.35             # -1: < 35% above, or net new highs < 0
+    new_high_sessions: 252           # 52-week highs and lows
+    net_new_highs_sessions: 10       # averaged over 10 sessions
+    # Universe filters (README §5.1), applied inline until task 1.5 builds the universe table.
+    universe_security_types: [COMMON, ADR]
+    universe_min_price: 10.0         # raw close as it traded that day
+    universe_min_dollar_volume: 10000000
+    universe_dollar_volume_sessions: 50
+    universe_min_history_sessions: 252
+  volatility:
+    up_max_vix: 20                   # +1: VIX < 20 and VIX/VIX3M < 0.9
+    up_max_ratio: 0.9
+    down_min_ratio: 1.0              # -1: VIX/VIX3M > 1.0 or VIX > 30
+    down_min_vix: 30
+  distribution:
+    min_decline: 0.002               # down >= 0.2% on volume above the prior session's
+    window_sessions: 25
+    up_max_days: 3                   # +1: <= 3 (higher index count)
+    down_min_days: 6                 # -1: >= 6
+    exclude_expiration_sessions: false   # flagged either way; the 2.4 backtest compares
+  leadership:
+    result_sessions: 5               # a breakout's result is complete 5 sessions after it
+    window_sessions: 20              # breakouts from T-24 to T-5
+    min_breakouts: 10                # fewer scores 0
+    up_min_share: 0.55
+    down_max_share: 0.35
+  follow_through:
+    min_gain: 0.0125
+    first_day: 4
+    last_strong_day: 7               # later FTDs are flagged weaker
+  transitions:
+    confirmed_min_score: 3           # +3..+5 CONFIRMED_UPTREND
+    correction_max_score: -1         # <= -1 CORRECTION (immediate from CU / UP)
+    debounce_score: 2                # CU -> UP at +2 only after debounce_sessions in a row
+    debounce_sessions: 2
+    upgrade_sessions: 3              # UP / EU -> CU after 3 sessions >= +3 in the state
+    early_uptrend_min_sessions: 10   # labels in EARLY_UPTREND before CONFIRMED_UPTREND
+    no_ftd_sessions: 10              # CORRECTION -> EARLY_UPTREND (no_ftd) after 10 sessions >= +3
+    no_ftd_min_score: 3
+    early_uptrend_max_distribution: 6    # since entering EARLY_UPTREND, higher index count
+  crisis:  # no new entries (README §5.2)
+    vix_ratio_above: 1.0             # VIX/VIX3M > 1.0 ...
+    vix_ratio_sessions: 2            # ... for >= 2 sessions
+    index: SPY
+    index_drop: 0.04                 # SPY -4% in a session: that session and the next
+  replay_warmup_sessions: 252        # a replay starts this many sessions before its first label

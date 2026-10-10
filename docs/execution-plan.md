@@ -45,7 +45,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 **Phase 2: Indicators and regime**
 - [x] 2.1 Indicators *(built out of plan order with the user's approval: pure functions, no config dependency)*
 - [x] 2.2 Base detection and base count *(built out of plan order with the user's approval)*
-- [ ] 2.3 Regime classifier
+- [x] 2.3 Regime classifier *(built out of plan order with the user's approval)*
 - [ ] 2.4 Regime backtest
 
 **Phase 3: Scanner, strategies, plans, baseline**

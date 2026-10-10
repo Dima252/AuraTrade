@@ -1,0 +1,59 @@
+"""Shared builders for the regime tests: a config with short windows and synthetic histories."""
+
+from datetime import date, timedelta
+
+from auratrade.config import DEFAULT_RISK_CONFIG, RiskConfig, load_risk_config
+from auratrade.regime.breadth import TickerHistory
+
+RISK = load_risk_config(DEFAULT_RISK_CONFIG)
+
+
+def small_risk() -> RiskConfig:
+    """The production config with windows short enough for hand-built histories."""
+    cfg = RISK.regime
+    regime = cfg.model_copy(
+        update={
+            "index_trend": cfg.index_trend.model_copy(
+                update={"short_sma": 3, "long_sma": 5, "slope_sessions": 2}
+            ),
+            "breadth": cfg.breadth.model_copy(
+                update={
+                    "sma": 3,
+                    "new_high_sessions": 5,
+                    "net_new_highs_sessions": 3,
+                    "universe_min_history_sessions": 5,
+                    "universe_dollar_volume_sessions": 3,
+                    "universe_min_dollar_volume": 1000.0,
+                }
+            ),
+            "replay_warmup_sessions": 8,
+        }
+    )
+    return RISK.model_copy(update={"regime": regime})
+
+
+def weekdays(start: date, n: int) -> list[date]:
+    out, day = [], start
+    while len(out) < n:
+        if day.weekday() < 5:
+            out.append(day)
+        day += timedelta(days=1)
+    return out
+
+
+def history(
+    dates: list[date],
+    closes: list[float],
+    *,
+    volume: float = 1000.0,
+    raw_scale: float = 1.0,
+    spread: float = 0.0,
+) -> TickerHistory:
+    return TickerHistory(
+        dates=dates,
+        highs=[c * (1 + spread) for c in closes],
+        lows=[c * (1 - spread) for c in closes],
+        closes=closes,
+        raw_closes=[c * raw_scale for c in closes],
+        volumes=[volume] * len(closes),
+    )
