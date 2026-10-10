@@ -19,6 +19,7 @@ from auratrade.db.models import (
     Base,
     CorporateAction,
     DailyBar,
+    DetectedBase,
     MarketSession,
     Mismatch,
     SystemFlag,
@@ -38,6 +39,7 @@ TABLES = {
     "job_runs",
     "system_flags",
     "mismatches",
+    "bases",
 }
 
 
@@ -236,3 +238,81 @@ class TestConstraints:
 def test_alembic_ini_has_no_url() -> None:
     ini = Path(REPO_ROOT / "alembic.ini").read_text(encoding="utf-8")
     assert not re.search(r"^\s*sqlalchemy\.url\s*=", ini, flags=re.MULTILINE)
+
+
+def base_row(ticker_id: int, **overrides: Any) -> dict[str, Any]:
+    values = {
+        "ticker_id": ticker_id,
+        "start_date": date(2026, 6, 1),
+        "end_date": date(2026, 7, 15),
+        "status": "BROKEN_OUT",
+        "sessions": 31,
+        "high": 120.0,
+        "low": 100.0,
+        "low_date": date(2026, 6, 20),
+        "depth": 1 / 6,
+        "pivot": 118.5,
+        "contraction_count": 2,
+        "contractions": [
+            {"high_date": "2026-06-01", "high": 120.0, "low_date": "2026-06-20", "low": 100.0},
+            {"high_date": "2026-07-01", "high": 118.5, "low_date": "2026-07-08", "low": 112.0},
+        ],
+        "stage_number": 2,
+        "count_reliable": True,
+        "advance": 0.24,
+    }
+    return values | overrides
+
+
+class TestBases:
+    def test_round_trip(self, pg_engine: Engine) -> None:
+        with pg_engine.begin() as conn:
+            tid = add_ticker(conn)
+            conn.execute(insert(DetectedBase).values(**base_row(tid)))
+            row = conn.execute(select(DetectedBase)).mappings().one()
+        assert row["stage_number"] == 2
+        assert row["contractions"][1]["low"] == 112.0
+        assert row["reset"] is False
+
+    def test_a_forming_base_and_a_failed_candidate(self, pg_engine: Engine) -> None:
+        with pg_engine.begin() as conn:
+            tid = add_ticker(conn)
+            conn.execute(
+                insert(DetectedBase).values(
+                    **base_row(tid, status="FAILED", stage_number=None, depth=0.55, low=54.0)
+                )
+            )
+            conn.execute(
+                insert(DetectedBase).values(
+                    **base_row(tid, start_date=date(2026, 8, 3), end_date=None, status="FORMING")
+                )
+            )
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [
+            {"status": "DONE"},
+            {"end_date": None},  # only a forming base has no end
+            {"status": "FORMING"},  # ... and a forming base has none
+            {"stage_number": None},  # only a failed candidate has no stage
+            {"status": "FAILED"},  # ... and a failed candidate has none
+            {"stage_number": 0},
+            {"end_date": date(2026, 6, 1)},
+            {"low": 0.0},
+            {"high": 99.0},
+            {"depth": 1.0},
+            {"contraction_count": -1},
+        ],
+    )
+    def test_bad_rows_are_rejected(
+        self, pg_engine: Engine, rejects: Rejects, overrides: dict[str, Any]
+    ) -> None:
+        with pg_engine.begin() as conn:
+            tid = add_ticker(conn)
+        rejects(lambda c: c.execute(insert(DetectedBase).values(**base_row(tid, **overrides))))
+
+    def test_one_base_per_ticker_and_start(self, pg_engine: Engine, rejects: Rejects) -> None:
+        with pg_engine.begin() as conn:
+            tid = add_ticker(conn)
+            conn.execute(insert(DetectedBase).values(**base_row(tid)))
+        rejects(lambda c: c.execute(insert(DetectedBase).values(**base_row(tid))))

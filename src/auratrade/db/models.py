@@ -317,3 +317,48 @@ class Mismatch(Base):
     detected_at: Mapped[datetime] = _created()
     resolved_at: Mapped[datetime | None]
     resolution_note: Mapped[str | None] = mapped_column(Text)
+
+
+BASE_STATUSES = ("FORMING", "BROKEN_OUT", "FAILED")
+
+
+class DetectedBase(Base):
+    """A base found by `indicators.bases` (README §5.3, task 2.2). The count is carried
+    forward from these rows, so they outlive the 2-year bar window."""
+
+    __tablename__ = "bases"
+    __table_args__ = (
+        UniqueConstraint("ticker_id", "start_date"),
+        CheckConstraint(_in("status", BASE_STATUSES), name="status"),
+        CheckConstraint("(end_date IS NULL) = (status = 'FORMING')", name="end_date"),
+        CheckConstraint("(stage_number IS NULL) = (status = 'FAILED')", name="stage_number"),
+        CheckConstraint("stage_number IS NULL OR stage_number >= 1", name="stage_positive"),
+        CheckConstraint("end_date IS NULL OR end_date > start_date", name="ends_after_start"),
+        CheckConstraint("low > 0 AND high >= low AND pivot > 0", name="prices"),
+        CheckConstraint("depth >= 0 AND depth < 1", name="depth"),
+        CheckConstraint("contraction_count >= 0", name="contraction_count"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    start_date: Mapped[date] = mapped_column(Date)
+    # The breakout session (BROKEN_OUT) or the session it became too deep (FAILED).
+    end_date: Mapped[date | None] = mapped_column(Date)
+    status: Mapped[str] = mapped_column(Text)
+    sessions: Mapped[int] = mapped_column(SmallInteger)
+    high: Mapped[float] = mapped_column(Double)
+    low: Mapped[float] = mapped_column(Double)
+    low_date: Mapped[date] = mapped_column(Date)
+    depth: Mapped[float] = mapped_column(Double)
+    pivot: Mapped[float] = mapped_column(Double)
+    contraction_count: Mapped[int] = mapped_column(SmallInteger)
+    # [{"high_date", "high", "low_date", "low", "depth"}, ...], oldest first.
+    contractions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'"))
+    stage_number: Mapped[int | None] = mapped_column(SmallInteger)
+    # False until the sequence is anchored at the IPO or a reset seen in the data; 3.5b
+    # treats an unreliable count as stage 3 (half risk).
+    count_reliable: Mapped[bool] = mapped_column(Boolean)
+    advance: Mapped[float | None] = mapped_column(Double)
+    reset: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    detected_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()

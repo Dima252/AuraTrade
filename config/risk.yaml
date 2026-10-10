@@ -132,3 +132,10 @@ trend_template:  # README §5.3 (Minervini)
     LEADER_PULLBACK: [1, 2, 3, 4, 5, 6, 7, 8]
     EMERGING_LEADER: [1, 5, 6, 7, 8]   # the MA stack (2-4) lags right after a correction
     EPISODIC_PIVOT: []
+
+bases:  # README §5.3 base count (IBD); see indicators/bases.py
+  min_sessions: 25                   # IBD's 5-week minimum; shorter consolidations are ignored
+  max_depth: 0.50                    # deeper is not a base, and resets the count
+  swing_reversal: 0.03               # a contraction is a >= 3% pullback from a swing high
+  pivot_min_position: 0.5            # the final contraction's high is the pivot only in the upper half
+  new_stage_advance: 0.20            # a new stage needs >= 20% from the prior base's pivot
