@@ -209,3 +209,36 @@ class TestClimaxConfig:
         raw["climax"] = {**raw["climax"], field: value}  # type: ignore[dict-item]
         with pytest.raises(ValidationError, match=error):
             RiskConfig.model_validate(raw)
+
+
+class TestTrendTemplateConfig:
+    def test_readme_values(self) -> None:
+        tt = load_risk_config().trend_template
+        assert (tt.short_sma, tt.mid_sma, tt.long_sma) == (50, 150, 200)
+        assert tt.long_sma_rising_sessions == 22
+        assert tt.range_sessions == 252
+        assert (tt.min_above_low, tt.max_below_high, tt.min_rs_rating) == (0.30, 0.25, 70)
+        assert [(w.lookback, w.weight) for w in tt.rs_weights] == [
+            (63, 0.4),
+            (126, 0.2),
+            (189, 0.2),
+            (252, 0.2),
+        ]
+        assert tt.required_rules[Strategy.VCP_BREAKOUT] == frozenset(range(1, 9))
+        assert tt.required_rules[Strategy.EMERGING_LEADER] == {1, 5, 6, 7, 8}
+        assert tt.required_rules[Strategy.EPISODIC_PIVOT] == frozenset()
+
+    @pytest.mark.parametrize(
+        ("change", "error"),
+        [
+            ({"mid_sma": 40}, "short_sma < mid_sma < long_sma"),
+            ({"required_rules": {"VCP_BREAKOUT": [1]}}, "missing"),
+            ({"required_rules": {s.value: [9] for s in Strategy}}, "less than or equal to 8"),
+            ({"rs_weights": []}, "at least 1"),
+        ],
+    )
+    def test_invalid_values(self, change: dict[str, object], error: str) -> None:
+        raw = risk_dict()
+        raw["trend_template"] = {**raw["trend_template"], **change}  # type: ignore[dict-item]
+        with pytest.raises(ValidationError, match=error):
+            RiskConfig.model_validate(raw)

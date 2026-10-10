@@ -49,7 +49,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 2.4 Regime backtest
 
 **Phase 3: Scanner, strategies, plans, baseline**
-- [ ] 3.1 Trend Template
+- [x] 3.1 Trend Template *(built out of plan order with the user's approval)*
 - [ ] 3.2a Strategy registry + core scans (VCP, momentum, EP proxy)
 - [ ] 3.2b Remaining scans (leader pullback, emerging leader)
 - [ ] 3.3 Ranking, cap, verdict cache
