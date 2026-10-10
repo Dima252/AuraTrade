@@ -282,6 +282,7 @@ class RiskConfig(_Strict):
     climax: ClimaxConfig
     data: DataConfig
     jobs: JobsConfig
+    bases: BasesConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -299,3 +300,16 @@ def load_risk_config(path: Path = DEFAULT_RISK_CONFIG) -> RiskConfig:
     if not isinstance(raw, dict):
         raise ValueError(f"{path} must contain a mapping")
     return RiskConfig.model_validate(raw)
+
+
+class BasesConfig(_Strict):
+    """Base detection and IBD counting (README §5.3); see `indicators.bases.BaseRules`."""
+
+    min_sessions: PositiveInt
+    max_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
+    swing_reversal: Annotated[float, Field(gt=0.0, lt=1.0)]
+    pivot_min_position: Annotated[float, Field(gt=0.0, lt=1.0)]
+    new_stage_advance: Positive
+
+
+RiskConfig.model_rebuild()

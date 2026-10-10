@@ -13,4 +13,5 @@ caller from ``config/risk.yaml``. Windows count sessions (bars), never calendar 
 - ``breadth``: share above an average, new highs and lows
 - ``earnings``: earnings-gap catalyst
 - ``climax``: climax-top signals for held positions
+- ``bases``: base detection (contractions, pivot) and the IBD base count
 """
