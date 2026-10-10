@@ -109,7 +109,7 @@ The F position (11 shares) kept its standalone GTC stop ($11.63, status `new`) t
 
 **Consequence for README §5.7.3 (09:20 `execute_open`: OPG exits and trims via the sell sequence):** while the market is closed, "reduce the stop, then sell" doesn't free the shares, so the OPG sale is rejected, and the restore fails too. If the 09:20 pre-market window behaves like the weekend, **OPG exits through the sell sequence can't work at all.** Nothing is unprotected meanwhile (stops only trigger in regular hours, and both stop orders stay in place), but the planned exit doesn't happen.
 
-Options for 0.4 (agenda #11):
+**Decision (user, 2026-10-10): option A.** Options considered (agenda #11):
 - **A (likely simplest):** drop OPG exits. A planned morning exit runs at the **09:31 check run** as a regular-hours sell sequence (replace is processed at once in the session, as `session` showed), with a marketable limit. The cost is one minute of exposure to the open, which a stop at the plan level covers anyway.
 - **B:** pre-market, **cancel** the stop (if a cancel is processed while closed, the shares are freed), place the OPG sell plus a new stop for the rest before 09:28. To test on Monday: whether a cancel is processed pre-market, and whether a new stop placed pre-market is accepted.
 
@@ -125,7 +125,6 @@ All on the `dev` account. The positions are small (≈ $80 a tranche) and every 
 | ✅ Fri, 14:30 | `uv run python -m spikes.alpaca_orders pdt --symbol SOFI` | Four same-day round trips: is the 4th rejected? Is a stop leg / standalone stop on same-day shares rejected? Is a same-day exit rejected? **Uses up the day trades for 5 sessions if PDT still applies**, so run it last |
 | ✅ Sat 10-10, 07:48 (any time; the window runs to Mon 09:28) | `uv run python -m spikes.alpaca_orders opg_exit` | Did the GTC stop survive the night and weekend? An OPG trim via the sell sequence. (Moved from Friday evening: the machine was offline. Is an OPG order accepted on a weekend?) |
 | Mon 10-12, 18:55 then 19:05 (optional) | `uv run python -m spikes.alpaca_orders opg_exit` | The window's start: a 403 just before 19:00, accepted after |
-| Mon 2026-10-12, 09:00–09:25 | read the F stop chain; cancel test | Does the `pending_replace` resolve before 09:30? Is a cancel processed pre-market, and is a new stop accepted pre-market (option B)? |
 | Mon 2026-10-12, after 09:31 | `uv run python -m spikes.alpaca_orders opg_check`, then `corp_check` | The OPG fill; restore the stop; the `pdt` scenario's SOFI day leg (expired at 16:00?); has paper applied the DXJ split to the position (1 → 3 shares)? |
 | Thu 2026-10-15, after 09:31 | `uv run python -m spikes.alpaca_orders corp_check` | **Dividend:** QDTE's stop lowered by the dividend (FINRA 5330) or not? |
 | Afterwards | `uv run python -m spikes.alpaca_orders cleanup --flatten` | Cancels `spk-` orders and closes the spike positions |
