@@ -54,4 +54,4 @@ jobs:
           TEST_DATABASE_URL: postgresql+psycopg://auratrade:auratrade@localhost:5432/auratrade
           # Fail instead of skipping the database tests if Postgres isn't reachable.
           AURATRADE_REQUIRE_DB: "1"
-        run: uv run pytest --cov --cov-report=term
+        run: uv run pytest --cov --cov-report=term --cov-fail-under=95

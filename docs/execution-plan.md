@@ -38,8 +38,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 1.3 Data clients
 - [x] 1.4 Market calendar *(daily re-sync wired into `ingest` at 1.5; run `python -m auratrade.calendar.sync` once against the Neon `dev` branch)*
 - [ ] 1.5 Ingest job
-- [ ] 1.6 Historical backfill
-- [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local)
+- [ ] 1.6 Historical backfill + real-data smoke run of the modules built early
+- [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local) + minimal fake broker and automated chaos tests
 - [ ] 1.8 👤 Early AWS deploy of the skeleton
 
 **Phase 2: Indicators and regime**
@@ -101,7 +101,10 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - **Test pyramid:**
   - unit tests on pure logic (indicators, regime, plans, guardrails, sizing), using synthetic data
   - integration tests with **recorded HTTP fixtures** (no live API calls in CI)
+  - a **real-data smoke run** of the pure modules over the backfilled history (from 1.6), re-run whenever one of them changes
+  - **automated chaos tests** of the order layer against the fake broker in `sim/` (from 1.7), in CI
   - manual end-to-end runs against Alpaca paper
+- **Coverage is enforced in CI:** at least 95% branch coverage overall, and 100% on `guardrails/` (from 3.5b).
 - **Decisions** go in the README decision log; spike findings in `docs/spikes/`; backtest reports in `docs/backtests/`.
 
 ---
@@ -235,7 +238,7 @@ Added at the user's request (decision #108). A public page with a link, explaini
 - Fundamentals: rolling refresh within free limits, plus a refresh after each report.
 - **Industry classification:** SIC → industry group; refreshed weekly.
 
-### 1.6 Historical backfill (S)
+### 1.6 Historical backfill and real-data smoke run (M)
 
 `scripts/backfill.py`: 2016 → today, **including delisted symbols** the vendor covers, with a point-in-time membership table so backtests can rebuild each session's universe. Split-adjusted bars plus the raw close. **Historical earnings dates and timing** from EDGAR 8-K Item 2.02 filings (per the 0.3e findings), so the backtests can apply the blackout and cushion rules. **Fundamentals keyed on the EDGAR `filed` date**, never the period end (README §5.1). Parquet partitioned by year; the last 2 years loaded into Postgres.
 
@@ -244,8 +247,13 @@ Added at the user's request (decision #108). A public page with a link, explaini
 - Tests pass for: a weekend, a Monday holiday, Good Friday, the day after Thanksgiving, a vendor short-count (→ `INCOMPLETE`), a split, and a calendar disagreement.
 - Industry coverage ≥ 95% of the universe.
 - Postgres size is under the free-tier limit with headroom.
+- **Real-data smoke run** (`scripts/smoke_real_data.py`, re-runnable). The modules built ahead of the data layer (2.1 indicators, 2.2 bases, 2.3 regime, 3.1 Trend Template, 3.5a plans on a few sample trades) have only seen synthetic bars and ten fixture tickers. They now run together over the whole backfilled history and point-in-time universe, and write `docs/backtests/smoke.md`:
+  - no exceptions; no NaN or infinite values where the inputs were complete
+  - one regime row per session, plausible on known stretches (the Feb–Mar 2020 crash, the 2022 bear market). A clear miss goes to 2.4; nothing is tuned here
+  - Trend Template pass counts and base-count distributions per session, with outliers listed and explained (bad ticks like B13 must be caught by ingest's outlier filter, not reach the base count)
+  - any mismatch between what the modules expect and what ingest stores (columns, raw vs adjusted prices, listing dates) is fixed before 1.7
 
-### 1.7 Walking skeleton (M)
+### 1.7 Walking skeleton (L)
 
 One thin pass through the **whole daily loop**, built from the real modules in minimal form, so the riskiest integration (orders, stops, timing, the job runner) runs on real sessions months before the full system exists. Phase 5 **extends** this code; it isn't throwaway.
 - **Scan-lite:** Trend Template rules 1–5 and 8 on the ingested data; pivot = 20-session high; structural stop = the 10-session low, capped at 8%.
@@ -261,6 +269,7 @@ One thin pass through the **whole daily loop**, built from the real modules in m
   - the **price-through-the-stop** path: sell at once instead of placing a stop above the market, escalating within the run (marketable limit → one re-price → market)
   - partial-fill handling (the filled quantity is the position)
   - kill switch (entries only) as the `system_flags` row, with `auratrade kill on|off`; `kill on` cancels resting entry orders at once
+- **Fake broker (minimal):** `sim/` gets an in-memory broker implementing the order layer's broker interface (orders, OTO legs, replace, cancel, positions, fills set by the test), with the 0.3b behaviours as amended at 0.4 and **fault injection** (a 500 on submit, a deleted stop, a dropped connection, a process killed between two calls). It has no fill model yet: 3.6 extends **this same module**, so there is still only one simulator (README §5.12, decision #63). The order code is tested against it before it ever runs unattended in 1.8.
 - **Exits:** the hard stop, plus a single soft rule (close below the 21 EMA at the 15:40 decision price) using the **sell sequence**.
 - **`post_market`:** a journal row, the Telegram daily report, and the nightly backup export to storage.
 - `TRADING_MODE` stays `dry_run` by default; paper orders need the explicit `paper` flag.
@@ -272,6 +281,17 @@ One thin pass through the **whole daily loop**, built from the real modules in m
 - every job correctly run or skipped on the calendar
 - a forced concurrent run of an order job waits on the lock instead of interleaving
 - a job killed right after reducing a stop is repaired by `stop_guard` within one run (≤ 5 minutes)
+
+**Accept (automated, in CI, against the fake broker and the test Postgres):** each of these ends with **no duplicate orders and no position without a full-quantity GTC stop**:
+- a job killed right after it reduced or cancelled a stop, before the sell (the next `stop_guard` run restores it)
+- the same order job run twice in a row (a Lambda retry): idempotent through `client_order_id`
+- two order jobs at the same time: the second waits on the lock
+- an API 500 on submit, and a dropped connection after the broker accepted the order
+- a stop deleted at the broker
+- the price already through the stop level: sell at once, escalating marketable limit → re-price → market
+- a partly filled entry: the filled quantity is protected
+
+Phase 5 extends this suite to the full chaos list (5.5); these cases keep running there.
 
 The long unattended record comes from 1.8 rather than from running this machine by hand for weeks.
 
@@ -462,7 +482,7 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
   - the clip regression test: with 4 positions open at 1.25% risk, a 5th at 1.25% is clipped to 1% (the room left), not rejected
   - a property test that a momentum / EP stop at 1 × ADR passes the noise floor whenever ATR ≤ 2 × ADR (the regression test for the old 1 × ATR floor, which rejected them all)
   - a VCP chased to pivot × 1.05 whose structural stop is 8% below the pivot is rejected (8% is measured from the limit)
-- **100% branch coverage.**
+- **100% branch coverage, enforced in CI:** a step that fails the build if `guardrails/` drops below 100% (e.g. `coverage report --include="src/auratrade/guardrails/*" --fail-under=100`).
 - `execution/sizing.py`: planned size on the worst fill; tranche split; tranche-2 re-sizing on the actual price and tranche 1's actual (possibly partial) fill.
 - `execution/triggers.py` (pure): pivot vs **5-min opening-range high** from 1-min bars (the opening-range high whenever the range traded above the level, README §7.1), low-of-day stops for momentum and EPs, max-chase checks, the skip when the opening-range high is above pivot × 1.05, the **limit buy at the limit** when the price at 09:36 is already above the trigger but within the limit (skip above it), and the limit price min(trigger × (1 + min(2%, ½ × ADR%)), code pivot × 1.05). Tested with a stock that opens below its pivot and breaks it before 09:36, and with one that breaks its opening-range high at 09:35.
 - `journal/risk_multiplier.py`: progressive-exposure state from the journal and equity peak, following the README §8 table exactly:
@@ -477,7 +497,7 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
 
 ### 3.6 Simulator and fake broker (M)
 
-- `sim/`: **one** fill simulator and an in-memory fake broker implementing the same broker interface as the order layer from 1.7.
+- `sim/`: **one** fill simulator, built on the in-memory fake broker from 1.7 (the same module, extended; the same broker interface as the order layer).
 - It calls the live pure functions (plans, triggers, sizing, guardrails, multiplier from 3.5a–3.5b), never copies of them.
 - The fake broker models what 0.3b found about partial fills, stops above the market and PDT rejections, so replay and chaos tests exercise those paths.
 - **Fill model** (README §5.12):
@@ -697,7 +717,7 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
   - tranche 2 adds after a gate pass and the stop covers the full quantity
   - a soft-rule exit and an earnings-cushion exit fire near the close
 - **Simulated sessions** (replayed bars through `sim/`) exercise every early-behaviour, partial, breakeven, round-trip, 8-week-hold and climax rule.
-- **Chaos tests:** each of these produces **no duplicate orders and no unprotected position**:
+- **Chaos tests** (extending the automated suite from 1.7, in CI): each of these produces **no duplicate orders and no unprotected position**:
   - killing a job mid-run, or running it twice
   - **killing a job right after it reduced or cancelled a stop and before the sell** (`stop_guard` or the Lambda retry restores protection within about 5 minutes)
   - **two runs of order jobs at the same time** (e.g. `fill_watcher` during an `eod_review` sell)

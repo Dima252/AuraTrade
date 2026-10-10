@@ -36,6 +36,7 @@ Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On
 | New database | Starts with entries disabled (kill switch on) until `auratrade kill off` | README §14, task 1.2 |
 | Out-of-order tasks | 2.1 Indicators built before Phase 1 finished; 2.2, 2.3, 3.1 and 3.5a built in parallel on 2026-10-10 (PRs #12–#15). All with approval | tracker |
 | OPG exits | Option A (#11 above) | alpaca-orders.md |
+| Testing gates | Added to the plan on 2026-10-10 at the user's request, after a review of the tests so far: a real-data smoke run of the early-built modules (1.6); a minimal fake broker in `sim/` and automated chaos tests of the order core (1.7), before it runs unattended in 1.8; CI coverage floors (95% overall now, 100% on `guardrails/` from 3.5b). Plan-only: no README behaviour changes | execution-plan.md |
 
 ## From the out-of-order build (2.2, 2.3, 3.1, 3.5a)
 
