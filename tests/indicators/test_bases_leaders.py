@@ -30,6 +30,22 @@ IPO_DATES = {"ZM": date(2019, 4, 18)}
 # relisted shares a separate security (README §5.1), with a history that starts at the relisting.
 SECURITY_STARTS = {"SMCI": date(2020, 1, 14)}
 
+# Bad SIP prints that pass a plain OHLC sanity check, left in the fixtures as the raw record.
+# Filtering them is ingest's job (task 1.5), not base detection's. No clear case may depend on
+# them: every asserted row for the ticker ends before the bad bar.
+KNOWN_BAD_BARS = (
+    # (ticker, date, field, value, reason)
+    (
+        "NVDA",
+        date(2024, 6, 10),
+        "high",
+        195.95,
+        "split day; open 120.37, close 121.79, true high ~122",
+    ),
+    ("TSLA", date(2021, 3, 1), "high", 290.67, "open 230.04, close 239.48"),
+    ("TSLA", date(2021, 3, 4), "high", 291.31, "open 218.60, close 207.15"),
+)
+
 
 def load(symbol: str) -> tuple[list[date], list[Bar]]:
     with gzip.open(FIXTURES / f"{symbol}.csv.gz", "rt", encoding="utf-8") as f:
@@ -167,3 +183,21 @@ def test_the_first_bar_alone_is_not_an_ipo() -> None:
     assert dates[0] == date(2017, 5, 24)
     assert "CELH" not in IPO_DATES
     assert detected("CELH")[0][4] is False
+
+
+@pytest.mark.parametrize(("symbol", "day", "field", "value", "reason"), KNOWN_BAD_BARS)
+def test_known_bad_bars_are_in_the_record(
+    symbol: str, day: date, field: str, value: float, reason: str
+) -> None:
+    dates, bars = load(symbol)
+    assert getattr(bars[dates.index(day)], field) == value, reason
+
+
+@pytest.mark.parametrize(("symbol", "day"), [(t, d) for t, d, *_ in KNOWN_BAD_BARS])
+def test_no_clear_case_depends_on_a_bad_bar(symbol: str, day: date) -> None:
+    # NVDA's 195.95 print makes its 2024-06-05 candidate look 54% deep (really ~36%), so that
+    # FAILED row, the "reset" 2024-08-19 base and the forming base after it are artefacts and
+    # are deliberately not checked.
+    for _, end, *_ in CLEAR_CASES[symbol]:
+        assert end is not None
+        assert end < day
