@@ -4,6 +4,17 @@ The points to decide at the 0.4 review. Each spike note has the evidence; this p
 
 Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On 2026-10-10 the decisions and readings from the out-of-order build (2.2, 2.3, 3.1, 3.5a; PRs #12–#15) were added at the end. What is left overall: [next-steps.md](../next-steps.md).
 
+## Review progress
+
+**Session 1, 2026-10-10:** approved by the user, all as proposed unless noted:
+- **#9** Keep $5,000 for the paper trial and live. The simulator and backtests size with whole shares at the real account size, so 0-share skips appear in the results. A trade sized below 2 shares goes in as a **single tranche** at the trigger. Evidence: the 8,177 edge-check trades re-sized at raw prices with the 25% position cap. At $5,000, 1% / 3% / 10% of trades get 0 shares at 1% / 0.5% / 0.25% risk; 3% / 10% / 28% are under 2 shares; flooring takes about 85–90% of the planned risk; the skipped trades' expectancy doesn't differ from the rest. At $10,000 the 0.5% skip rate is 1%.
+- **#10** Adopted.
+- **#6, #7, #7b, #8** Adopted (#8: alert above $1.00 per Analyst batch and $0.50 per real-time call).
+- **"Already decided" and B1–B12:** recorded as built.
+- **B13, B14** (unreliable count = half risk), **B15, B16, B17, B18** (accept the side effect), **B19, B20, B21:** adopted.
+
+**Still open:** #1–4 (after Thursday's order checks) and #5 (after Monday's VIX watch). Then one PR updates the README, the decision log (#113 onward) and the plan.
+
 ## Proposed design changes (need approval)
 
 | # | Topic | Finding | Proposal | Evidence |
