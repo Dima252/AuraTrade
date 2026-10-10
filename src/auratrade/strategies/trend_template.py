@@ -58,6 +58,15 @@ class TrendTemplate:
         return all(self.rule(n) for n in rules)
 
 
+# Computed levels carry float noise (10 * 1.3 = 13.000000000000002); a close this close to a
+# level has reached it.
+_LEVEL_TOLERANCE = 1e-9
+
+
+def _at_least(value: float, level: float | None) -> bool:
+    return level is not None and value >= level - _LEVEL_TOLERANCE
+
+
 def _gt(a: float | None, b: float | None) -> bool:
     return a is not None and b is not None and a > b
 
@@ -91,8 +100,12 @@ def trend_template(
                 long_rising=long_rising[t],
                 short_above_mid_and_long=_gt(short[t], mid[t]) and _gt(short[t], long[t]),
                 above_short=_gt(close, short[t]),
-                above_low=low is not None and close >= low * (1 + config.min_above_low),
-                near_high=high is not None and close >= high * (1 - config.max_below_high),
+                above_low=_at_least(
+                    close, None if low is None else low * (1 + config.min_above_low)
+                ),
+                near_high=_at_least(
+                    close, None if high is None else high * (1 - config.max_below_high)
+                ),
                 strong_rs=rating is not None and rating >= config.min_rs_rating,
             )
         )

@@ -98,6 +98,15 @@ def test_rule_6_price_30_percent_above_52_week_low() -> None:
     assert template.failed == (6,)
 
 
+def test_rules_6_and_7_count_a_close_exactly_at_the_level() -> None:
+    # In floating point 1.01 * 1.3 = 1.3130000000000002 and 1.1 * 0.75 = 0.8250000000000001,
+    # yet closes of 1.313 and 0.825 are exactly 30% above the low / 25% below the high.
+    assert last(flat_bars([1.01, 1.01, 1.01, 1.1, 1.2, 1.25, 1.28, 1.313])).rule(6)
+    bars = flat_bars([0.7, 0.72, 0.74, 0.76, 0.78, 0.8, 0.81, 0.825])
+    bars[5] = Bar(open=0.8, high=1.1, low=0.8, close=0.8, volume=1000)
+    assert last(bars).rule(7)
+
+
 def test_rule_7_price_within_25_percent_of_52_week_high() -> None:
     bars = flat_bars(UPTREND)
     bars[5] = Bar(open=15, high=22, low=15, close=15, volume=1000)  # 22 * 0.75 = 16.5 <= 17
