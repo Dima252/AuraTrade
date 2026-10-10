@@ -2,7 +2,7 @@
 
 The points to decide at the 0.4 review. Each spike note has the evidence; this page lists the decisions in one place. Nothing here changes the README until the user approves it (CLAUDE.md §5).
 
-Status: being collected while the last spikes run (2026-10-09 to 2026-10-15).
+Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On 2026-10-10 the decisions and readings from the out-of-order build (2.2, 2.3, 3.1, 3.5a; PRs #12–#15) were added at the end. What is left overall: [next-steps.md](../next-steps.md).
 
 ## Proposed design changes (need approval)
 
@@ -34,4 +34,47 @@ Status: being collected while the last spikes run (2026-10-09 to 2026-10-15).
 | Long-weekend input | `sessions_until_next_open` → `days_until_next_open` (calendar days; in sessions the next open is always 1 away). Approved by merging PR #9 | README §4, task 1.4 |
 | Climax setting | `fast_gain_min_move_sessions = 15`, provisional; the baseline backtest (3.8) chooses the value | `config/risk.yaml`, task 1.2 |
 | New database | Starts with entries disabled (kill switch on) until `auratrade kill off` | README §14, task 1.2 |
-| Out-of-order task | 2.1 Indicators built before Phase 1 finished, with approval | tracker 2.1 |
+| Out-of-order tasks | 2.1 Indicators built before Phase 1 finished; 2.2, 2.3, 3.1 and 3.5a built in parallel on 2026-10-10 (PRs #12–#15). All with approval | tracker |
+| OPG exits | Option A (#11 above) | alpaca-orders.md |
+
+## From the out-of-order build (2.2, 2.3, 3.1, 3.5a)
+
+Each PR description has the full reasoning: [#13](https://github.com/Dima252/AuraTrade/pull/13) (2.2 bases), [#15](https://github.com/Dima252/AuraTrade/pull/15) (2.3 regime), [#14](https://github.com/Dima252/AuraTrade/pull/14) (3.5a plans). The code already implements every row below; the README and decision log don't record them yet.
+
+### Decided by the user during the build (record in the decision log)
+
+| # | Task | Decision |
+|---|---|---|
+| B1 | 2.2 | **Interim-low reset.** The base count also resets when any intraday low *between* two bases undercuts the prior base's low, not only a low inside the next base. Without it, a crash that recovers into a higher base keeps counting up. |
+| B2 | 2.2 | **`pivot_min_position: 0.5`.** The final contraction's high is the pivot only in the upper half of the base's range; otherwise the pivot is the base high. This lowers counts, so it allows more risk. |
+| B3 | 2.3 | **"50 SMA rising/falling"** compares the 50 SMA with its value 10 sessions earlier (`index_trend.slope_sessions`). |
+| B4 | 2.3 | **Crisis override with stale macro data.** VIX/VIX3M = the latest value on or before the session, from CBOE or from FRED when CBOE is late. `crisis = true` (plus an alert) only when both sources are more than 2 sessions stale, the volatility pillar's threshold. |
+| B5 | 2.3 | **Expiration flag:** the quarterly expiration sessions (third Friday of Mar/Jun/Sep/Dec, or the session before on a holiday; also the S&P 500 and Nasdaq-100 rebalance dates). Russell left out. Their distribution days count by default; 2.4 decides whether to exclude them. |
+| B6 | 2.3 | **Starting state:** `CORRECTION` (fail closed); a replay starts ≥ 252 sessions before the first label that matters. |
+| B7 | 2.3 | **Breadth universe before 1.5:** `COMMON`/`ADR` securities listed and not delisted *as of each session*, with a bar that session, passing the §5.1 filters as of that session (point in time). The thresholds live in `regime.breadth.universe_*` until 1.5 takes them over. |
+| B8 | 2.3 | **Readings of §5.2:** one rally attempt across both indexes (an undercut by either restarts both day counts; each index keeps its own low); `EARLY_UPTREND` → `CORRECTION` counts distribution days since entering it; the label at session t governs t+1, and the upgrade and §6 step-up need 10 `EARLY_UPTREND` labels; a downgrade beats an upgrade and an FTD beats the `no_ftd` fallback; an `EARLY_UPTREND` LLM view when the computed regime isn't `EARLY_UPTREND` fails closed to `CORRECTION`. |
+| B9 | 3.5a | **Exhaustion-gap climax signal:** the open must be ≥ 1% above the prior session's high (`climax.exhaustion_min_gap`). |
+| B10 | 3.5a | **The "10-day" trail** is a 10-session **SMA**. |
+| B11 | 3.5a | **Downgrade during an active 8-week hold:** to `UNDER_PRESSURE`, the hold's trail tightens one step (50 SMA → 21 EMA); to `CORRECTION`, the hold still ends. |
+| B12 | 3.5a | **The late-stage sale** ranks with the climax sales (precedence slot 4); an 8-week hold doesn't suppress it; it fires once per position. |
+
+### Need a decision or a check at 0.4
+
+| # | Task | Topic | Detail and proposal |
+|---|---|---|---|
+| B13 | 2.2 / 1.5 | **Bad ticks in SIP daily bars** | Bad highs pass a plain OHLC sanity check: NVDA high 195.95 on 2024-06-10 (true ≈ 122), TSLA 290.67 / 291.31 on 2021-03-01 / 03-04. NVDA's one print created a false `FAILED` base and a false count reset. **Proposal:** ingest (1.5) gets an outlier filter (a high or low far outside both the bar's open–close range and the neighbouring bars), and the base count never trusts a single-bar extreme. |
+| B14 | 2.2 / 3.5b | **`count_reliable`** | New concept: a base count is reliable only from a real IPO in the history or from a reset seen in the data. **Proposal:** 3.5b sizes `count_reliable = false` as stage 3 (half risk). Affects risk, so it needs your OK. |
+| B15 | 2.2 | **Failure resets** | A decline deeper than 50% is a `FAILED` row, resets the count and makes it reliable, like an undercut. Every failure in the spot-check also undercut the prior low. Confirm. |
+| B16 | 2.2 / §10 | **Retention of `bases`** | The count carries forward from `bases` rows, so they must outlive the 2-year `daily_bars` window. Add `bases` (keep forever; small) to README §10's retention list. |
+| B17 | 2.2 / 1.5–1.6 | **Listing date** | The IPO anchor needs the first *public trading* date, not the exchange listing date (CELH's 2017 uplisting from OTC is not an IPO). A relisting after a > 30-session gap is a separate security with an unreliable count (§5.1; SMCI tested). Ingest must store the right date. |
+| B18 | 2.3 | **Stale-day side effect** | With one stale macro day, the "VIX/VIX3M > 1.0 for ≥ 2 sessions" check can read the same observation twice. Accept, or require two distinct observation dates. |
+| B19 | 2.3 | **Recomputing a regime row** keeps the stored `llm_regime`; once a view exists, Phase 4 code maintains the effective regime. Confirm. |
+| B20 | 3.5a | **Readings to check** (PR #14 lists them): the entry session is session 1 and the "breakout" session for the 8-week hold; breakeven at +3R and the round-trip rule read the highest high since entry, while partials, the hold trigger, the cushion and trails read the decision price; the Kullamägi partial is checked at session N exactly; strength partial, climax ½ and late-stage ½ fire once each; "breakeven after the first partial" counts profit-taking sales only; any close below the pivot in the first 20 sessions (not a heavy-volume-reversal exit) holds, blocks tranche 2 and raises `FAILED_BREAKOUT`; a downgrade to `UNDER_PRESSURE` keeps the plan's trail tightened after a hold ends; a stop raised through the price exits that session as `HARD_STOP`; `DURING_MARKET` / `UNKNOWN` earnings timing count as before the open; with no known date the cushion runs at last report + 52 sessions; all of a session's changes fold into one plan version. |
+| B21 | 3.5a / 3.8 | **Provisional menu defaults** | Kullamägi ⅓ at session 3, Minervini ⅓ at +2R, O'Neil ¼ at +20%. The baseline backtest (3.8) chooses the final values. |
+
+### Notes for later tasks (no decision needed)
+
+- **3.2a:** `contraction_count` from 2.2 is noisy on volatile names (fixed 3% zigzag; 30–50 in some long bases). The VCP scan applies its own contraction rules.
+- **3.7:** the leadership-health pillar needs a result for every breakout in T−24…T−5 (`sessions_ago`, above trigger 5 sessions later); a missing one is an error. Until then the pillar scores 0.
+- **5.x:** `position_plans.position_id` has no foreign key yet; add it with the `positions` table.
+- **1.5:** the calendar sync inserts row by row (about 8 min from the PC to Neon); batch it.
