@@ -282,6 +282,7 @@ class RiskConfig(_Strict):
     climax: ClimaxConfig
     data: DataConfig
     jobs: JobsConfig
+    trend_template: TrendTemplateConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -299,3 +300,43 @@ def load_risk_config(path: Path = DEFAULT_RISK_CONFIG) -> RiskConfig:
     if not isinstance(raw, dict):
         raise ValueError(f"{path} must contain a mapping")
     return RiskConfig.model_validate(raw)
+
+
+# --- risk.yaml: scanner and plans (Phase 3) ------------------------------------------------
+# Defined after RiskConfig so these sections stay appended; `RiskConfig.model_rebuild()` below
+# resolves the forward references.
+
+
+class RsWeight(_Strict):
+    lookback: PositiveInt
+    weight: Positive
+
+
+TrendTemplateRule = Annotated[int, Field(ge=1, le=8)]
+
+
+class TrendTemplateConfig(_Strict):
+    """Minervini's 8-rule Trend Template (README §5.3); see `strategies.trend_template`."""
+
+    short_sma: PositiveInt
+    mid_sma: PositiveInt
+    long_sma: PositiveInt
+    long_sma_rising_sessions: PositiveInt
+    range_sessions: PositiveInt
+    min_above_low: Positive
+    max_below_high: Fraction
+    min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
+    rs_weights: tuple[RsWeight, ...] = Field(min_length=1)
+    required_rules: dict[Strategy, frozenset[TrendTemplateRule]]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if not self.short_sma < self.mid_sma < self.long_sma:
+            raise ValueError("need short_sma < mid_sma < long_sma")
+        missing = set(Strategy) - self.required_rules.keys()
+        if missing:
+            raise ValueError(f"required_rules is missing {sorted(missing)}")
+        return self
+
+
+RiskConfig.model_rebuild()
