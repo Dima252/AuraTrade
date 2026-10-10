@@ -111,3 +111,24 @@ jobs:  # README §2
   chain_wait_minutes: 30
   duration_alert_minutes: 10
   stale_running_minutes: 20
+
+trend_template:  # README §5.3 (Minervini)
+  short_sma: 50
+  mid_sma: 150
+  long_sma: 200
+  long_sma_rising_sessions: 22       # rule 3: the 200 SMA above its value 22 sessions ago
+  range_sessions: 252                # the 52-week high and low
+  min_above_low: 0.30                # rule 6: >= 30% above the 52-week low
+  max_below_high: 0.25               # rule 7: within 25% of the 52-week high
+  min_rs_rating: 70                  # rule 8
+  rs_weights:                        # RS score = 0.4*R63 + 0.2*R126 + 0.2*R189 + 0.2*R252
+    - {lookback: 63, weight: 0.4}
+    - {lookback: 126, weight: 0.2}
+    - {lookback: 189, weight: 0.2}
+    - {lookback: 252, weight: 0.2}
+  required_rules:                    # rule numbers each strategy needs; EPs are exempt
+    VCP_BREAKOUT: [1, 2, 3, 4, 5, 6, 7, 8]
+    MOMENTUM_BREAKOUT: [1, 2, 3, 4, 5, 6, 7, 8]
+    LEADER_PULLBACK: [1, 2, 3, 4, 5, 6, 7, 8]
+    EMERGING_LEADER: [1, 5, 6, 7, 8]   # the MA stack (2-4) lags right after a correction
+    EPISODIC_PIVOT: []
