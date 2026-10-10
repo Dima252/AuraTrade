@@ -99,7 +99,8 @@ climax:  # README §7.3 "Climax sale"
   # the first 15 sessions after the breakout are the 8-week-hold window (+20% in 15), where
   # a fast gain is a strength signal, not a climax. Tuned only on backtest evidence (3.8).
   fast_gain_min_move_sessions: 15
-  # The exhaustion-gap minimum has no README value yet; it is added with the plan engine (3.5a).
+  # Open above the prior session's high by at least this much (user decision, task 3.5a).
+  exhaustion_min_gap: 0.01
   sell_half_signals: 2
   sell_all_signals: 3
 
@@ -195,3 +196,94 @@ regime:  # README §5.2; provisional until the 2.4 regime backtest (final after 
     index: SPY
     index_drop: 0.04                 # SPY -4% in a session: that session and the next
   replay_warmup_sessions: 252        # a replay starts this many sessions before its first label
+
+plans:  # README §7.1-7.4; see auratrade.plans. Defaults change only on backtest evidence (3.8).
+  trails:                            # "first close below" the average exits (§7.3)
+    TEN_DAY: {kind: SMA, window: 10}   # user decision, task 3.5a: the 10-day is an SMA
+    EMA_21: {kind: EMA, window: 21}
+    SMA_50: {kind: SMA, window: 50}
+  # Bounded menus (§7.3 "Strength partial"): a plan picks values inside these ranges.
+  # 0.3333333333 is ⅓ (share counts are floored with a small tolerance).
+  partial_menus:
+    KULLAMAGI:                       # (a) sell ⅓-½ after 3-5 sessions if >= +1.5R
+      fraction: {min: 0.3333333333, max: 0.5}
+      after_sessions: {min: 3, max: 5}
+      min_r: 1.5
+    ONEIL:                           # (b) sell ¼-½ at +20-25%
+      fraction: {min: 0.25, max: 0.5}
+      gain: {min: 0.20, max: 0.25}
+    MINERVINI:                       # (c) sell ⅓-½ at +2-3R
+      fraction: {min: 0.3333333333, max: 0.5}
+      r_multiple: {min: 2.0, max: 3.0}
+  breakeven_at_r: 3.0                # stop -> breakeven at +3R (session high)
+  round_trip_gain: 0.10              # once +10% is reached (session high), stop >= breakeven
+  eight_week_hold:
+    min_gain: 0.20                   # +20% (decision price) ...
+    within_sessions: 15              # ... within 15 sessions of the breakout (entry = session 1)
+    hold_sessions: 40                # hold on the 50-day through session 40
+  heavy_volume_reversal:
+    min_volume_ratio: 1.5            # projected volume vs the 50-day average
+  early_sessions: 20                 # §7.2 rules apply in the first 20 sessions
+  time_stop:
+    min_r: 1.0                       # "no progress" = session high since entry < +1R
+    halve_session: 10
+    halve_fraction: 0.5
+    exit_session: 20
+  climax_sell_fraction: 0.5          # >= climax.sell_half_signals -> sell ½ (once)
+  late_stage_sale:
+    min_base_count: 4                # a breakout from a 4th-stage base or later ...
+    sell_fraction: 0.5               # ... sells ½ into strength (once)
+  earnings_cushion:                  # §7.4, unrealized gain in R on the decision price
+    exit_below_r: 1.0
+    hold_full_from_r: 3.0
+    trim_fraction: 0.5
+  confirmation_gates:                # §7.1, tranche 2 on the decision price
+    BREAKOUT:                        # VCP, emerging leaders
+      max_above_level: 0.05
+      min_range_position: 0.5        # upper half of the day's range
+      min_volume_ratio: 1.4          # projected volume vs the 50-day average
+      rs_line_near_high: true
+      above_tested_ma: false
+      rs_line_not_at_low: false
+    PULLBACK:                        # leader pullbacks
+      max_above_level: 0.05
+      min_range_position: 0.5
+      min_volume_ratio: 1.0
+      rs_line_near_high: false
+      above_tested_ma: true
+      rs_line_not_at_low: true
+  entry:                             # §7.1
+    VCP_BREAKOUT: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: BREAKOUT}
+    LEADER_PULLBACK: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: PULLBACK}
+    EMERGING_LEADER: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: BREAKOUT}
+    MOMENTUM_BREAKOUT: {trigger: CONSOLIDATION_OR_RANGE_HIGH, stop: LOW_OF_DAY, tranches: 1}
+    EPISODIC_PIVOT: {trigger: OPENING_RANGE_HIGH, stop: LOW_OF_DAY, tranches: 1}
+  # Default exit sets (§7.3): one trader's own set per strategy, plus the safety rules
+  # (earnings cushion, regime-downgrade tightening). Values inside the menus are provisional
+  # and chosen by the 3.8 baseline backtest.
+  exit_sets:
+    KULLAMAGI:
+      partial: {kind: KULLAMAGI, fraction: 0.3333333333, after_sessions: 3}
+      breakeven_after_partial: true
+      trail: TEN_DAY
+    MINERVINI:
+      partial: {kind: MINERVINI, fraction: 0.3333333333, r_multiple: 2.0}
+      breakeven_after_partial: true
+      breakeven_at_r: true
+      trail: SMA_50
+    ONEIL:
+      partial: {kind: ONEIL, fraction: 0.25, gain: 0.20}
+      round_trip: true
+      trail: SMA_50
+      eight_week_hold: true
+      climax_sales: true
+      heavy_volume_reversal: true
+      late_stage_sale: true
+  # Each strategy's default plan: its set, plus per-rule switches (`overrides`) so the
+  # baseline backtest can add rules one at a time.
+  default_plans:
+    MOMENTUM_BREAKOUT: {exit_set: KULLAMAGI}
+    EPISODIC_PIVOT: {exit_set: KULLAMAGI}
+    VCP_BREAKOUT: {exit_set: MINERVINI}
+    LEADER_PULLBACK: {exit_set: MINERVINI}
+    EMERGING_LEADER: {exit_set: ONEIL}

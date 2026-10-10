@@ -410,3 +410,122 @@ class MarketRegimeRow(Base):
     state: Mapped[dict[str, Any]]
     risk_hash: Mapped[str] = mapped_column(String(64))
     computed_at: Mapped[datetime] = _created()
+
+
+# --- Position plans (task 3.5a, README §7.3, §10) -------------------------------------------
+# These value lists mirror the enums in `auratrade.config` and `auratrade.plans` (a test
+# checks they match), so the database rejects a value the code can't produce.
+
+STRATEGIES = (
+    "VCP_BREAKOUT",
+    "MOMENTUM_BREAKOUT",
+    "EPISODIC_PIVOT",
+    "LEADER_PULLBACK",
+    "EMERGING_LEADER",
+)
+TRAILS = ("SMA_50", "EMA_21", "TEN_DAY")
+HOLD_STATES = ("OFF", "WATCHING", "ACTIVE", "ENDED")
+PLAN_CHANGES = (
+    "ENTRY",
+    "TRANCHE_2",
+    "MILESTONE",
+    "PARTIAL_SALE",
+    "EIGHT_WEEK_HOLD",
+    "REGIME_DOWNGRADE",
+    "EARNINGS_CUSHION",
+    "TIGHTEN",
+    "SPLIT",
+)
+PLAN_RULES = (
+    "HARD_STOP",
+    "EARNINGS_CUSHION",
+    "HEAVY_VOLUME_REVERSAL",
+    "CLIMAX",
+    "LATE_STAGE",
+    "REGIME_DOWNGRADE",
+    "EIGHT_WEEK_HOLD",
+    "STRENGTH_PARTIAL",
+    "TRAIL",
+    "TIME_STOP",
+)
+POSITION_EVENT_KINDS = (
+    "EXIT",
+    "SALE",
+    "STOP_RAISED",
+    "TRAIL_TIGHTENED",
+    "HOLD_STARTED",
+    "HOLD_ENDED",
+    "REGIME_DOWNGRADE",
+    "EARNINGS_CUSHION",
+    "CLIMAX_SIGNALS",
+    "FALTERING_RS",
+    "FAILED_BREAKOUT",
+)
+
+
+class PositionPlanRow(Base):
+    """One version of a position's plan (`plans.model.PositionPlan`), tighten-only. Kept
+    forever (README §10)."""
+
+    __tablename__ = "position_plans"
+    __table_args__ = (
+        UniqueConstraint("position_id", "version"),
+        CheckConstraint("version >= 1", name="version"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(_in("change", PLAN_CHANGES), name="change"),
+        CheckConstraint(_in("trail", TRAILS), name="trail"),
+        CheckConstraint(_in("hold_state", HOLD_STATES), name="hold_state"),
+        CheckConstraint("pivot > 0 AND initial_stop > 0", name="positive"),
+        CheckConstraint("initial_stop < entry_price", name="initial_stop"),
+        CheckConstraint("hard_stop >= initial_stop", name="hard_stop"),
+        CheckConstraint(
+            "(hold_state = 'ACTIVE') = (hold_until_session IS NOT NULL)", name="hold_until"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    # `positions` comes with the order layer; the foreign key is added with it.
+    position_id: Mapped[int] = mapped_column(BigInteger)
+    version: Mapped[int] = mapped_column(SmallInteger)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    strategy: Mapped[str] = mapped_column(Text)
+    change: Mapped[str] = mapped_column(Text)
+    # The session whose review (or the entry) wrote this version.
+    session_date: Mapped[date] = mapped_column(Date)
+    pivot: Mapped[float] = mapped_column(Double)
+    entry_price: Mapped[float] = mapped_column(Double)
+    initial_stop: Mapped[float] = mapped_column(Double)
+    hard_stop: Mapped[float] = mapped_column(Double)
+    # The trail in force (the 8-week hold's while it is active).
+    trail: Mapped[str] = mapped_column(Text)
+    hold_state: Mapped[str] = mapped_column(Text)
+    hold_until_session: Mapped[int | None] = mapped_column(SmallInteger)
+    # The whole plan version, authoritative; the columns above are for queries and checks.
+    plan: Mapped[dict[str, Any]]
+    # `plans.levels.plan_levels`: tomorrow's hard stop, trail level and milestone triggers.
+    levels: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    risk_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _created()
+
+
+class PositionEventRow(Base):
+    """Milestones, sales, climax signals, faltering RS, time stops, the cushion, downgrades."""
+
+    __tablename__ = "position_events"
+    __table_args__ = (
+        CheckConstraint(_in("kind", POSITION_EVENT_KINDS), name="kind"),
+        CheckConstraint(f"rule IS NULL OR {_in('rule', PLAN_RULES)}", name="rule"),
+        CheckConstraint("shares IS NULL OR shares > 0", name="shares"),
+        Index("ix_position_events_position_session", "position_id", "session_date"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    position_id: Mapped[int] = mapped_column(BigInteger)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    session_date: Mapped[date] = mapped_column(Date)
+    plan_version: Mapped[int | None] = mapped_column(SmallInteger)
+    kind: Mapped[str] = mapped_column(Text)
+    rule: Mapped[str | None] = mapped_column(Text)
+    shares: Mapped[int | None] = mapped_column(Integer)
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    created_at: Mapped[datetime] = _created()

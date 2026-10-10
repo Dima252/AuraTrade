@@ -11,7 +11,7 @@ import json
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 import yaml
 from pydantic import (
@@ -20,7 +20,9 @@ from pydantic import (
     Field,
     PositiveInt,
     SecretStr,
+    SerializerFunctionWrapHandler,
     field_validator,
+    model_serializer,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -252,6 +254,7 @@ class ClimaxConfig(_Strict):
     fast_gain_min: Positive
     fast_gain_window: PositiveInt
     fast_gain_min_move_sessions: Annotated[int, Field(ge=0)]
+    exhaustion_min_gap: Fraction
     sell_half_signals: PositiveInt
     sell_all_signals: PositiveInt
 
@@ -285,6 +288,7 @@ class RiskConfig(_Strict):
     trend_template: TrendTemplateConfig
     bases: BasesConfig
     regime: RegimeConfig
+    plans: PlansConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -445,6 +449,316 @@ class RegimeConfig(_Strict):
         if len(set(self.indexes)) != len(self.indexes):
             raise ValueError("indexes must be distinct")
         return self
+
+
+class TrailMA(StrEnum):
+    """Trailing moving averages, loosest first: a step tighter is 50 SMA -> 21 EMA -> 10-day."""
+
+    SMA_50 = "SMA_50"
+    EMA_21 = "EMA_21"
+    TEN_DAY = "TEN_DAY"
+
+
+class AverageKind(StrEnum):
+    SMA = "SMA"
+    EMA = "EMA"
+
+
+class TrailSpec(_Strict):
+    kind: AverageKind
+    window: PositiveInt
+
+
+class FloatRange(_Strict):
+    min: float
+    max: float
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.min > self.max:
+            raise ValueError("min must be <= max")
+        return self
+
+    def contains(self, value: float) -> bool:
+        return self.min <= value <= self.max
+
+
+class IntRange(_Strict):
+    min: int
+    max: int
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.min > self.max:
+            raise ValueError("min must be <= max")
+        return self
+
+    def contains(self, value: float) -> bool:
+        return self.min <= value <= self.max
+
+
+class KullamagiPartial(_Strict):
+    """(a) Sell a fraction at the EOD review of session ``after_sessions`` if >= +min_r R."""
+
+    kind: Literal["KULLAMAGI"] = "KULLAMAGI"
+    fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    after_sessions: PositiveInt
+
+
+class ONeilPartial(_Strict):
+    """(b) Sell a fraction once the decision price is ``gain`` above the entry (0.2 = +20%)."""
+
+    kind: Literal["ONEIL"] = "ONEIL"
+    fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    gain: Positive
+
+
+class MinerviniPartial(_Strict):
+    """(c) Sell a fraction once the decision price is ``r_multiple`` R above the entry."""
+
+    kind: Literal["MINERVINI"] = "MINERVINI"
+    fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    r_multiple: Positive
+
+
+type AnyPartial = KullamagiPartial | ONeilPartial | MinerviniPartial
+StrengthPartial = Annotated[
+    KullamagiPartial | ONeilPartial | MinerviniPartial, Field(discriminator="kind")
+]
+
+
+class KullamagiMenu(_Strict):
+    fraction: FloatRange
+    after_sessions: IntRange
+    min_r: Positive
+
+
+class ONeilMenu(_Strict):
+    fraction: FloatRange
+    gain: FloatRange
+
+
+class MinerviniMenu(_Strict):
+    fraction: FloatRange
+    r_multiple: FloatRange
+
+
+class PartialMenus(_Strict):
+    """The bounded strength-partial menu (README §7.3)."""
+
+    KULLAMAGI: KullamagiMenu
+    ONEIL: ONeilMenu
+    MINERVINI: MinerviniMenu
+
+    def violations(self, partial: AnyPartial) -> list[str]:
+        menu: BaseModel = getattr(self, partial.kind)
+        out: list[str] = []
+        for name in type(menu).model_fields:
+            bounds = getattr(menu, name)
+            if not isinstance(bounds, FloatRange | IntRange):
+                continue
+            value: float = getattr(partial, name)
+            if not bounds.contains(value):
+                out.append(
+                    f"{partial.kind} partial {name}={value} is outside [{bounds.min}, {bounds.max}]"
+                )
+        return out
+
+
+class ExitPlan(_Strict):
+    """One position's exit-menu choices (README §7.3). Written at entry; tighten-only after."""
+
+    partial: StrengthPartial | None = None
+    breakeven_after_partial: bool = False
+    breakeven_at_r: bool = False
+    round_trip: bool = False
+    trail: TrailMA
+    eight_week_hold: bool = False
+    climax_sales: bool = False
+    heavy_volume_reversal: bool = False
+    late_stage_sale: bool = False
+    time_stop: bool = False
+    # Safety rules: in every default set, tested on vs off by the baseline backtest.
+    earnings_cushion: bool = True
+    regime_tightening: bool = True
+
+
+class ExitPlanOverrides(_Strict):
+    """Per-strategy switches on top of an exit set; only the keys given are applied."""
+
+    partial: StrengthPartial | None = None
+    breakeven_after_partial: bool | None = None
+    breakeven_at_r: bool | None = None
+    round_trip: bool | None = None
+    trail: TrailMA | None = None
+    eight_week_hold: bool | None = None
+    climax_sales: bool | None = None
+    heavy_volume_reversal: bool | None = None
+    late_stage_sale: bool | None = None
+    time_stop: bool | None = None
+    earnings_cushion: bool | None = None
+    regime_tightening: bool | None = None
+
+    @model_serializer(mode="wrap")
+    def _only_given(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        # Dump only the keys given, so a dumped config re-validates to the same overrides
+        # (an explicit `partial: null` means "no partial", not "unchanged").
+        data: dict[str, Any] = handler(self)
+        return {name: value for name, value in data.items() if name in self.model_fields_set}
+
+    def apply(self, plan: ExitPlan) -> ExitPlan:
+        changes = {name: getattr(self, name) for name in self.model_fields_set}
+        return ExitPlan.model_validate({**plan.model_dump(), **changes})
+
+
+class ExitSetName(StrEnum):
+    KULLAMAGI = "KULLAMAGI"
+    MINERVINI = "MINERVINI"
+    ONEIL = "ONEIL"
+
+
+class DefaultPlan(_Strict):
+    exit_set: ExitSetName
+    overrides: ExitPlanOverrides = ExitPlanOverrides()
+
+
+class TriggerKind(StrEnum):
+    """Entry triggers (README §7.1); computed by `execution.triggers` (3.5b)."""
+
+    PIVOT = "PIVOT"
+    """The pivot (a pullback's prior-session high), or the opening-range high if the range
+    traded above it."""
+    CONSOLIDATION_OR_RANGE_HIGH = "CONSOLIDATION_OR_RANGE_HIGH"
+    """max(consolidation high, opening-range high)."""
+    OPENING_RANGE_HIGH = "OPENING_RANGE_HIGH"
+
+
+class StopKind(StrEnum):
+    STRUCTURAL = "STRUCTURAL"
+    LOW_OF_DAY = "LOW_OF_DAY"
+
+
+class GateKind(StrEnum):
+    BREAKOUT = "BREAKOUT"
+    PULLBACK = "PULLBACK"
+
+
+class EntryPolicy(_Strict):
+    trigger: TriggerKind
+    stop: StopKind
+    tranches: Literal[1, 2]
+    gate: GateKind | None = None
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if (self.tranches == 2) != (self.gate is not None):
+            raise ValueError("a confirmation gate is needed exactly when there are 2 tranches")
+        return self
+
+
+class GateConfig(_Strict):
+    """Tranche-2 confirmation gate (README §7.1), on the decision price."""
+
+    max_above_level: Fraction
+    min_range_position: Fraction
+    min_volume_ratio: Positive
+    rs_line_near_high: bool
+    above_tested_ma: bool
+    rs_line_not_at_low: bool
+
+
+class EightWeekHoldConfig(_Strict):
+    min_gain: Positive
+    within_sessions: PositiveInt
+    hold_sessions: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.hold_sessions < self.within_sessions:
+            raise ValueError("hold_sessions must be >= within_sessions")
+        return self
+
+
+class HeavyVolumeReversalConfig(_Strict):
+    min_volume_ratio: Positive
+
+
+class TimeStopConfig(_Strict):
+    min_r: Positive
+    halve_session: PositiveInt
+    halve_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    exit_session: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.exit_session <= self.halve_session:
+            raise ValueError("exit_session must be after halve_session")
+        return self
+
+
+class LateStageSaleConfig(_Strict):
+    min_base_count: PositiveInt
+    sell_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+
+
+class EarningsCushionConfig(_Strict):
+    exit_below_r: float
+    hold_full_from_r: float
+    trim_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.exit_below_r > self.hold_full_from_r:
+            raise ValueError("exit_below_r must be <= hold_full_from_r")
+        return self
+
+
+class PlansConfig(_Strict):
+    """Position plans (README §7.1-7.4); behaviour lives in `auratrade.plans`."""
+
+    trails: dict[TrailMA, TrailSpec]
+    partial_menus: PartialMenus
+    breakeven_at_r: Positive
+    round_trip_gain: Positive
+    eight_week_hold: EightWeekHoldConfig
+    heavy_volume_reversal: HeavyVolumeReversalConfig
+    early_sessions: PositiveInt
+    time_stop: TimeStopConfig
+    climax_sell_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    late_stage_sale: LateStageSaleConfig
+    earnings_cushion: EarningsCushionConfig
+    confirmation_gates: dict[GateKind, GateConfig]
+    entry: dict[Strategy, EntryPolicy]
+    exit_sets: dict[ExitSetName, ExitPlan]
+    default_plans: dict[Strategy, DefaultPlan]
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        required: tuple[tuple[str, set[str], set[str]], ...] = (
+            ("trails", set(self.trails), set(TrailMA)),
+            ("confirmation_gates", set(self.confirmation_gates), set(GateKind)),
+            ("entry", set(self.entry), set(Strategy)),
+            ("exit_sets", set(self.exit_sets), set(ExitSetName)),
+            ("default_plans", set(self.default_plans), set(Strategy)),
+        )
+        for name, keys, wanted in required:
+            if missing := wanted - keys:
+                raise ValueError(f"{name} is missing {sorted(missing)}")
+        problems = [
+            f"{strategy}: {problem}"
+            for strategy in Strategy
+            for problem in self.menu_violations(self.default_exit_plan(strategy))
+        ]
+        if problems:
+            raise ValueError("; ".join(problems))
+        return self
+
+    def default_exit_plan(self, strategy: Strategy) -> ExitPlan:
+        default = self.default_plans[strategy]
+        return default.overrides.apply(self.exit_sets[default.exit_set])
+
+    def menu_violations(self, plan: ExitPlan) -> list[str]:
+        return [] if plan.partial is None else self.partial_menus.violations(plan.partial)
 
 
 RiskConfig.model_rebuild()

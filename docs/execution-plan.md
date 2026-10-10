@@ -54,7 +54,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 3.2b Remaining scans (leader pullback, emerging leader)
 - [ ] 3.3 Ranking, cap, verdict cache
 - [ ] 3.4 Charts
-- [ ] 3.5a Position plans engine
+- [x] 3.5a Position plans engine *(built out of plan order with the user's approval)*
 - [ ] 3.5b Guardrails, sizing, triggers, risk multiplier (pure; the 3.8 backtest needs them)
 - [ ] 3.6 Simulator and fake broker (`sim/`)
 - [ ] 3.7 Watchlist, baseline book, breakout tracker, verdict scorecard

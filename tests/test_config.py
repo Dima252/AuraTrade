@@ -7,12 +7,15 @@ from pydantic import ValidationError
 from auratrade.config import (
     DEFAULT_MODEL,
     DEFAULT_RISK_CONFIG,
+    AverageKind,
     Effort,
+    GateKind,
     Regime,
     RiskConfig,
     Settings,
     Strategy,
     TradingMode,
+    TrailMA,
     load_risk_config,
     load_settings,
 )
@@ -178,6 +181,7 @@ class TestClimaxConfig:
         assert (climax.fast_gain_min, climax.fast_gain_window) == (0.25, 15)
         assert climax.fast_gain_min_move_sessions == 15
         assert (climax.sell_half_signals, climax.sell_all_signals) == (2, 3)
+        assert climax.exhaustion_min_gap == 0.01  # user decision, task 3.5a
 
     def test_keys_match_the_indicator(self) -> None:
         climax = load_risk_config().climax
@@ -187,7 +191,7 @@ class TestClimaxConfig:
             at=29,
             move_start=0,
             long_average=None,
-            exhaustion_min_gap=0.0,  # not in risk.yaml yet (3.5a)
+            exhaustion_min_gap=climax.exhaustion_min_gap,
             up_day_clusters=[(c.up_days, c.of_sessions) for c in climax.up_day_clusters],
             min_above_long_average=climax.min_above_long_average,
             fast_gain_min=climax.fast_gain_min,
@@ -242,3 +246,92 @@ class TestTrendTemplateConfig:
         raw["trend_template"] = {**raw["trend_template"], **change}  # type: ignore[dict-item]
         with pytest.raises(ValidationError, match=error):
             RiskConfig.model_validate(raw)
+
+
+class TestPlansConfig:
+    def test_readme_values(self) -> None:
+        plans = load_risk_config().plans
+        assert {t: (s.kind, s.window) for t, s in plans.trails.items()} == {
+            TrailMA.TEN_DAY: (AverageKind.SMA, 10),
+            TrailMA.EMA_21: (AverageKind.EMA, 21),
+            TrailMA.SMA_50: (AverageKind.SMA, 50),
+        }
+        menus = plans.partial_menus
+        assert (menus.KULLAMAGI.after_sessions.min, menus.KULLAMAGI.after_sessions.max) == (3, 5)
+        assert menus.KULLAMAGI.min_r == 1.5
+        assert (menus.ONEIL.fraction.min, menus.ONEIL.gain.min, menus.ONEIL.gain.max) == (
+            0.25,
+            0.20,
+            0.25,
+        )
+        assert (menus.MINERVINI.r_multiple.min, menus.MINERVINI.r_multiple.max) == (2.0, 3.0)
+        assert (plans.breakeven_at_r, plans.round_trip_gain) == (3.0, 0.10)
+        hold = plans.eight_week_hold
+        assert (hold.min_gain, hold.within_sessions, hold.hold_sessions) == (0.20, 15, 40)
+        assert plans.heavy_volume_reversal.min_volume_ratio == 1.5
+        assert plans.early_sessions == 20
+        stop = plans.time_stop
+        assert (stop.min_r, stop.halve_session, stop.exit_session) == (1.0, 10, 20)
+        assert plans.climax_sell_fraction == plans.late_stage_sale.sell_fraction == 0.5
+        assert plans.late_stage_sale.min_base_count == 4
+        cushion = plans.earnings_cushion
+        assert (cushion.exit_below_r, cushion.hold_full_from_r, cushion.trim_fraction) == (
+            1.0,
+            3.0,
+            0.5,
+        )
+        breakout = plans.confirmation_gates[GateKind.BREAKOUT]
+        assert (breakout.max_above_level, breakout.min_volume_ratio) == (0.05, 1.4)
+        assert breakout.rs_line_near_high
+        assert not breakout.above_tested_ma
+        pullback = plans.confirmation_gates[GateKind.PULLBACK]
+        assert pullback.min_volume_ratio == 1.0
+        assert pullback.above_tested_ma
+        assert pullback.rs_line_not_at_low
+
+    @pytest.mark.parametrize(
+        ("path", "value", "error"),
+        [
+            (
+                ("entry",),
+                {
+                    "VCP_BREAKOUT": {
+                        "trigger": "PIVOT",
+                        "stop": "STRUCTURAL",
+                        "tranches": 2,
+                        "gate": "BREAKOUT",
+                    }
+                },
+                "entry is missing",
+            ),
+            (("entry", "MOMENTUM_BREAKOUT", "gate"), "BREAKOUT", "exactly when"),
+            (("entry", "VCP_BREAKOUT", "gate"), None, "exactly when"),
+            (("exit_sets", "MINERVINI", "partial", "r_multiple"), 4.0, "outside"),
+            (("exit_sets", "ONEIL", "loose_rule"), True, "loose_rule"),
+            (
+                ("default_plans", "VCP_BREAKOUT", "overrides"),
+                {"partial": {"kind": "ONEIL", "fraction": 0.9, "gain": 0.2}},
+                "fraction",
+            ),
+            (("partial_menus", "ONEIL", "gain"), {"min": 0.3, "max": 0.2}, "min must be"),
+            (("time_stop", "exit_session"), 10, "exit_session"),
+            (("eight_week_hold", "hold_sessions"), 10, "hold_sessions"),
+            (("earnings_cushion", "exit_below_r"), 4.0, "exit_below_r"),
+            (("trails",), {"TEN_DAY": {"kind": "SMA", "window": 10}}, "trails is missing"),
+        ],
+    )
+    def test_invalid(self, path: tuple[str, ...], value: object, error: str) -> None:
+        raw = risk_dict()
+        node = raw["plans"]
+        for key in path[:-1]:
+            node = node[key]  # type: ignore[index]
+        node[path[-1]] = value  # type: ignore[index]
+        with pytest.raises(ValidationError, match=error):
+            RiskConfig.model_validate(raw)
+
+    def test_dumped_config_round_trips(self) -> None:
+        # Overrides dump only the keys given, so re-validating a dump changes nothing.
+        risk = load_risk_config()
+        again = RiskConfig.model_validate(risk.model_dump())
+        assert again == risk
+        assert again.config_hash == risk.config_hash
