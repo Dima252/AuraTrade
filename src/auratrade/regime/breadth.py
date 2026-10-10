@@ -1,0 +1,87 @@
+"""Breadth-pillar inputs from per-ticker daily bars (README §5.2), point in time.
+
+A ticker counts at a session only if it has a bar that session and passes the README §5.1
+universe filters as of that session: raw close >= $10, 50-session average dollar volume >= $10M,
+and >= 252 sessions of history. Until task 1.5 builds the universe table these filters are applied
+here. The same function serves the live job (2 years of Postgres bars) and the 2.4 backtest.
+"""
+
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass
+from datetime import date
+
+from auratrade.config import BreadthConfig
+from auratrade.indicators.breadth import net_new_highs_average
+from auratrade.indicators.moving_averages import sma
+from auratrade.indicators.series import rolling_max, rolling_mean, rolling_min
+
+
+@dataclass(frozen=True, slots=True)
+class TickerHistory:
+    """One security's split-adjusted bars, oldest first; ``raw_closes`` are as traded."""
+
+    dates: Sequence[date]
+    highs: Sequence[float]
+    lows: Sequence[float]
+    closes: Sequence[float]
+    raw_closes: Sequence[float]
+    volumes: Sequence[float]
+
+
+@dataclass(frozen=True, slots=True)
+class SessionBreadth:
+    members: int
+    above: int
+    new_highs: int
+    new_lows: int
+
+    @property
+    def fraction_above(self) -> float | None:
+        return self.above / self.members if self.members else None
+
+
+def session_breadth(
+    histories: Iterable[TickerHistory], sessions: Sequence[date], cfg: BreadthConfig
+) -> dict[date, SessionBreadth]:
+    """Universe size, members above their 50 SMA, and 52-week new highs and lows, per session."""
+    wanted = set(sessions)
+    counts = {s: [0, 0, 0, 0] for s in sessions}
+    for h in histories:
+        averages = sma(h.closes, cfg.sma)
+        highest = rolling_max(h.highs, cfg.new_high_sessions)
+        lowest = rolling_min(h.lows, cfg.new_high_sessions)
+        dollar_volume = rolling_mean(
+            [c * v for c, v in zip(h.closes, h.volumes, strict=True)],
+            cfg.universe_dollar_volume_sessions,
+        )
+        for i, day in enumerate(h.dates):
+            if day not in wanted:
+                continue
+            dv = dollar_volume[i]
+            if (
+                i + 1 < cfg.universe_min_history_sessions
+                or h.raw_closes[i] < cfg.universe_min_price
+                or dv is None
+                or dv < cfg.universe_min_dollar_volume
+            ):
+                continue
+            c = counts[day]
+            c[0] += 1
+            average, top, bottom = averages[i], highest[i], lowest[i]
+            c[1] += average is not None and h.closes[i] > average
+            c[2] += top is not None and h.highs[i] >= top
+            c[3] += bottom is not None and h.lows[i] <= bottom
+    return {s: SessionBreadth(*c) for s, c in counts.items()}
+
+
+def breadth_inputs(
+    breadth: Mapping[date, SessionBreadth], sessions: Sequence[date], cfg: BreadthConfig
+) -> dict[date, tuple[float | None, float | None]]:
+    """Per session: (share of the universe above its 50 SMA, the 10-session average of new
+    highs minus new lows). ``sessions`` are consecutive; the average is ``None`` until it has a
+    full window."""
+    points = [breadth[s] for s in sessions]
+    net = net_new_highs_average(
+        [p.new_highs for p in points], [p.new_lows for p in points], cfg.net_new_highs_sessions
+    )
+    return {s: (p.fraction_above, n) for s, p, n in zip(sessions, points, net, strict=True)}

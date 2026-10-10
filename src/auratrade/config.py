@@ -284,6 +284,7 @@ class RiskConfig(_Strict):
     jobs: JobsConfig
     trend_template: TrendTemplateConfig
     bases: BasesConfig
+    regime: RegimeConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -348,6 +349,102 @@ class BasesConfig(_Strict):
     swing_reversal: Annotated[float, Field(gt=0.0, lt=1.0)]
     pivot_min_position: Annotated[float, Field(gt=0.0, lt=1.0)]
     new_stage_advance: Positive
+
+
+class IndexTrendConfig(_Strict):
+    short_sma: PositiveInt
+    long_sma: PositiveInt
+    slope_sessions: PositiveInt
+
+
+class BreadthConfig(_Strict):
+    sma: PositiveInt
+    up_min_above: Fraction
+    down_max_above: Fraction
+    new_high_sessions: PositiveInt
+    net_new_highs_sessions: PositiveInt
+    universe_security_types: tuple[str, ...] = Field(min_length=1)
+    universe_min_price: Positive
+    universe_min_dollar_volume: Positive
+    universe_dollar_volume_sessions: PositiveInt
+    universe_min_history_sessions: PositiveInt
+
+
+class VolatilityConfig(_Strict):
+    up_max_vix: Positive
+    up_max_ratio: Positive
+    down_min_ratio: Positive
+    down_min_vix: Positive
+
+
+class DistributionConfig(_Strict):
+    min_decline: Fraction
+    window_sessions: PositiveInt
+    up_max_days: Annotated[int, Field(ge=0)]
+    down_min_days: PositiveInt
+    exclude_expiration_sessions: bool
+
+
+class LeadershipConfig(_Strict):
+    result_sessions: PositiveInt
+    window_sessions: PositiveInt
+    min_breakouts: PositiveInt
+    up_min_share: Fraction
+    down_max_share: Fraction
+
+
+class FollowThroughConfig(_Strict):
+    min_gain: Positive
+    first_day: PositiveInt
+    last_strong_day: PositiveInt
+
+
+class TransitionsConfig(_Strict):
+    confirmed_min_score: int
+    correction_max_score: int
+    debounce_score: int
+    debounce_sessions: PositiveInt
+    upgrade_sessions: PositiveInt
+    early_uptrend_min_sessions: PositiveInt
+    no_ftd_sessions: PositiveInt
+    no_ftd_min_score: int
+    early_uptrend_max_distribution: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if not self.correction_max_score < self.debounce_score < self.confirmed_min_score:
+            raise ValueError("need correction_max_score < debounce_score < confirmed_min_score")
+        return self
+
+
+class CrisisConfig(_Strict):
+    vix_ratio_above: Positive
+    vix_ratio_sessions: PositiveInt
+    index: str
+    index_drop: Fraction
+
+
+class RegimeConfig(_Strict):
+    """The regime classifier and state machine (README §5.2); see `auratrade.regime`."""
+
+    indexes: tuple[str, ...] = Field(min_length=1)
+    index_trend: IndexTrendConfig
+    breadth: BreadthConfig
+    volatility: VolatilityConfig
+    distribution: DistributionConfig
+    leadership: LeadershipConfig
+    follow_through: FollowThroughConfig
+    transitions: TransitionsConfig
+    crisis: CrisisConfig
+    replay_warmup_sessions: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.crisis.index not in self.indexes:
+            raise ValueError("crisis.index must be one of indexes")
+        if len(set(self.indexes)) != len(self.indexes):
+            raise ValueError("indexes must be distinct")
+        return self
 
 
 RiskConfig.model_rebuild()
