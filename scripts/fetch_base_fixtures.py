@@ -5,7 +5,7 @@ Writes one gzipped CSV per ticker to `tests/fixtures/bases/` of the repository t
 lives in, whichever folder it is run from, so it can run against another checkout's `.env`:
 
     uv run python scripts/fetch_base_fixtures.py
-    uv run python ../AuraTrade-regime/scripts/fetch_base_fixtures.py --env-file .env
+    uv run python path/to/AuraTrade/scripts/fetch_base_fixtures.py --env-file .env
 """
 
 from __future__ import annotations
