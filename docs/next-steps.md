@@ -1,17 +1,19 @@
-# What's left: status at 2026-10-10 (evening)
+# What's left: status at 2026-10-11
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
-## Where things stand
+## Done so far
 
-- **Done:** Phase 0 except 0.3b, 0.3d and 0.4; Phase 1 tasks 1.1, 1.2, 1.4; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. PR #18 (testing gates in the plan, CI coverage floor 95%) is merged.
-- **0.4 review, session 1 done** (2026-10-10, branch `phase-0/review-0-4`, pushed, no PR yet): #6–#10 and B1–B21 approved. The list is at the top of [spikes/review-agenda.md](spikes/review-agenda.md).
-- **Checked on 2026-10-10:**
-  - both Alpaca paper accounts are active: `dev` ...JG3C in `.env` and `paper` ...CDFD in `.env.paper`
-  - the Neon `dev` database is migrated to head (0004)
-  - 782 tests pass at 99.7% branch coverage
-- **Weekend read-only checks (Sunday 2026-10-11):** the SOFI `day` leg expired; DXJ is still not split-adjusted; the F stop is still `pending_replace` (as expected); CBOE's quote JSON = its history file for Friday; FRED had no weekend update. Details in [spikes/alpaca-orders.md](spikes/alpaca-orders.md) and [spikes/macro.md](spikes/macro.md).
-- **Blocked:** every remaining build task waits for the end of 0.4. That needs Monday's and Thursday's spike checks.
+- **Build:** Phase 0 except 0.3b, 0.3d and 0.4; Phase 1 tasks 1.1, 1.2, 1.4; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. 782 tests pass at 99.7% branch coverage; ruff and mypy clean.
+- **Sat 2026-10-10:**
+  - testing review → testing gates added to the plan (1.6 real-data smoke run; 1.7 fake broker + automated chaos tests; CI coverage floor 95%, guardrails 100% from 3.5b). PR #18, merged
+  - **0.4 review, session 1:** #6–#10 and B1–B21 approved (list at the top of [spikes/review-agenda.md](spikes/review-agenda.md)). #9 measured on the edge-check trades: keep $5,000, model whole shares, under 2 shares = single tranche
+  - both Alpaca paper accounts verified active: `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`
+  - the Neon `dev` database migrated to head (0004)
+- **Sun 2026-10-11, read-only spike checks:** the SOFI `day` leg expired; DXJ still not split-adjusted; the F stop still `pending_replace` (as expected); CBOE's quote JSON = its history file for Friday; FRED had no weekend update. Details in [spikes/alpaca-orders.md](spikes/alpaca-orders.md) and [spikes/macro.md](spikes/macro.md).
+- **Open PR:** #19 (branch `phase-0/review-0-4`): the review decisions, this page and the Sunday notes. Merge it before Monday's session.
+
+**Blocked:** every remaining build task waits for the end of 0.4, which needs Monday's and Thursday's spike checks.
 
 ## 1. The spike checks (time-bound, needs market hours)
 
