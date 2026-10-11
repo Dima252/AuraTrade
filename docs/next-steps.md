@@ -10,6 +10,7 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
   - both Alpaca paper accounts are active: `dev` ...JG3C in `.env` and `paper` ...CDFD in `.env.paper`
   - the Neon `dev` database is migrated to head (0004)
   - 782 tests pass at 99.7% branch coverage
+- **Weekend read-only checks (Sunday 2026-10-11):** the SOFI `day` leg expired; DXJ is still not split-adjusted; the F stop is still `pending_replace` (as expected); CBOE's quote JSON = its history file for Friday; FRED had no weekend update. Details in [spikes/alpaca-orders.md](spikes/alpaca-orders.md) and [spikes/macro.md](spikes/macro.md).
 - **Blocked:** every remaining build task waits for the end of 0.4. That needs Monday's and Thursday's spike checks.
 
 ## 1. The spike checks (time-bound, needs market hours)
@@ -20,7 +21,8 @@ Run everything from the `AuraTrade` folder; the spike state files are in `spikes
 
 | When (Tel Aviv) | New York | Say to Claude | Commands | What it settles |
 |---|---|---|---|---|
-| **Mon 2026-10-12, from 16:35** | after 09:31 | "run the Monday checks" | `uv run python -m spikes.alpaca_orders opg_check`, then `uv run python -m spikes.alpaca_orders corp_check` | Did Saturday's `pending_replace` on F resolve at the open to the 10-share stop (then restore it to 11)? Did paper split-adjust DXJ (1 → 3 shares)? Did the SOFI OTO `day` leg expire? |
+| *Optional:* **Mon 2026-10-12, 15:00–16:25** | 08:00–09:25 | "take the pre-market VIX snapshot" | `uv run --group spikes python -m spikes.macro snapshot` | What CBOE's delayed-quote JSON shows before the open (CBOE computes VIX in its overnight session). Decides what the 07:30 `premarket_check` can read |
+| **Mon 2026-10-12, from 16:35** | after 09:31 | "run the Monday checks" | `uv run python -m spikes.alpaca_orders opg_check`, then `uv run python -m spikes.alpaca_orders corp_check` | Did Saturday's `pending_replace` on F resolve at the open to the 10-share stop (then restore it to 11)? Did paper split-adjust DXJ (1 → 3 shares)? (Not yet by Sunday. The SOFI leg: ✅ expired, seen Sunday) |
 | **Mon 2026-10-12, start by 22:50**, runs until **05:15 Tue** | 15:50–22:15 | "start the VIX watch" | `uv run --group spikes python -m spikes.macro poll --until 22:15 --every 120` (in the background) | When CBOE's delayed-quote JSON has the final close, when each CBOE CSV and FRED update, and whether the JSON value equals the CSV row. Finishes **0.3d** and decides **#5** |
 | **Thu 2026-10-15, from 16:35** | after 09:31 | "run the Thursday checks" | `uv run python -m spikes.alpaca_orders corp_check`, then `uv run python -m spikes.alpaca_orders cleanup --flatten` | Was the QDTE GTC stop ($25.05) lowered by the dividend (FINRA 5330)? Then close the paper positions (F, QDTE, DXJ, SOFI) and cancel the `spk-` orders. Finishes **0.3b** and decides **#1–4** |
 

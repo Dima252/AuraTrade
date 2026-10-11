@@ -26,6 +26,15 @@
 | FRED vintages (ALFRED) | Not usable for timing: each vintage is dated by its observation date (59 of 60 show "lag 0") |
 | Credit spread (`BAMLH0A0HYM2`) | **Only 3 years of history on FRED** (from 2023-10-10): "Starting in April 2026, this series will only include 3 years of observations." It can't be backtested to 2016. No README rule uses it today |
 
+### Weekend snapshot (Sunday 2026-10-11, `snapshot`)
+
+| Question | Answer |
+|---|---|
+| Delayed-quote JSON after the close | Still holds Friday's final values all weekend: `close` VIX **14.84**, VIX3M **17.77**, `last_trade_time` **2026-10-09 16:15:01** (the settlement) |
+| **JSON = history row?** | **Yes, on this sample:** the CSV rows for 2026-10-09 are VIX 14.84 and VIX3M 17.77. Monday's poll adds a second sample |
+| History-file timing, 2nd sample | Friday's rows: `Last-Modified` **VIX3M 18:31 ET, VIX 21:21 ET** (Thursday's: 18:31 / 21:11). The same pattern, still after the 17:25 `regime` job |
+| FRED over the weekend | Still at **2026-10-08** on Sunday (`last_updated` Friday 09:38 ET); no weekend update. Friday's value is expected Monday around 09:38 ET. **Monday is Columbus Day** (a federal holiday; markets and CBOE open), so FRED may publish a day late. If it does, re-check with `fred_lag` on Tuesday before counting it as FRED's normal lag |
+
 ## What it means for the design
 
 - **README §5.1 / §5.2 (volatility pillar) as written, "CBOE primary, FRED fallback", doesn't work at 17:25:** CBOE's *history file* is late and FRED is a session behind. Without a change, the evening regime would score the volatility pillar on **yesterday's** VIX every day. The crisis override "VIX/VIX3M > 1.0 for ≥ 2 sessions" would effectively need 3.
