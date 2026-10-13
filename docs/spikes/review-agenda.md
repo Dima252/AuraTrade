@@ -13,7 +13,12 @@ Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On
 - **"Already decided" and B1–B12:** recorded as built.
 - **B13, B14** (unreliable count = half risk), **B15, B16, B17, B18** (accept the side effect), **B19, B20, B21:** adopted.
 
-**Still open:** #1–4 (after Thursday's order checks) and #5 (ready to decide: Monday's watch is in). Then one PR updates the README, the decision log (#113 onward) and the plan.
+**Session 2, 2026-10-13:** approved by the user, all as proposed:
+- **#5** The evening VIX/VIX3M come from CBOE's delayed-quote JSON, accepted only if `last_trade_time` ≥ 16:15 on session T. The next evening checks it against the history row and logs any difference. Fallbacks in order: the CBOE history file (if its **last row date** is T; never `Last-Modified`), then FRED (T−1), then the existing staleness rule. Backtests use the CBOE history file, filtered to `market_sessions` dates (the VIX file has rows on holidays).
+- **`premarket_check` macro refresh:** settled closes only. If the evening read missed session T, it fetches T's close (the JSON, then the history file), re-scores and may only downgrade. CBOE's overnight-session VIX values are ignored because they can't be backtested, so the skipped pre-market snapshot isn't needed.
+- **Credit spread** (`BAMLH0A0HYM2`, only 3 years on FRED): kept in `macro_series` as LLM context only (recent values to the Portfolio Manager). No code rule uses it.
+
+**Still open:** #1–4 (after Thursday's order checks). Then one PR updates the README, the decision log (#113 onward) and the plan.
 
 ## Proposed design changes (need approval)
 
