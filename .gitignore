@@ -27,8 +27,6 @@ htmlcov/
 /var/
 *.parquet
 spikes/**/data/
-# STORAGE_BACKEND=local writes here
-/var/
 spikes/**/output/
 spikes/**/*.out
 

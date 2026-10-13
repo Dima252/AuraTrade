@@ -10,7 +10,7 @@ caller from ``config/risk.yaml``. Windows count sessions (bars), never calendar 
 - ``relative_strength``: RS score and rating, RS line and its states, momentum rank, group RS rank
 - ``volume``: up/down volume ratio, half-day normalization, intraday pace curve
 - ``distribution``: distribution days, rally attempts and follow-through days (per index)
-- ``breadth``: share above an average, new highs and lows
+- ``breadth``: the net-new-highs average (the per-session counts are in ``regime.breadth``)
 - ``earnings``: earnings-gap catalyst
 - ``climax``: climax-top signals for held positions
 - ``bases``: base detection (contractions, pivot) and the IBD base count

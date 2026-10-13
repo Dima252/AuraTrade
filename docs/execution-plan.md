@@ -21,14 +21,14 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 **Phase 0: Foundations and spikes**
 - [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
 - [x] 0.2 👤 Accounts and keys + `scripts/check_keys.py` *(all keys verified 2026-10-09; local Postgres via Docker until Neon at 1.2; paper capital $5,000 confirmed)*
-- [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture *(part 1 done 2026-10-08; part 2 needs market hours, see `docs/spikes/alpaca-orders.md`)*
-- [x] 0.3a Spike: Alpaca market data *(findings adopted as #109–111; real-time and bar-revision checks done 2026-10-09: two proposals for 0.4)*
+- [ ] 0.3b Spike: Alpaca orders (paper) — **run first**: it can invalidate the order architecture *(part 1 done 2026-10-08; part 2 mostly done 2026-10-09 to 10-12; the QDTE dividend check on Thu 2026-10-15 and cleanup remain, see `docs/spikes/alpaca-orders.md`)*
+- [x] 0.3a Spike: Alpaca market data *(findings adopted as #109–111; real-time and bar-revision checks done 2026-10-09: two proposals, approved at 0.4 as #6 and #7b)*
 - [x] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build) *(≈ 0R before costs, −0.08R after; continue, decision #112)*
 - [x] 0.3c Spike: market calendar
-- [x] 0.3d Spike: macro data timing *(2026-10-13: ADJUST, evening VIX from CBOE's delayed-quote JSON, final 16:32 ET; decided at 0.4 as #5)*
-- [x] 0.3e Spike: fundamentals, earnings, industries *(ADJUST proposed: earnings timing = earlier of 8-K and headline; decided at 0.4)*
+- [x] 0.3d Spike: macro data timing *(2026-10-13: ADJUST, evening VIX from CBOE's delayed-quote JSON, final 16:32 ET; approved at 0.4 as #5)*
+- [x] 0.3e Spike: fundamentals, earnings, industries *(ADJUST: earnings timing = earlier of 8-K and headline; approved at 0.4 as #7)*
 - [x] 0.3f Spike: news
-- [x] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK) *(approved 2026-10-09; spent ~$0.26; ~$0.016 per Analyst request, ~$17–22/month; ADJUST proposed for README §9)*
+- [x] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK) *(approved 2026-10-09; spent ~$0.26; ~$0.016 per Analyst request, ~$17–22/month; ADJUST for README §9, approved at 0.4 as #8)*
 - [ ] 0.4 👤 Review spike findings; amend README/decisions
 - [x] 0.5 Public project site (landing page + S3/CloudFront stack; deployed in 1.8)
 
@@ -123,7 +123,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 | External dead-man's-switch check (e.g. healthchecks.io, free) | Phase 1 (task 1.8) | Alerts you if the AWS watchdog itself stops pinging (README §5.13) |
 | GitHub remote repository | Phase 0 | Private repo |
 | AWS account | Phase 1 (task 1.8) | Root MFA, an admin user via IAM Identity Center, budget alarms |
-| Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | Not currently installed on this machine |
+| Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | GitHub CLI installed; AWS CLI not yet (needed for 1.8) |
 | Domain name (optional) | Task 1.8 | For the public site (0.5). Buying it through Route 53 (about $13/year for a `.com`) creates the hosted zone the stack needs. Without one, the site lives on its `*.cloudfront.net` address |
 
 ---

@@ -23,7 +23,7 @@ Script: `spikes/alpaca_orders/` (`uv run python -m spikes.alpaca_orders <scenari
 
 **Consequence for §5.7 (the design anticipated this):** "OTO child legs may inherit the parent's `day` time-in-force, so after a fill the stop is converted to a standalone GTC stop if needed." It does inherit, and it **can't be converted in place**. Two ways out:
 
-- **A (recommended): submit entries as GTC-parent OTOs.** The leg is then GTC from the start, with no conversion window. The parent must not rest past the day, so `eod_review` (or the 16:00 reconcile) cancels any unfilled entry parent. §5.8 already cancels the unfilled rest of a partly filled entry at EOD. Cancelling an unfilled parent also cancels its held leg, which is the behaviour we want. One caveat to check in part 2: a GTC parent that is partly filled at the close keeps its leg for the filled part.
+- **A (recommended): submit entries as GTC-parent OTOs.** The leg is then GTC from the start, with no conversion window. The parent must not rest past the day, so `eod_review` (or the 16:00 reconcile) cancels any unfilled entry parent. §5.7.8 already cancels the unfilled rest of a partly filled entry at EOD. Cancelling an unfilled parent also cancels its held leg, which is the behaviour we want. One caveat to check in part 2: a GTC parent that is partly filled at the close keeps its leg for the filled part.
 - **B: day parent, then replace the leg after the fill.** Cancel the day leg and place a standalone GTC stop. That leaves a gap of milliseconds to seconds with no stop between the cancel and the new stop. The `stop_guard` covers it, but A has no gap at all.
 
 Part 2 confirms A on a real fill (tranche 2 of `session` uses a GTC parent).
@@ -81,7 +81,7 @@ The position kept over the weekend: **F 11 shares, standalone GTC stop $11.63** 
 ### Split: DXJ 3-for-1, ex-date 2026-10-09 (`corp_check`, 09:31 ET)
 
 - The GTC sell stop placed on 10-08 (1 share at $156.97) is **`rejected`**, with `failed_at` **2026-10-09 08:00 UTC (04:00 ET)**. Alpaca removes resting stops on the ex-date before the open; it neither adjusts nor keeps them.
-- The paper **position wasn't adjusted** by 09:31: still 1 share at $184.67 average cost, priced at $60.34. Alpaca's corporate-actions API lists the split (`old_rate 1`, `new_rate 3`, ex/process/payable date 10-09). Whether paper applies it later is to be checked on Monday.
+- The paper **position wasn't adjusted** by 09:31: still 1 share at $184.67 average cost, priced at $60.34. Alpaca's corporate-actions API lists the split (`old_rate 1`, `new_rate 3`, ex/process/payable date 10-09). Whether paper applies it later was checked on Monday: it doesn't ([Monday status](#monday-status-2026-10-12-1103-et-opg_check-corp_check)).
 - **For the design (agenda #4):** README §5.7.10's "re-place a scaled stop at 09:20 on the ex-date" is needed on every split. And invariant repair must look up the corporate-actions feed first: an unadjusted position plus an unscaled plan stop ($156.97 against a $60 price) would otherwise read as "price through the stop" and be sold.
 
 ### PDT (`pdt` on SOFI, 14:30 ET)
@@ -91,7 +91,7 @@ The position kept over the weekend: **F 11 shares, standalone GTC stop $11.63** 
 - The account still has no PDT fields (`daytrade_count` / `pattern_day_trader` absent), only margin fields (`multiplier` 4, `buying_power` 4× equity, `regt_buying_power` 2×).
 - **Why:** the SEC approved FINRA's amendment to Rule 4210 on 2026-04-14 (Release 34-105226, FINRA Regulatory Notice 26-10). The day-trading provisions (4 day trades in 5 days, the $25,000 minimum) are replaced by an intraday margin standard for all margin accounts, effective 2026-06-04 with a phase-in to 2027-10-20.
 - **For the design (agenda #10):** drop the PDT allowance (§5.7.9, §8, the "PDT status" input in §5.6). Check instead that entries never create an intraday margin deficit; the design never uses margin (exposure ≤ 100%). Confirm the live-account behaviour with Alpaca before Phase 8.
-- Left open: SOFI 1 share with its OTO `day` leg, which expired at 16:00 (Monday's check confirms the expiry).
+- Left open: SOFI 1 share with its OTO `day` leg, which expired at 16:00 (confirmed Sunday, below).
 
 ### Dividend setup (`corp_setup QDTE`, 09:45 ET)
 
@@ -142,7 +142,7 @@ All on the `dev` account. The positions are small (≈ $80 a tranche) and every 
 | ✅ Fri, 09:45 | `uv run python -m spikes.alpaca_orders corp_setup QDTE` | **Dividend:** QDTE pays weekly (ex-date Thursdays; its after-hours buy didn't fill on 10-08) |
 | ✅ Fri, 14:30 | `uv run python -m spikes.alpaca_orders pdt --symbol SOFI` | Four same-day round trips: is the 4th rejected? Is a stop leg / standalone stop on same-day shares rejected? Is a same-day exit rejected? **Uses up the day trades for 5 sessions if PDT still applies**, so run it last |
 | ✅ Sat 10-10, 07:48 (any time; the window runs to Mon 09:28) | `uv run python -m spikes.alpaca_orders opg_exit` | Did the GTC stop survive the night and weekend? An OPG trim via the sell sequence. (Moved from Friday evening: the machine was offline. Is an OPG order accepted on a weekend?) |
-| Mon 10-12, 18:55 then 19:05 (optional) | `uv run python -m spikes.alpaca_orders opg_exit` | The window's start: a 403 just before 19:00, accepted after |
+| Skipped (optional; moot after option A) Mon 10-12, 18:55 then 19:05 | `uv run python -m spikes.alpaca_orders opg_exit` | The window's start: a 403 just before 19:00, accepted after |
 | ✅ Mon 2026-10-12, 11:03 | `uv run python -m spikes.alpaca_orders opg_check`, then `corp_check` | The pending replace went through at 04:00 ET and the stop is back to 11 shares; paper hasn't applied the DXJ split (see [Monday status](#monday-status-2026-10-12-1103-et-opg_check-corp_check)) |
 | Thu 2026-10-15, after 09:31 | `uv run python -m spikes.alpaca_orders corp_check` | **Dividend:** QDTE's stop lowered by the dividend (FINRA 5330) or not? |
 | Afterwards | `uv run python -m spikes.alpaca_orders cleanup --flatten` | Cancels `spk-` orders and closes the spike positions |

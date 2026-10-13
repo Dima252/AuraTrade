@@ -1,7 +1,7 @@
 # Spike 0.3g: Claude cost, batch turnaround and Portfolio Manager timing
 
 **Run:** 2026-10-09, `uv run --group spikes python -m spikes.claude_cost <build|batch|pm>`, model `claude-opus-5-5`, Python SDK 1.12.1. **Paid, approved by the user:** total spend about **$0.26** (batch $0.155, Portfolio Manager call $0.104; token counting is free). Raw output in `spikes/claude_cost/output/` (git-ignored).
-**Decision: ADJUST** (proposed, for approval at 0.4): README §9's cost estimate is about **2–3× too high**. Measured, the Analyst costs about **$0.016 a request** in the batch, so about **$13 a month** at a full 40 requests a session, and **about $17–22 a month all in**. The Phase 4 daily cost limit should be set from these numbers (below). Batch turnaround was **2 h 20 min**, which the 19:00 / 21:00 / 06:00 collect schedule already covers.
+**Decision: ADJUST** (approved at 0.4 on 2026-10-10 as agenda #8; the README is updated with the other 0.4 changes): README §9's cost estimate is about **2–3× too high**. Measured, the Analyst costs about **$0.016 a request** in the batch, so about **$13 a month** at a full 40 requests a session, and **about $17–22 a month all in**. The Phase 4 daily cost limit should be set from these numbers (below). Batch turnaround was **2 h 20 min**, which the 19:00 / 21:00 / 06:00 collect schedule already covers.
 
 ## What was sent
 

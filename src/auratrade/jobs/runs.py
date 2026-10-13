@@ -1,7 +1,7 @@
 """`job_runs` heartbeats: the record every job run leaves, and the store interface.
 
-The Postgres store arrives with the `job_runs` table (task 1.2); the in-memory store
-serves tests and has the same semantics.
+The Postgres store is `auratrade.db.job_runs.SqlJobRunStore`; the in-memory store serves
+tests and has the same semantics.
 """
 
 from __future__ import annotations
