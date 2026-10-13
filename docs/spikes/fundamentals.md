@@ -1,7 +1,7 @@
 # Spike 0.3e: fundamentals, earnings dates and industries
 
 **Run:** 2026-10-09, `uv run --group spikes python -m spikes.fundamentals <scenario>` (`universe`, `edgar`, `calendar`, `history`, `facts`). Sources: SEC EDGAR (submissions, company facts; `EDGAR_USER_AGENT` header, about 6 requests a second), Finnhub free tier, Alpaca news for the timing check. Raw output in `spikes/fundamentals/output/` (git-ignored).
-**Decision: ADJUST** (proposed, for approval at 0.4). EDGAR carries everything the backtests need, and Finnhub covers upcoming dates for most US companies. Two changes: historical earnings timing takes the **earlier of the 8-K and the first earnings headline**, and upcoming before/after-market timing comes from the company's own 8-K habit when Finnhub leaves it blank, which is most of the time.
+**Decision: ADJUST** (approved at 0.4 on 2026-10-10 as agenda #7; the README is updated with the other 0.4 changes). EDGAR carries everything the backtests need, and Finnhub covers upcoming dates for most US companies. Two changes: historical earnings timing takes the **earlier of the 8-K and the first earnings headline**, and upcoming before/after-market timing comes from the company's own 8-K habit when Finnhub leaves it blank, which is most of the time.
 
 ## Universe used
 

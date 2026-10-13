@@ -2,21 +2,14 @@
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
-## Done so far
+## Where things stand
 
-- **Build:** Phase 0 except 0.3b, 0.3d and 0.4; Phase 1 tasks 1.1, 1.2, 1.4; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. 782 tests pass at 99.7% branch coverage; ruff and mypy clean.
-- **Sat 2026-10-10:**
-  - testing review → testing gates added to the plan (1.6 real-data smoke run; 1.7 fake broker + automated chaos tests; CI coverage floor 95%, guardrails 100% from 3.5b). PR #18, merged
-  - **0.4 review, session 1:** #6–#10 and B1–B21 approved (list at the top of [spikes/review-agenda.md](spikes/review-agenda.md)). #9 measured on the edge-check trades: keep $5,000, model whole shares, under 2 shares = single tranche
-  - both Alpaca paper accounts verified active: `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`
-  - the Neon `dev` database migrated to head (0004)
-- **Sun 2026-10-11, read-only spike checks:** the SOFI `day` leg expired; DXJ still not split-adjusted; the F stop still `pending_replace` (as expected); CBOE's quote JSON = its history file for Friday; FRED had no weekend update. Details in [spikes/alpaca-orders.md](spikes/alpaca-orders.md) and [spikes/macro.md](spikes/macro.md).
-- **Mon 2026-10-12, Monday checks (11:03 ET):** F's pending stop replace went through at 04:00 ET, when pre-market opens, and the stop is back to 11 shares. Paper still hasn't applied the DXJ split two sessions later and shows no split entry: paper doesn't apply splits (agenda #4).
-- **Mon 2026-10-12, VIX watch (0.3d ✅):** CBOE's delayed-quote JSON had the final close at 16:32 ET (VIX 15.21, VIX3M 17.93); the history files followed at 19:00 and 21:33 ET with the same values; FRED hadn't published Monday by 22:17 ET. Details in [spikes/macro.md](spikes/macro.md).
-- **Tue 2026-10-13, 0.4 review session 2:** **#5** approved (evening VIX from CBOE's delayed-quote JSON; history file, then FRED, as fallbacks), plus a fill-gaps-only `premarket_check` macro refresh and the credit spread as LLM context only. Details at the top of [spikes/review-agenda.md](spikes/review-agenda.md).
-- **Branch:** `phase-0/spike-wrapup` holds the Sunday and Monday notes and the 0.3d write-up. PR #19 was merged before the Sunday commits, so they're on this branch, not on `main`.
+- **Build:** Phase 0 except 0.3b and 0.4; Phase 1 tasks 1.1, 1.2, 1.4; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. 782 tests pass at 99.7% branch coverage; ruff and mypy clean. Everything is merged to `main` (latest: PR #20, `phase-0/spike-wrapup`).
+- **0.4 review:** #5–#11 and B1–B21 are approved (session 1 on 2026-10-10, session 2 on 2026-10-13: #5, the evening VIX source). The list and the exact wording are at the top of [spikes/review-agenda.md](spikes/review-agenda.md). None of it is in the README yet.
+- **Spikes:** 0.3d is done (evening VIX from CBOE's delayed-quote JSON, final 16:32 ET; [spikes/macro.md](spikes/macro.md)). 0.3b has only Thursday's dividend check and the cleanup left ([spikes/alpaca-orders.md](spikes/alpaca-orders.md)). Already settled there: F's queued stop replace went through at 04:00 ET; paper never applies splits (DXJ); a `day` OTO leg expires at 16:00 (SOFI).
+- **Accounts:** both Alpaca paper accounts are active (`dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`); the Neon `dev` database is migrated to head (0004).
 
-**Blocked:** every remaining build task waits for the end of 0.4, which now needs only Thursday's spike checks.
+**Blocked:** every remaining build task waits for the end of 0.4, which needs only Thursday's spike checks and decisions #1–4.
 
 ## 1. The spike checks (time-bound, needs market hours)
 
@@ -26,22 +19,17 @@ Run everything from the `AuraTrade` folder; the spike state files are in `spikes
 
 | When (Tel Aviv) | New York | Say to Claude | Commands | What it settles |
 |---|---|---|---|---|
-| ~~*Optional:* **Mon 2026-10-12, 15:00–16:25**~~ (skipped: window passed) | 08:00–09:25 | "take the pre-market VIX snapshot" | `uv run --group spikes python -m spikes.macro snapshot` | What CBOE's delayed-quote JSON shows before the open (CBOE computes VIX in its overnight session). Decides what the 07:30 `premarket_check` can read |
-| ✅ **Mon 2026-10-12, from 16:35** (done 18:03) | after 09:31 | "run the Monday checks" | `uv run python -m spikes.alpaca_orders opg_check`, then `uv run python -m spikes.alpaca_orders corp_check` | ✅ F's replace went through at 04:00 ET; stop restored to 11. ✅ DXJ: paper doesn't apply splits. ✅ SOFI leg expired |
-| ✅ **Mon 2026-10-12** (ran 18:05 → 05:17 Tue) | 11:05–22:17 | "start the VIX watch" | `uv run --group spikes python -m spikes.macro poll --until 22:15 --every 120` (in the background) | When CBOE's delayed-quote JSON has the final close, when each CBOE CSV and FRED update, and whether the JSON value equals the CSV row. ✅ JSON final 16:32 ET, equal to the CSV rows; **0.3d** done, **#5** approved 10-13 |
-| *Optional:* **Tue 2026-10-13, from 17:00** | after 10:00 | "check FRED" | `uv run --group spikes python -m spikes.macro fred_lag` | Did FRED publish Monday's value by Tuesday morning (normal lag) or later (the holiday)? FRED is only the last fallback, so this doesn't change #5 |
+| *Optional:* **Tue 2026-10-13, from 17:00** | after 10:00 | "check FRED" | `uv run --group spikes python -m spikes.macro fred_lag` | Did FRED publish Monday's (Columbus Day) value by Tuesday morning, its normal lag, or later? FRED is only the last fallback, so this doesn't change #5 |
 | **Thu 2026-10-15, from 16:35** | after 09:31 | "run the Thursday checks" | `uv run python -m spikes.alpaca_orders corp_check`, then `uv run python -m spikes.alpaca_orders cleanup --flatten` | Was the QDTE GTC stop ($25.05) lowered by the dividend (FINRA 5330)? Then close the paper positions (F, QDTE, DXJ, SOFI) and cancel the `spk-` orders. Finishes **0.3b** and decides **#1–4** |
-
-**Columbus Day:** Monday 2026-10-12 is a US federal holiday. The stock market and CBOE are open, but FRED may publish late. Monday's CBOE timings count as normal; if FRED is late, check its timing again on Tuesday with `uv run --group spikes python -m spikes.macro fred_lag` before calling the FRED lag.
 
 ## 2. Finish the 0.4 review (needs you, about 10 minutes, after Thursday)
 
-- ~~Decide **#5**~~ (done 2026-10-13). Decide **#1–4** (OTO stop leg, OTO adds, partial fills, splits) with Thursday's results.
+- Decide **#1–4** (OTO stop leg, OTO adds, partial fills, splits) with Thursday's results.
 - Then one PR updates the README, the decision log (#113 onward) and the plan, with every 0.4 decision. Besides the agenda rows, it includes:
   - #9's whole-share sizing at the real account size in 3.5b, 3.6 and 3.8, with a single tranche under 2 shares
   - B13's outlier filter in 1.5
   - B14's half risk for an unreliable count in 3.5b
-  - #10: the stale "PDT rules apply" hint in `scripts/check_keys.py`
+  - #10: the stale "PDT rules apply" hint in `scripts/check_keys.py`, and the PDT notes in the plan's "What I need from you"
 - Then tick **0.4**.
 
 Say "continue the 0.4 review" when you're ready.
@@ -49,7 +37,7 @@ Say "continue the 0.4 review" when you're ready.
 ## 3. Things only you can do (before task 1.8, not urgent)
 
 - **AWS account:** root MFA, an admin user via IAM Identity Center, budget alarms at $10 / $25.
-- **AWS CLI** installed on this PC (Node is already there for CDK).
+- **AWS CLI** installed on this PC (Node and the GitHub CLI are already there).
 - **healthchecks.io** free account, for the external dead-man's switch.
 - **Anthropic Console:** confirm a monthly spend limit is set (about $20 now, about $40 from 4.6).
 - **Domain** for the public site: optional.

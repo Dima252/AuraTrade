@@ -1,8 +1,8 @@
 # Spike 0.3d: macro data timing (VIX, VIX3M, FRED)
 
 **Run:** 2026-10-09, `uv run --group spikes python -m spikes.macro <snapshot|fred_lag|poll>`. Raw output in `spikes/macro/output/` (git-ignored).
-**Status: DONE** (2026-10-13). The history checks ran on 2026-10-09; the evening timing watch ran on Monday 2026-10-12, 11:05–22:17 ET ([results](#evening-watch-monday-2026-10-12-poll)). Two small follow-ups, neither of which changes the decision: FRED's lag after a holiday (re-check Tuesday) and the optional pre-market snapshot.
-**Decision: ADJUST** (for approval at 0.4, agenda #5). CBOE's history files appear 1.5–5 hours after the 17:25 regime job, and FRED at least a full session later. The evening regime reads VIX/VIX3M from **CBOE's delayed-quote JSON**, final by **16:32 ET** and equal to the history row on both samples, with the history file and FRED as fallbacks.
+**Status: DONE** (2026-10-13). The history checks ran on 2026-10-09; the evening timing watch ran on Monday 2026-10-12, 11:05–22:17 ET ([results](#evening-watch-monday-2026-10-12-poll)). One optional follow-up, which doesn't change the decision: FRED's lag after a holiday (re-check with `fred_lag`). The pre-market snapshot was skipped and is no longer needed (agenda #5: `premarket_check` reads settled closes only).
+**Decision: ADJUST** (approved at 0.4 on 2026-10-13, agenda #5). CBOE's history files appear 1.5–5 hours after the 17:25 regime job, and FRED at least a full session later. The evening regime reads VIX/VIX3M from **CBOE's delayed-quote JSON**, final by **16:32 ET** and equal to the history row on both samples, with the history file and FRED as fallbacks.
 
 ## Sources checked
 
@@ -21,7 +21,7 @@
 | Extra rows | **The VIX file has rows on US market holidays from 2022 on** (e.g. 2022-05-30, 2023-01-16, 2024-02-19): CBOE computes VIX during global trading hours. The ingest must keep only `market_sessions` dates. VIX3M has none |
 | CBOE vs FRED values | **Identical**: 0 differences over 2,740 VIX days and 2,707 VIX3M days |
 | **When the history files update** | The 2026-10-08 rows: `Last-Modified` **VIX3M 18:31 ET, VIX 21:11 ET**. Both after the 17:25 `regime` job. The CDN adds up to 15 more minutes (`s-maxage=900`, `stale-while-revalidate=900`) |
-| Delayed-quote JSON | Updates every few seconds (`s-maxage=5`), **15 minutes delayed** (at 09:57 ET it showed `last_trade_time` 09:42). Fields: `current_price`, `close`, `prev_day_close`, `open`, `high`, `low`, `last_trade_time`. VIX settles at 16:15, so the final value should be there around **16:30–16:35 ET**. **To confirm Monday** |
+| Delayed-quote JSON | Updates every few seconds (`s-maxage=5`), **15 minutes delayed** (at 09:57 ET it showed `last_trade_time` 09:42). Fields: `current_price`, `close`, `prev_day_close`, `open`, `high`, `low`, `last_trade_time`. VIX settles at 16:15, so the final value should be there around **16:30–16:35 ET**. Confirmed Monday: final at 16:32 ET ([below](#evening-watch-monday-2026-10-12-poll)) |
 | **FRED lag** | `last_updated` of VIXCLS / VXVCLS: **2026-10-09 08:38 CT (09:38 ET) for the 2026-10-08 value**. FRED is one session behind at 17:25, and still behind at the 07:30 `premarket_check` |
 | FRED vintages (ALFRED) | Not usable for timing: each vintage is dated by its observation date (59 of 60 show "lag 0") |
 | Credit spread (`BAMLH0A0HYM2`) | **Only 3 years of history on FRED** (from 2023-10-10): "Starting in April 2026, this series will only include 3 years of observations." It can't be backtested to 2016. No README rule uses it today |
@@ -60,7 +60,7 @@ Polled every 2 minutes from 11:05 to 22:17 ET: 393 log entries, 2 transient conn
   1. Evening (`ingest` 17:00 / `regime` 17:25): read **today's close from the delayed-quote JSON**, accepting it only if `last_trade_time` is at or after 16:15 on session T (final by 16:32 ET on Monday's sample). Store it in `macro_series` with `fetched_at` and the source.
   2. Next evening: confirm it against the CBOE history row (same value expected) and log any difference.
   3. Fallbacks, in order: the CBOE history file (if it already has session T), then FRED (T−1). If only T−1 is available, the README's staleness rule applies (more than 2 sessions stale → the volatility pillar scores 0).
-  4. `premarket_check` (07:30) reads the delayed-quote JSON too. CBOE also computes VIX in its extended (global) trading hours before the US open; whether and how the JSON shows those values before 09:30 is **to check Monday morning**.
+  4. `premarket_check` (07:30) reads the delayed-quote JSON too. CBOE also computes VIX in its extended (global) trading hours before the US open; whether and how the JSON shows those values before 09:30 was not checked (the snapshot was skipped; agenda #5 has `premarket_check` ignore overnight values).
 - **Backtests:** use the CBOE history file (complete, identical to FRED), filtered to sessions.
 - **Credit spread:** keep it only as LLM context (recent values), or drop it. It can't be part of any backtested rule.
 
