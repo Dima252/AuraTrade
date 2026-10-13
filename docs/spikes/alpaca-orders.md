@@ -1,6 +1,6 @@
 # Spike 0.3b: Alpaca orders (paper)
 
-**Status: PART 1 done** (2026-10-08, after the close); **PART 2 mostly done** (2026-10-09, market hours: `session`, the DXJ split check, `corp_setup QDTE`, `pdt`; results below). Remaining: the overnight OPG exit (weekend), its check on Monday 10-12, the QDTE dividend check on Thursday 10-15, cleanup. The after-hours checks are below. The fills, sell sequences, stops through the market, OPG exits, PDT and the split/dividend checks need market hours and overnight holds. They are scripted and listed in the [run sheet](#run-sheet-part-2).
+**Status: PART 1 done** (2026-10-08, after the close); **PART 2 mostly done** (2026-10-09, market hours: `session`, the DXJ split check, `corp_setup QDTE`, `pdt`; results below). The OPG exit (Saturday) and its Monday check are done too. Remaining: the QDTE dividend check on Thursday 10-15, cleanup. The after-hours checks are below. The fills, sell sequences, stops through the market, OPG exits, PDT and the split/dividend checks need market hours and overnight holds. They are scripted and listed in the [run sheet](#run-sheet-part-2).
 **Decision so far: GO on OTO, with one adjustment** (entry parents are GTC, so the stop leg is GTC; below). The final go / adjust waits for part 2.
 
 Script: `spikes/alpaca_orders/` (`uv run python -m spikes.alpaca_orders <scenario>`). Every order uses a `spk-` `client_order_id`. Raw events are in `spikes/alpaca_orders/output/*.jsonl` (git-ignored). Accounts: `dev` (...JG3C) and `paper` (...CDFD), $5,000 each.
@@ -113,6 +113,24 @@ The F position (11 shares) kept its standalone GTC stop ($11.63, status `new`) t
 - **A (likely simplest):** drop OPG exits. A planned morning exit runs at the **09:31 check run** as a regular-hours sell sequence (replace is processed at once in the session, as `session` showed), with a marketable limit. The cost is one minute of exposure to the open, which a stop at the plan level covers anyway.
 - **B:** pre-market, **cancel** the stop (if a cancel is processed while closed, the shares are freed), place the OPG sell plus a new stop for the rest before 09:28. To test on Monday: whether a cancel is processed pre-market, and whether a new stop placed pre-market is accepted.
 
+### Weekend status (Sunday 2026-10-11, read-only: `corp_check` and an order listing)
+
+| Position | State | Meaning |
+|---|---|---|
+| **SOFI** 1 share | The OTO's `day` stop leg is **`expired`** (Friday 16:00). The position now has no stop | Answers Monday's question. A `day` parent gives a `day` leg that leaves the position unprotected at the close, which is why entries are GTC-parent OTOs (agenda #1). Spike position only; closed at cleanup |
+| **DXJ** 1 share | **Still not split-adjusted** two days after the 3:1 ex-date: 1 share at $184.67 average, priced at $60.71. The stop stays `rejected` | So far paper doesn't apply splits to positions at all. If Monday shows the same, a split during the paper trial leaves a wrong position (and a false −67% on paper equity) until fixed by hand. For agenda #4, decided Thursday |
+| **F** 11 shares | The original stop (11 sh, $11.63) is still **`pending_replace`**; its replacement (10 sh, `new`, created Saturday) waits for the open | Unchanged since Saturday, as expected. Monday's `opg_check` shows what the open does with it |
+| **QDTE** 1 share | GTC stop $25.05 × 1, `new`, untouched | Thursday's ex-dividend check |
+
+### Monday status (2026-10-12, 11:03 ET: `opg_check`, `corp_check`)
+
+| Position | State | Meaning |
+|---|---|---|
+| **F** 11 shares | The pending replace went through at **04:00 ET** (`replaced_at` 08:00 UTC), not at the 09:30 open: the old 11-share stop is `replaced`, the 10-share stop became live then. Restoring it to 11 at 11:03 was accepted at once (`new`, $11.63 × 11) | Alpaca handles a queued replace when its pre-market session opens at 04:00 ET, the same moment it rejected the DXJ stop on the split's ex-date. Nothing was ever unprotected: an order covered the shares the whole time. Option A (#11) stands: it doesn't depend on what happens pre-market |
+| **DXJ** 1 share | **Still not split-adjusted** after two sessions past the 3:1 ex-date (Fri and Mon): 1 share at $184.67, priced at $60.80 (−67%). The account activities have **no split entry** | **Paper doesn't apply splits to positions.** Paper equity shows a false loss of about $124 that stays until the position is closed. For agenda #4 |
+| **SOFI** 1 share | No stop (the `day` leg expired on Friday) | As on Sunday |
+| **QDTE** 1 share | GTC stop $25.05 × 1, `new` | Thursday's ex-dividend check |
+
 ## Run sheet (part 2)
 
 All on the `dev` account. The positions are small (≈ $80 a tranche) and every one has a GTC stop.
@@ -125,7 +143,7 @@ All on the `dev` account. The positions are small (≈ $80 a tranche) and every 
 | ✅ Fri, 14:30 | `uv run python -m spikes.alpaca_orders pdt --symbol SOFI` | Four same-day round trips: is the 4th rejected? Is a stop leg / standalone stop on same-day shares rejected? Is a same-day exit rejected? **Uses up the day trades for 5 sessions if PDT still applies**, so run it last |
 | ✅ Sat 10-10, 07:48 (any time; the window runs to Mon 09:28) | `uv run python -m spikes.alpaca_orders opg_exit` | Did the GTC stop survive the night and weekend? An OPG trim via the sell sequence. (Moved from Friday evening: the machine was offline. Is an OPG order accepted on a weekend?) |
 | Mon 10-12, 18:55 then 19:05 (optional) | `uv run python -m spikes.alpaca_orders opg_exit` | The window's start: a 403 just before 19:00, accepted after |
-| Mon 2026-10-12, after 09:31 | `uv run python -m spikes.alpaca_orders opg_check`, then `corp_check` | The OPG fill; restore the stop; the `pdt` scenario's SOFI day leg (expired at 16:00?); has paper applied the DXJ split to the position (1 → 3 shares)? |
+| ✅ Mon 2026-10-12, 11:03 | `uv run python -m spikes.alpaca_orders opg_check`, then `corp_check` | The pending replace went through at 04:00 ET and the stop is back to 11 shares; paper hasn't applied the DXJ split (see [Monday status](#monday-status-2026-10-12-1103-et-opg_check-corp_check)) |
 | Thu 2026-10-15, after 09:31 | `uv run python -m spikes.alpaca_orders corp_check` | **Dividend:** QDTE's stop lowered by the dividend (FINRA 5330) or not? |
 | Afterwards | `uv run python -m spikes.alpaca_orders cleanup --flatten` | Cancels `spk-` orders and closes the spike positions |
 
