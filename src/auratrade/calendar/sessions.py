@@ -17,7 +17,6 @@ from sqlalchemy import Connection, Engine, orm, select
 
 from auratrade.db.models import MarketSession
 
-FULL_SESSION_MINUTES = 390
 # Fri → Mon is 3 days; anything longer is a long weekend (README §4, "Long weekends").
 NORMAL_WEEKEND_DAYS = 3
 

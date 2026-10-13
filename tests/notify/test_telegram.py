@@ -2,6 +2,7 @@ import json
 
 import httpx
 import pytest
+from structlog.testing import capture_logs
 
 from auratrade.notify.alerts import LogAlerter
 from auratrade.notify.telegram import MAX_MESSAGE_CHARS, TelegramError, TelegramNotifier
@@ -22,7 +23,9 @@ class Recorder:
         return item
 
 
-def notifier(recorder: Recorder, sleeps: list[float], clock: list[float] | None = None):  # type: ignore[no-untyped-def]
+def notifier(
+    recorder: Recorder, sleeps: list[float], clock: list[float] | None = None
+) -> TelegramNotifier:
     ticks = clock if clock is not None else [0.0]
     return TelegramNotifier(
         TOKEN,
@@ -107,5 +110,9 @@ def test_rate_limits_consecutive_messages() -> None:
     assert len(sleeps) == 1
 
 
-def test_log_alerter_does_not_raise() -> None:
-    LogAlerter().alert("nothing configured")
+def test_log_alerter_logs_the_undelivered_alert() -> None:
+    with capture_logs() as logs:
+        LogAlerter().alert("nothing configured")
+    assert logs == [
+        {"event": "alert", "text": "nothing configured", "delivered": False, "log_level": "error"}
+    ]

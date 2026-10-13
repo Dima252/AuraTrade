@@ -44,10 +44,6 @@ def base_path(top: float, low: float, back_to: float, breakout: float) -> list[f
     return [*seg(top, low, 4), *seg(low, back_to, 4), breakout]
 
 
-def broken_out(scan_bases: tuple[PriceBase, ...]) -> list[PriceBase]:
-    return [b for b in scan_bases if b.status is BaseStatus.BROKEN_OUT]
-
-
 class TestRules:
     @pytest.mark.parametrize(
         "change",

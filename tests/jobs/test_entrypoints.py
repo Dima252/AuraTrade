@@ -11,6 +11,7 @@ from pathlib import Path
 import boto3
 import pytest
 from botocore.stub import Stubber
+from structlog.testing import capture_logs
 
 from auratrade.calendar.sessions import DbCalendar
 from auratrade.config import Settings
@@ -191,7 +192,16 @@ def test_lambda_invoker_sends_async_event() -> None:
 
 
 def test_no_chain_invoker_only_logs() -> None:
-    NoChainInvoker().invoke("ingest", WED, dry_run=True)
+    with capture_logs() as logs:
+        NoChainInvoker().invoke("ingest", WED, dry_run=True)
+    assert logs == [
+        {
+            "event": "chain_not_followed",
+            "successor": "ingest",
+            "session": "2026-10-07",
+            "log_level": "info",
+        }
+    ]
 
 
 class TestSchedule:

@@ -11,6 +11,7 @@ from auratrade.plans.model import (
     HoldState,
     PlanChange,
     PositionPlan,
+    Resolution,
     Rule,
     Sale,
 )
@@ -21,11 +22,11 @@ from tests.plans.factories import RISK, make_day, make_plan
 ONEIL = make_plan(Strategy.EMERGING_LEADER)
 
 
-def run(plan: PositionPlan, day: Day, shares: int = 100):  # type: ignore[no-untyped-def]
+def run(plan: PositionPlan, day: Day, shares: int = 100) -> Resolution:
     return resolve(plan, day, shares=shares, config=RISK)
 
 
-def kinds(resolution) -> list[EventKind]:  # type: ignore[no-untyped-def]
+def kinds(resolution: Resolution) -> list[EventKind]:
     return [e.kind for e in resolution.events]
 
 
