@@ -170,8 +170,8 @@ infra = [
 ]
 spikes = [
     { name = "mplfinance" },
+    { name = "numpy" },
     { name = "pandas" },
-    { name = "pandas-market-calendars" },
     { name = "pyarrow" },
 ]
 
@@ -211,8 +211,8 @@ infra = [
 ]
 spikes = [
     { name = "mplfinance", specifier = ">=0.12.10b0" },
+    { name = "numpy", specifier = ">=2.5.3" },
     { name = "pandas", specifier = ">=3.0.6" },
-    { name = "pandas-market-calendars", specifier = ">=5.5.0" },
     { name = "pyarrow", specifier = ">=25.0.1" },
 ]
 

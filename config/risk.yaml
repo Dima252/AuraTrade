@@ -3,8 +3,8 @@
 # so a change here is visible in every log line that follows it.
 #
 # Fractions are of equity (0.01 = 1%). Windows count sessions, never calendar days.
-# Sections for scans, entry rules, exit-plan menus, early-behaviour rules and the earnings
-# cushion are added with the tasks that implement them (3.x).
+# Sections for the scans and entry rules are added with the tasks that implement them
+# (3.2a, 3.5b); the exit-plan menus and the earnings cushion are under `plans`.
 
 regimes:  # README §6
   CONFIRMED_UPTREND:
