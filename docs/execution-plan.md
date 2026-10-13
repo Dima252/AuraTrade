@@ -25,7 +25,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 0.3a Spike: Alpaca market data *(findings adopted as #109–111; real-time and bar-revision checks done 2026-10-09: two proposals for 0.4)*
 - [x] 0.3h 👤 Spike: early edge check (daily bars, tuning period only; a clearly negative result pauses the build) *(≈ 0R before costs, −0.08R after; continue, decision #112)*
 - [x] 0.3c Spike: market calendar
-- [ ] 0.3d Spike: macro data timing *(partial note 2026-10-09: ADJUST proposed (evening VIX from CBOE delayed quotes); evening timing watch moved to Mon 2026-10-12)*
+- [x] 0.3d Spike: macro data timing *(2026-10-13: ADJUST, evening VIX from CBOE's delayed-quote JSON, final 16:32 ET; decided at 0.4 as #5)*
 - [x] 0.3e Spike: fundamentals, earnings, industries *(ADJUST proposed: earnings timing = earlier of 8-K and headline; decided at 0.4)*
 - [x] 0.3f Spike: news
 - [x] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK) *(approved 2026-10-09; spent ~$0.26; ~$0.016 per Analyst request, ~$17–22/month; ADJUST proposed for README §9)*
