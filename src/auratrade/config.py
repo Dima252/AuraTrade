@@ -342,6 +342,9 @@ class IngestConfig(_Strict):
     industry_min_group_size: PositiveInt
     # Scanner, tracker and LLM output rows older than this move to Parquet (README §10).
     archive_after_sessions: PositiveInt
+    # Concurrent requests per vendor: the bar and EDGAR requests are bound by response time, and
+    # the vendor's rate limiter still applies across the workers.
+    http_workers: PositiveInt
     db_size_limit_mb: PositiveInt
     db_size_alert_fraction: Fraction
 

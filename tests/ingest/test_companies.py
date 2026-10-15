@@ -203,3 +203,21 @@ def test_companies_step(pg_engine: Engine, calendar: MarketCalendar) -> None:
 def test_session_index(calendar: MarketCalendar) -> None:
     assert session_index(calendar, calendar.first) == 0  # type: ignore[arg-type]
     assert session_index(calendar, date(2025, 12, 2)) == 1
+
+
+def test_submissions_cache_prefetches_and_keeps_errors_per_company() -> None:
+    class Flaky(FakeEdgar):
+        def submissions(self, cik: int, *, since: date | None = None) -> Submissions | None:
+            if cik == 2:
+                raise RuntimeError("sec 503")
+            return super().submissions(cik, since=since)
+
+    edgar = Flaky(by_cik={1: subs("3674")})
+    cache = SubmissionsCache(edgar, THU, workers=3)
+    cache.prefetch([1, 2, 3, 1])
+    assert cache.requests == 3
+    assert cache(1) is not None
+    assert cache(3) is None
+    with pytest.raises(RuntimeError, match="sec 503"):
+        cache(2)
+    assert cache.requests == 3  # nothing fetched twice

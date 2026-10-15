@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Iterable, Mapping
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date
 from typing import Protocol
@@ -86,19 +87,38 @@ def traded_before(subs: Submissions, first_bar: date) -> bool:
 
 
 class SubmissionsCache:
-    """One EDGAR submissions fetch per CIK per run; only filing pages reaching `since`."""
+    """One EDGAR submissions fetch per CIK per run; only filing pages reaching `since`.
+    `prefetch` loads many concurrently (EDGAR's limiter still applies); a failed fetch raises
+    when its CIK is asked for, so each caller handles it per company."""
 
-    def __init__(self, fetch: SubmissionsFetch, since: date) -> None:
+    def __init__(self, fetch: SubmissionsFetch, since: date, *, workers: int = 1) -> None:
         self._fetch = fetch
         self._since = since
-        self._cache: dict[int, Submissions | None] = {}
+        self._workers = workers
+        self._cache: dict[int, Submissions | Exception | None] = {}
         self.requests = 0
+
+    def _load(self, cik: int) -> Submissions | Exception | None:
+        try:
+            return self._fetch.submissions(cik, since=self._since)
+        except Exception as exc:
+            return exc
+
+    def prefetch(self, ciks: Iterable[int]) -> None:
+        missing = sorted(set(ciks) - self._cache.keys())
+        self.requests += len(missing)
+        with ThreadPoolExecutor(max_workers=self._workers) as pool:
+            for cik, result in zip(missing, pool.map(self._load, missing), strict=True):
+                self._cache[cik] = result
 
     def __call__(self, cik: int) -> Submissions | None:
         if cik not in self._cache:
             self.requests += 1
-            self._cache[cik] = self._fetch.submissions(cik, since=self._since)
-        return self._cache[cik]
+            self._cache[cik] = self._load(cik)
+        result = self._cache[cik]
+        if isinstance(result, Exception):
+            raise result
+        return result
 
 
 class SubmissionsFetch(Protocol):
@@ -183,13 +203,16 @@ def ingest_companies(
     rows = _tracked(conn, risk, session)
 
     n = cfg.industries_refresh_sessions
+    work = []
     for row in rows:
         due_sic = row.cik is not None and (row.sic is None or row.id % n == index % n)
         listing = (
             row.listed_at is None and row.first_bar is not None and row.first_bar > window_start
         )
-        if not (due_sic or (listing and row.cik is not None)):
-            continue
+        if due_sic or (listing and row.cik is not None):
+            work.append((row, due_sic, listing))
+    submissions.prefetch(row.cik for row, _, _ in work if row.cik is not None)
+    for row, due_sic, listing in work:
         try:
             subs = submissions(row.cik) if row.cik is not None else None
         except Exception as exc:

@@ -219,3 +219,20 @@ def test_unexpected_shapes_are_errors() -> None:
         client(Server(ok({"assets": []}))).assets()
     with pytest.raises(VendorError, match="unexpected response"):
         client(Server(ok([]))).daily_bars(["AAPL"], date(2026, 10, 6), date(2026, 10, 8))
+
+
+def test_chunks_are_fetched_concurrently_in_order() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        symbols = request.url.params["symbols"].split(",")
+        bars = {
+            s: [{"t": "2026-10-08T04:00:00Z", "o": 1, "h": 1, "l": 1, "c": 1, "v": 1}]
+            for s in symbols
+        }
+        return httpx.Response(200, json={"bars": bars, "next_page_token": None})
+
+    http = alpaca_http("k", "s", client=httpx.Client(transport=httpx.MockTransport(handler)))
+    symbols = [f"S{i:04d}" for i in range(2500)]
+    data = AlpacaDataClient(http, now=lambda: EVENING, workers=3)
+    out = data.daily_bars(symbols, date(2026, 10, 8), date(2026, 10, 8))
+    assert list(out) == sorted(symbols)
+    assert all(len(b) == 1 for b in out.values())

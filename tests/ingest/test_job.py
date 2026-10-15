@@ -164,7 +164,7 @@ def job(
 ) -> Any:
     return ingest_job.make_job(
         engine_factory=lambda _: engine,
-        sources_factory=lambda _: src,
+        sources_factory=lambda *_: src,
         alerter_factory=lambda _: alerter,
         clock=lambda: now,
     )
@@ -312,13 +312,13 @@ class TestSources:
             alpaca_secret_key="s",
             edgar_user_agent="AuraTrade test@example.com",
         )
-        src = ingest_job.build_sources(settings)
+        src = ingest_job.build_sources(settings, RISK)
         assert src.edgar is not None
         assert (src.fred, src.finnhub) == (None, None)
 
     def test_alpaca_keys_are_required(self) -> None:
         with pytest.raises(ingest_job.IngestError, match="ALPACA_API_KEY"):
-            ingest_job.build_sources(Settings(_env_file=None))  # type: ignore[call-arg]
+            ingest_job.build_sources(Settings(_env_file=None), RISK)  # type: ignore[call-arg]
 
 
 def test_a_session_closed_by_the_resync_fails(pg_engine: Engine, tmp_path: Path) -> None:

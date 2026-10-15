@@ -13,11 +13,13 @@ from auratrade.db.models import Ticker
 from auratrade.ingest.classify import SecurityType
 from auratrade.ingest.universe import (
     ListedSecurity,
+    ScreenBar,
     TickerRefresh,
     UniverseError,
     listed_securities,
     passes_screen,
     refresh_tickers,
+    screen_bars,
 )
 from tests.ingest.fakes import NOW, RISK, add_ticker, sync_calendar
 
@@ -192,8 +194,10 @@ class TestRefresh:
         assert all(r.active for r in tickers(pg_engine))
 
 
-def raw(closes: list[float], volume: int) -> list[DailyBar]:
-    return [DailyBar("X", date(2026, 10, 1 + i), c, c, c, c, volume) for i, c in enumerate(closes)]
+def raw(closes: list[float], volume: int) -> list[ScreenBar]:
+    return screen_bars(
+        [DailyBar("X", date(2026, 10, 1 + i), c, c, c, c, volume) for i, c in enumerate(closes)]
+    )
 
 
 def test_passes_screen() -> None:

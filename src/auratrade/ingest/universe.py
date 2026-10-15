@@ -225,26 +225,27 @@ def active_ids(conn: Connection, symbols: Iterable[str]) -> dict[str, int]:
     return {row.symbol: row.id for row in rows}
 
 
-def passes_screen(raw_bars: Sequence[DailyBar], universe: UniverseConfig, *, margin: float) -> bool:
+@dataclass(frozen=True, slots=True)
+class ScreenBar:
+    """What the screen reads of a bar: the close as traded and the dollar volume."""
+
+    raw_close: float
+    dollar_volume: float
+
+
+def screen_bars(raw_bars: Sequence[DailyBar]) -> list[ScreenBar]:
+    """From raw (unadjusted) vendor bars."""
+    return [ScreenBar(b.close, b.close * b.volume) for b in raw_bars]
+
+
+def passes_screen(bars: Sequence[ScreenBar], universe: UniverseConfig, *, margin: float) -> bool:
     """Raw close and average dollar volume (over the last `dollar_volume_sessions` bars, or
     fewer for a new listing) at `margin` times the universe filters."""
-    if not raw_bars:
+    if not bars:
         return False
-    recent = raw_bars[-universe.dollar_volume_sessions :]
-    dollar_volume = sum(b.close * b.volume for b in recent) / len(recent)
+    recent = bars[-universe.dollar_volume_sessions :]
+    dollar_volume = sum(b.dollar_volume for b in recent) / len(recent)
     return (
-        raw_bars[-1].close >= universe.min_price * margin
+        bars[-1].raw_close >= universe.min_price * margin
         and dollar_volume >= universe.min_dollar_volume * margin
     )
-
-
-def tracked(
-    candidates: Sequence[Candidate],
-    raw_bars: Mapping[str, Sequence[DailyBar]],
-    universe: UniverseConfig,
-    *,
-    margin: float,
-) -> list[Candidate]:
-    return [
-        c for c in candidates if passes_screen(raw_bars.get(c.symbol, ()), universe, margin=margin)
-    ]

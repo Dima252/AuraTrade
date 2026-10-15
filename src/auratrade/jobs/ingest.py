@@ -100,7 +100,7 @@ class Sources:
     finnhub: FinnhubFullSource | None = None
 
 
-def build_sources(settings: Settings) -> Sources:
+def build_sources(settings: Settings, risk: RiskConfig) -> Sources:
     from auratrade.calendar.sources import AlpacaCalendarClient, exchange_calendar_sessions
     from auratrade.data.alpaca_data import alpaca_http
 
@@ -111,7 +111,7 @@ def build_sources(settings: Settings) -> Sources:
     fred_key, finnhub_key = settings.fred_api_key, settings.finnhub_api_key
     http = alpaca_http(key, secret)
     return Sources(
-        alpaca=AlpacaDataClient(http),
+        alpaca=AlpacaDataClient(http, workers=risk.ingest.http_workers),
         news=AlpacaNewsClient(http),
         nasdaq=NasdaqDirectoryClient(),
         cboe=CboeClient(),
@@ -242,7 +242,8 @@ def run_ingest(
             "(CBOE quote not final, history file and FRED behind). The regime uses the latest."
         )
     edgar = sources.edgar
-    cache = SubmissionsCache(edgar, session) if edgar is not None else None
+    workers = risk.ingest.http_workers
+    cache = SubmissionsCache(edgar, session, workers=workers) if edgar is not None else None
     if edgar is not None and cache is not None:
         step(
             "companies",
@@ -301,14 +302,14 @@ def _utc_now() -> datetime:
 def make_job(
     *,
     engine_factory: Callable[[Settings], Engine] = engine_from_settings,
-    sources_factory: Callable[[Settings], Sources] = build_sources,
+    sources_factory: Callable[[Settings, RiskConfig], Sources] = build_sources,
     alerter_factory: Callable[[Settings], Alerter] = _alerter,
     clock: Callable[[], datetime] = _utc_now,
 ) -> JobSpec:
     def run(ctx: JobContext) -> JobOutput:
         outcome = run_ingest(
             engine_factory(ctx.settings),
-            sources_factory(ctx.settings),
+            sources_factory(ctx.settings, ctx.risk),
             ctx.risk,
             ctx.storage,
             ctx.session_date,
@@ -345,7 +346,12 @@ def direct_main(argv: Sequence[str]) -> int:
     engine = engine_from_settings(settings)
     try:
         outcome = run_ingest(
-            engine, build_sources(settings), risk, make_store(settings), args.session, _utc_now()
+            engine,
+            build_sources(settings, risk),
+            risk,
+            make_store(settings),
+            args.session,
+            _utc_now(),
         )
     finally:
         engine.dispose()

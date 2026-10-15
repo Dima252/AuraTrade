@@ -43,7 +43,13 @@ from auratrade.ingest.bars import (
     sanity_problem,
     split_changed,
 )
-from auratrade.ingest.universe import active_ids, candidates, tracked
+from auratrade.ingest.universe import (
+    ScreenBar,
+    active_ids,
+    candidates,
+    passes_screen,
+    screen_bars,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -136,21 +142,43 @@ def ingest_bars(
 
     pool = candidates(conn, u)
     report.candidates = len(pool)
+    indexes = active_ids(conn, risk.regime.indexes)
+    # The stored bars serve the screen of tickers tracked through T-1 (their split-adjusted
+    # close x volume is the raw dollar volume), the outlier check's range and left neighbour,
+    # and the overlap re-fetch. Only the others are screened on vendor bars.
+    depth = max(u.dollar_volume_sessions, cfg.outliers.adr_sessions + 2)
+    tails = stored_tail(conn, [c.ticker_id for c in pool] + list(indexes.values()), depth)
+    current = {
+        c.ticker_id
+        for c in pool
+        if (tail := tails.get(c.ticker_id)) and tail[-1].session >= window.previous
+    }
     screen_start = window.days[max(len(window.days) - u.dollar_volume_sessions, 0)]
     recent_raw = source.daily_bars(
-        [c.symbol for c in pool], screen_start, session, adjustment=Adjustment.RAW
+        [c.symbol for c in pool if c.ticker_id not in current],
+        screen_start,
+        session,
+        adjustment=Adjustment.RAW,
     )
-    targets = {c.ticker_id: c.symbol for c in tracked(pool, recent_raw, u, margin=cfg.track_margin)}
-    indexes = active_ids(conn, risk.regime.indexes)
+    screens = {
+        c.ticker_id: (
+            [ScreenBar(b.raw_close, b.close * b.volume) for b in tails[c.ticker_id]]
+            if c.ticker_id in current
+            else screen_bars(recent_raw.get(c.symbol, ()))
+        )
+        for c in pool
+    }
+    targets = {
+        c.ticker_id: c.symbol
+        for c in pool
+        if passes_screen(screens[c.ticker_id], u, margin=cfg.track_margin)
+    }
     absent = sorted(set(risk.regime.indexes) - indexes.keys())
     if absent:
         raise MissingIndexError(f"index ETFs not in tickers: {absent}")
     targets |= {ticker_id: symbol for symbol, ticker_id in indexes.items()}
     report.tracked = len(targets)
 
-    # The overlap re-fetch starts at T-1 at the latest; the outlier check needs the stored bars
-    # before it for the left neighbour and the average daily range.
-    tails = stored_tail(conn, targets, cfg.outliers.adr_sessions + 2)
     starts: dict[int, date] = {}
     for ticker_id in targets:
         tail = tails.get(ticker_id)

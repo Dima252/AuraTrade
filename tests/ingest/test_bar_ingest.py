@@ -178,11 +178,17 @@ class TestEveningUpdates:
     ) -> None:
         vendor, ids = world
         run(pg_engine, vendor, calendar, THU)
-        vendor.add("DDD", sessions(calendar, date(2026, 10, 1), FRI), price=2.0)
-        report = run(pg_engine, vendor, calendar, FRI)
+        mon = date(2026, 10, 19)
+        vendor.add("DDD", sessions(calendar, FRI, mon), price=2.0)  # collapses on Friday
+        # Friday: still screened on the stored bars through Thursday, so Friday is stored.
+        assert run(pg_engine, vendor, calendar, FRI).tracked == 4
+        # Monday: its stored Friday close is $2, under the $5 screen.
+        report = run(pg_engine, vendor, calendar, mon)
         assert report.tracked == 3
-        assert FRI not in stored(pg_engine, ids["DDD"])
-        assert THU in stored(pg_engine, ids["DDD"])  # kept until it ages out of the window
+        bars = stored(pg_engine, ids["DDD"])
+        assert FRI in bars
+        assert mon not in bars
+        assert THU in bars  # kept until it ages out of the window
 
     def test_a_ticker_that_starts_passing_gets_its_window(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]

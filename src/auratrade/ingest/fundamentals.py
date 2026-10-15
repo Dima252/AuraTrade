@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from datetime import date
 from typing import Protocol
@@ -246,12 +247,21 @@ def ingest_fundamentals(
     ]
     report.due = len(due)
     report.backlog = max(len(due) - cfg.fundamentals_max_requests, 0)
-    written: dict[int, list[Quarter]] = {}
-    for row in due[: cfg.fundamentals_max_requests]:
+    batch = due[: cfg.fundamentals_max_requests]
+
+    def load(cik: int) -> CompanyFacts | Exception | None:
         try:
-            facts = source.company_facts(row.cik)
+            return source.company_facts(cik)
         except Exception as exc:
-            report.errors.append(f"facts {row.symbol}: {type(exc).__name__}: {exc}")
+            return exc
+
+    # Company facts are megabytes each: fetched concurrently, EDGAR's limiter still applies.
+    with ThreadPoolExecutor(max_workers=cfg.http_workers) as pool:
+        fetched = list(pool.map(load, [row.cik for row in batch]))
+    written: dict[int, list[Quarter]] = {}
+    for row, facts in zip(batch, fetched, strict=True):
+        if isinstance(facts, Exception):
+            report.errors.append(f"facts {row.symbol}: {type(facts).__name__}: {facts}")
             continue
         report.fetched += 1
         if facts is None:
