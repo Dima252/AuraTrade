@@ -221,7 +221,8 @@ def test_step_refreshes_recent_reporters_first_and_caps(
     source = FakeFacts({100: company, 101: None, 102: company})
     with pg_engine.begin() as conn:
         report = ingest_fundamentals(conn, source, calendar, risk, THU)
-    assert source.calls == [102, 100, 101]  # the reporter first; the 4th is over the cap
+    # Fetched concurrently, so in any order: the reporter is in, the 4th (666) over the cap.
+    assert sorted(source.calls) == [100, 101, 102]
     assert (report.due, report.fetched, report.backlog) == (4, 3, 1)
     assert report.no_facts == ["T1"]
     with pg_engine.connect() as conn:
