@@ -21,15 +21,15 @@ def small_risk() -> RiskConfig:
                     "sma": 3,
                     "new_high_sessions": 5,
                     "net_new_highs_sessions": 3,
-                    "universe_min_history_sessions": 5,
-                    "universe_dollar_volume_sessions": 3,
-                    "universe_min_dollar_volume": 1000.0,
                 }
             ),
             "replay_warmup_sessions": 8,
         }
     )
-    return RISK.model_copy(update={"regime": regime})
+    universe = RISK.universe.model_copy(
+        update={"min_history_sessions": 5, "dollar_volume_sessions": 3, "min_dollar_volume": 1000.0}
+    )
+    return RISK.model_copy(update={"regime": regime, "universe": universe})
 
 
 def weekdays(start: date, n: int) -> list[date]:

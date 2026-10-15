@@ -79,6 +79,7 @@ uv run python scripts/check_keys.py       # confirm every key in .env works (fre
 uv run alembic upgrade head               # apply migrations (from task 1.2)
 uv run python -m auratrade.calendar.sync  # sync market_sessions from Alpaca + cross-check (from task 1.4)
 uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
+uv run python -m auratrade.jobs.ingest --direct --session 2026-10-14   # ingest without the runner (its predecessor post_market comes in 1.7)
 cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 ```
 

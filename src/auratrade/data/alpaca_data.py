@@ -14,6 +14,7 @@ the corporate-actions feed, and the asset list (spike 0.3a, docs/spikes/alpaca-d
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from enum import StrEnum
@@ -175,9 +176,20 @@ def _chunks(symbols: Iterable[str], size: int = MAX_SYMBOLS) -> Iterator[list[st
 
 
 class AlpacaDataClient:
-    def __init__(self, http: VendorHttp, *, now: Callable[[], datetime] | None = None) -> None:
+    """`workers` > 1 fetches the symbol chunks of a bars request concurrently: the requests are
+    bound by the server's response time (3 to 15 s for 1,000 symbols, measured), not by the
+    rate limit, which the shared limiter still enforces."""
+
+    def __init__(
+        self,
+        http: VendorHttp,
+        *,
+        now: Callable[[], datetime] | None = None,
+        workers: int = 1,
+    ) -> None:
         self._http = http
         self._now = now or (lambda: datetime.now(UTC))
+        self._workers = workers
 
     def daily_bars(
         self,
@@ -323,7 +335,7 @@ class AlpacaDataClient:
         feed: Feed,
         adjustment: Adjustment,
     ) -> Iterator[tuple[str, dict[str, Any]]]:
-        for chunk in _chunks(symbols):
+        def chunk_bars(chunk: list[str]) -> list[tuple[str, dict[str, Any]]]:
             params = {
                 "symbols": ",".join(chunk),
                 "timeframe": timeframe,
@@ -333,10 +345,21 @@ class AlpacaDataClient:
                 "adjustment": adjustment.value,
                 "limit": PAGE_LIMIT,
             }
-            for body in self._pages(f"{DATA_URL}/v2/stocks/bars", params):
-                for symbol, bars in (body.get("bars") or {}).items():
-                    for raw in bars:
-                        yield symbol, raw
+            return [
+                (symbol, raw)
+                for body in self._pages(f"{DATA_URL}/v2/stocks/bars", params)
+                for symbol, bars in (body.get("bars") or {}).items()
+                for raw in bars
+            ]
+
+        chunks = list(_chunks(symbols))
+        if self._workers > 1 and len(chunks) > 1:
+            with ThreadPoolExecutor(max_workers=self._workers) as pool:
+                results = list(pool.map(chunk_bars, chunks))
+        else:
+            results = [chunk_bars(chunk) for chunk in chunks]
+        for result in results:
+            yield from result
 
     def _pages(self, url: str, params: Params) -> Iterator[dict[str, Any]]:
         token: str | None = None

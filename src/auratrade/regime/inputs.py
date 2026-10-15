@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from auratrade.config import RegimeConfig
+from auratrade.config import RegimeConfig, UniverseConfig
 from auratrade.indicators.bars import Bar
 from auratrade.indicators.moving_averages import falling, rising, sma
 from auratrade.indicators.volume import normalize_session_volumes
@@ -87,6 +87,7 @@ def build_inputs(
     data: LoadedData,
     targets: Sequence[date],
     cfg: RegimeConfig,
+    universe: UniverseConfig,
     *,
     breakouts: Callable[[date], Sequence[TrackedBreakout]] = lambda _: (),
 ) -> list[SessionInputs]:
@@ -99,7 +100,7 @@ def build_inputs(
     first = data.sessions.index(targets[0]) - cfg.breadth.net_new_highs_sessions + 1
     window = list(data.sessions[max(first, 0) : data.sessions.index(targets[-1]) + 1])
     breadth = breadth_inputs(
-        session_breadth(data.universe, window, cfg.breadth), window, cfg.breadth
+        session_breadth(data.universe, window, cfg.breadth, universe), window, cfg.breadth
     )
     expirations = quarterly_expiration_sessions(data.sessions)
 
