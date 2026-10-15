@@ -1,16 +1,16 @@
 """Breadth-pillar inputs from per-ticker daily bars (README §5.2), point in time.
 
 A ticker counts at a session only if it has a bar that session and passes the README §5.1
-universe filters as of that session: raw close >= $10, 50-session average dollar volume >= $10M,
-and >= 252 sessions of history. Until task 1.5 builds the universe table these filters are applied
-here. The same function serves the live job (2 years of Postgres bars) and the 2.4 backtest.
+universe filters (``universe`` in risk.yaml) as of that session: raw close >= $10, 50-session
+average dollar volume >= $10M, and >= 252 sessions of history. The same function serves the live
+job (2 years of Postgres bars) and the 2.4 backtest.
 """
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from auratrade.config import BreadthConfig
+from auratrade.config import BreadthConfig, UniverseConfig
 from auratrade.indicators.breadth import net_new_highs_average
 from auratrade.indicators.moving_averages import sma
 from auratrade.indicators.series import rolling_max, rolling_mean, rolling_min
@@ -41,7 +41,10 @@ class SessionBreadth:
 
 
 def session_breadth(
-    histories: Iterable[TickerHistory], sessions: Sequence[date], cfg: BreadthConfig
+    histories: Iterable[TickerHistory],
+    sessions: Sequence[date],
+    cfg: BreadthConfig,
+    universe: UniverseConfig,
 ) -> dict[date, SessionBreadth]:
     """Universe size, members above their 50 SMA, and 52-week new highs and lows, per session."""
     wanted = set(sessions)
@@ -52,17 +55,17 @@ def session_breadth(
         lowest = rolling_min(h.lows, cfg.new_high_sessions)
         dollar_volume = rolling_mean(
             [c * v for c, v in zip(h.closes, h.volumes, strict=True)],
-            cfg.universe_dollar_volume_sessions,
+            universe.dollar_volume_sessions,
         )
         for i, day in enumerate(h.dates):
             if day not in wanted:
                 continue
             dv = dollar_volume[i]
             if (
-                i + 1 < cfg.universe_min_history_sessions
-                or h.raw_closes[i] < cfg.universe_min_price
+                i + 1 < universe.min_history_sessions
+                or h.raw_closes[i] < universe.min_price
                 or dv is None
-                or dv < cfg.universe_min_dollar_volume
+                or dv < universe.min_dollar_volume
             ):
                 continue
             c = counts[day]

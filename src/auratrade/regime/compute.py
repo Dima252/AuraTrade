@@ -34,9 +34,9 @@ def compute(
     if not targets:
         return []
     calendar = load_calendar(conn)
-    data = load_data(conn, calendar, targets[0], targets[-1], risk.regime)
+    data = load_data(conn, calendar, targets[0], targets[-1], risk.regime, risk.universe)
     results = []
-    for inputs in build_inputs(data, targets, risk.regime, breakouts=breakouts):
+    for inputs in build_inputs(data, targets, risk.regime, risk.universe, breakouts=breakouts):
         result = classify(
             state, inputs, risk.regime, macro_stale_limit=risk.data.macro_stale_sessions
         )

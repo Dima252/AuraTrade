@@ -19,7 +19,7 @@ from datetime import UTC, date, datetime
 from enum import StrEnum
 
 import structlog
-from sqlalchemy import Engine, delete, insert, select, update
+from sqlalchemy import Engine, bindparam, delete, insert, select, update
 
 from auratrade.calendar.sources import NY, SessionTimes
 from auratrade.db.models import MarketSession
@@ -136,14 +136,28 @@ def sync_market_sessions(
                 f"Alpaca dropped {len(removed)} synced sessions (limit {max_removals}); "
                 "nothing written, check the calendar by hand"
             )
+        # Batched: one statement per kind of change, since row by row a full sync took about
+        # 8 minutes from a PC to Neon.
+        new_rows = []
+        changed_rows = []
         for day, values in wanted.items():
             current = existing.get(day)
             if current is None:
-                conn.execute(insert(t).values(session_date=day, synced_at=now, **values))
-                inserted += 1
+                new_rows.append({"session_date": day, "synced_at": now, **values})
             elif any(current[k] != v for k, v in values.items()):
-                conn.execute(update(t).where(t.session_date == day).values(synced_at=now, **values))
-                updated += 1
+                changed_rows.append({"session_date": day, "synced_at": now, **values})
+        if new_rows:
+            conn.execute(insert(t), new_rows)
+            inserted = len(new_rows)
+        if changed_rows:
+            # executemany UPDATE: bound names must differ from the column names.
+            conn.execute(
+                update(t)
+                .where(t.session_date == bindparam("p_session_date"))
+                .values({c: bindparam(f"p_{c}") for c in changed_rows[0] if c != "session_date"}),
+                [{f"p_{k}": v for k, v in row.items()} for row in changed_rows],
+            )
+            updated = len(changed_rows)
         if removed:
             conn.execute(delete(t).where(t.session_date.in_(removed)))
     result = SyncResult(

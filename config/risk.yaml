@@ -108,6 +108,37 @@ data:  # README §4
   min_coverage: 0.90
   macro_stale_sessions: 2
 
+universe:  # README §5.1; point in time, on raw prices as traded that day
+  exchanges: [NYSE, NASDAQ, AMEX]
+  security_types: [COMMON, ADR]    # ADRs included (#111)
+  min_price: 10.0
+  min_dollar_volume: 10000000
+  dollar_volume_sessions: 50
+  min_history_sessions: 252
+
+ingest:  # README §5.1, §10; see auratrade.ingest
+  bar_history_sessions: 504          # 2 years in Postgres; full history in Parquet
+  track_margin: 0.5                  # bars kept for tickers passing half the universe filters
+  split_close_tolerance: 0.02        # re-fetched overlap bar moved > 2%: re-fetch the window
+  outliers:                          # NVDA high 195.95 on 2024-06-10 (true ~122), #126
+    min_beyond_body: 0.15
+    min_beyond_neighbours: 0.15
+  corporate_actions_lookback_sessions: 5
+  corporate_actions_lookahead_sessions: 5
+  macro:
+    quote_settle_minutes: 15         # CBOE JSON final once last_trade_time >= close + 15 min
+    history_mismatch_tolerance: 0.01
+    fred_lookback_sessions: 10
+  earnings_horizon_sessions: 63      # Finnhub calendar, day by day
+  earnings_usual_timing_reports: 8   # blank timing -> the company's usual over its last 8 (#119)
+  earnings_surprise_sessions: 3
+  fundamentals_refresh_sessions: 20  # each universe ticker's EDGAR facts at least every 20
+  industries_refresh_sessions: 5     # each universe ticker's SIC weekly
+  industry_min_group_size: 15        # spike 0.3e: 102 groups
+  archive_after_sessions: 63         # ~90 days
+  db_size_limit_mb: 512              # Neon free tier
+  db_size_alert_fraction: 0.70
+
 jobs:  # README §2
   chain_wait_minutes: 30
   duration_alert_minutes: 10
@@ -153,12 +184,6 @@ regime:  # README §5.2; provisional until the 2.4 regime backtest (final after 
     down_max_above: 0.35             # -1: < 35% above, or net new highs < 0
     new_high_sessions: 252           # 52-week highs and lows
     net_new_highs_sessions: 10       # averaged over 10 sessions
-    # Universe filters (README §5.1), applied inline until task 1.5 builds the universe table.
-    universe_security_types: [COMMON, ADR]
-    universe_min_price: 10.0         # raw close as it traded that day
-    universe_min_dollar_volume: 10000000
-    universe_dollar_volume_sessions: 50
-    universe_min_history_sessions: 252
   volatility:
     up_max_vix: 20                   # +1: VIX < 20 and VIX/VIX3M < 0.9
     up_max_ratio: 0.9

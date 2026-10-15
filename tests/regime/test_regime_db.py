@@ -115,7 +115,9 @@ def _replay(engine: Engine, first: date, last: date, risk: RiskConfig = RISK) ->
 class TestLoad:
     def test_the_universe_is_point_in_time(self, pg_engine: Engine, seeded: dict[str, int]) -> None:
         with pg_engine.connect() as conn:
-            data = load_data(conn, load_calendar(conn), SESSIONS[30], SESSIONS[39], RISK.regime)
+            data = load_data(
+                conn, load_calendar(conn), SESSIONS[30], SESSIONS[39], RISK.regime, RISK.universe
+            )
         firsts_and_lasts = sorted((h.dates[0], h.dates[-1]) for h in data.universe)
         assert firsts_and_lasts == [
             (SESSIONS[22], SESSIONS[24]),  # BBB: delisted at session 25
@@ -129,7 +131,9 @@ class TestLoad:
         self, pg_engine: Engine, seeded: dict[str, int]
     ) -> None:
         with pg_engine.connect() as conn:
-            data = load_data(conn, load_calendar(conn), SESSIONS[18], SESSIONS[22], RISK.regime)
+            data = load_data(
+                conn, load_calendar(conn), SESSIONS[18], SESSIONS[22], RISK.regime, RISK.universe
+            )
         starts = sorted(h.dates[0] for h in data.universe)
         assert starts == [SESSIONS[10], SESSIONS[10], SESSIONS[20]]  # DDD only once listed
 
@@ -331,7 +335,14 @@ class TestEdges:
             with pytest.raises(MissingDataError, match="empty"):
                 replay(conn, RISK, SESSIONS[12], SESSIONS[20])
             with pytest.raises(MissingDataError, match="empty"):
-                load_data(conn, load_calendar(conn), SESSIONS[12], SESSIONS[20], RISK.regime)
+                load_data(
+                    conn,
+                    load_calendar(conn),
+                    SESSIONS[12],
+                    SESSIONS[20],
+                    RISK.regime,
+                    RISK.universe,
+                )
 
     def test_nothing_to_compute_or_write(self, pg_engine: Engine) -> None:
         with pg_engine.begin() as conn:

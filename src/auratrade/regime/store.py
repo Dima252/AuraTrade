@@ -9,7 +9,7 @@ from sqlalchemy import Connection, and_, case, or_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from auratrade.calendar.sessions import MarketCalendar
-from auratrade.config import RegimeConfig
+from auratrade.config import RegimeConfig, UniverseConfig
 from auratrade.db.models import DailyBar, MacroObservation, MarketRegimeRow, Ticker
 from auratrade.regime.breadth import TickerHistory
 from auratrade.regime.classifier import RegimeResult
@@ -21,13 +21,13 @@ MACRO_LOOKBACK_SESSIONS = 10
 WRITE_CHUNK = 500
 
 
-def lookback_sessions(cfg: RegimeConfig) -> int:
+def lookback_sessions(cfg: RegimeConfig, universe: UniverseConfig) -> int:
     """Sessions of bars needed before the first target for every window to be full."""
-    b, it = cfg.breadth, cfg.index_trend
+    b, it, u = cfg.breadth, cfg.index_trend, universe
     return max(
         it.long_sma + it.slope_sessions,
-        max(b.new_high_sessions, b.universe_min_history_sessions) + b.net_new_highs_sessions,
-        b.universe_dollar_volume_sessions + b.net_new_highs_sessions,
+        max(b.new_high_sessions, u.min_history_sessions) + b.net_new_highs_sessions,
+        u.dollar_volume_sessions + b.net_new_highs_sessions,
     )
 
 
@@ -63,7 +63,12 @@ _BAR_COLUMNS = (
 
 
 def load_data(
-    conn: Connection, calendar: MarketCalendar, first: date, last: date, cfg: RegimeConfig
+    conn: Connection,
+    calendar: MarketCalendar,
+    first: date,
+    last: date,
+    cfg: RegimeConfig,
+    universe: UniverseConfig,
 ) -> LoadedData:
     """Bars and macro data for classifying ``first`` .. ``last``, with the look-back before
     ``first`` (cut short where the calendar or the stored bars begin)."""
@@ -71,7 +76,7 @@ def load_data(
         raise MissingDataError("market_sessions is empty: sync the calendar")
     all_sessions = calendar.sessions_between(calendar.first, last)
     days = [s.day for s in all_sessions]
-    start = days[max(days.index(first) - lookback_sessions(cfg), 0)]
+    start = days[max(days.index(first) - lookback_sessions(cfg, universe), 0)]
     sessions = days[days.index(start) :]
     minutes = {s.day: s.minutes for s in all_sessions if s.day >= start}
 
@@ -93,18 +98,17 @@ def load_data(
 
     # The universe point in time: listed and not yet delisted as of each bar's session (a bar
     # that session already means it traded). Today's listing would add survivorship bias.
-    b = cfg.breadth
     universe_rows = conn.execute(
         select(*_BAR_COLUMNS)
         .join(Ticker, Ticker.id == DailyBar.ticker_id)
         .where(
             in_range,
-            Ticker.security_type.in_(b.universe_security_types),
+            Ticker.security_type.in_(universe.security_types),
             or_(Ticker.listed_at.is_(None), Ticker.listed_at <= DailyBar.session_date),
             or_(Ticker.delisted_at.is_(None), Ticker.delisted_at > DailyBar.session_date),
         )
     ).all()
-    universe = list(_histories([tuple(r) for r in universe_rows]).values())  # type: ignore[misc]
+    members = list(_histories([tuple(r) for r in universe_rows]).values())  # type: ignore[misc]
 
     macro_start = days[max(days.index(first) - MACRO_LOOKBACK_SESSIONS, 0)]
     macro_rows = conn.execute(
@@ -126,7 +130,7 @@ def load_data(
         sessions=sessions,
         session_minutes=minutes,
         indexes=indexes,
-        universe=universe,
+        universe=members,
         macro=macro,
     )
 

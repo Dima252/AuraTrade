@@ -270,6 +270,69 @@ class DataConfig(_Strict):
     macro_stale_sessions: PositiveInt
 
 
+class UniverseConfig(_Strict):
+    """The tradable universe (README §5.1), filtered point in time on raw prices."""
+
+    exchanges: tuple[str, ...] = Field(min_length=1)
+    security_types: tuple[str, ...] = Field(min_length=1)
+    min_price: Positive
+    min_dollar_volume: Positive
+    dollar_volume_sessions: PositiveInt
+    min_history_sessions: PositiveInt
+
+
+class OutlierConfig(_Strict):
+    """A high (low) is a bad tick when it lies beyond both the bar's open-close body and the
+    neighbouring bars' highs (lows) by more than these fractions (README §5.1, #126)."""
+
+    min_beyond_body: Positive
+    min_beyond_neighbours: Positive
+
+
+class MacroIngestConfig(_Strict):
+    # The delayed-quote JSON is final once its last trade is this long after the close
+    # (16:15 on a full session, README §5.1 / #117).
+    quote_settle_minutes: PositiveInt
+    history_mismatch_tolerance: Annotated[float, Field(ge=0.0)]
+    fred_lookback_sessions: PositiveInt
+
+
+class IngestConfig(_Strict):
+    """The evening ingest (README §5.1, §10; task 1.5)."""
+
+    # Rolling window of bars kept in Postgres (2 years); older bars live in Parquet.
+    bar_history_sessions: PositiveInt
+    # Bars are stored for "tracked" tickers: universe types on universe exchanges whose raw
+    # close and average dollar volume pass `track_margin` times the universe filters. A ticker
+    # that starts passing gets its whole window fetched, so the margin only trades storage
+    # (Neon's 0.5 GB) against re-fetching, never which tickers are in the universe.
+    track_margin: Annotated[float, Field(gt=0.0, le=1.0)]
+    # A re-fetched overlap bar whose close moved by more than this is a split (or another
+    # vendor re-adjustment): the ticker's whole window is re-fetched.
+    split_close_tolerance: Positive
+    outliers: OutlierConfig
+    # Corporate actions are fetched by process date over a window padded this many
+    # sessions back and ahead of the session (spike 0.3b, docs/spikes/alpaca-data.md).
+    corporate_actions_lookback_sessions: PositiveInt
+    corporate_actions_lookahead_sessions: PositiveInt
+    macro: MacroIngestConfig
+    # Upcoming earnings dates: Finnhub's calendar, one request per day, this far ahead.
+    earnings_horizon_sessions: PositiveInt
+    # Blank Finnhub timing → the company's usual timing over its last N reports (#119).
+    earnings_usual_timing_reports: PositiveInt
+    # Surprises are refreshed for reports in the last N sessions.
+    earnings_surprise_sessions: PositiveInt
+    # Rolling refreshes: every universe ticker once per N sessions.
+    fundamentals_refresh_sessions: PositiveInt
+    industries_refresh_sessions: PositiveInt
+    # SIC codes roll up to 3 and then 2 digits until a group has this many members.
+    industry_min_group_size: PositiveInt
+    # Scanner, tracker and LLM output rows older than this move to Parquet (README §10).
+    archive_after_sessions: PositiveInt
+    db_size_limit_mb: PositiveInt
+    db_size_alert_fraction: Fraction
+
+
 class JobsConfig(_Strict):
     chain_wait_minutes: PositiveInt
     duration_alert_minutes: PositiveInt
@@ -284,6 +347,8 @@ class RiskConfig(_Strict):
     multiplier: MultiplierConfig
     climax: ClimaxConfig
     data: DataConfig
+    universe: UniverseConfig
+    ingest: IngestConfig
     jobs: JobsConfig
     trend_template: TrendTemplateConfig
     bases: BasesConfig
@@ -367,11 +432,6 @@ class BreadthConfig(_Strict):
     down_max_above: Fraction
     new_high_sessions: PositiveInt
     net_new_highs_sessions: PositiveInt
-    universe_security_types: tuple[str, ...] = Field(min_length=1)
-    universe_min_price: Positive
-    universe_min_dollar_volume: Positive
-    universe_dollar_volume_sessions: PositiveInt
-    universe_min_history_sessions: PositiveInt
 
 
 class VolatilityConfig(_Strict):
