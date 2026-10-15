@@ -8,7 +8,7 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 - **0.4 review: closed** (sessions on 2026-10-10, 10-13 and 10-15). Every decision is in README §16 as **#113–128**, and the plan tasks carry the follow-ups. The record of what was decided and why is [spikes/review-agenda.md](spikes/review-agenda.md).
 - **Spikes:** all done. 0.3b finished on Thu 2026-10-15: GO on OTO with adjustments ([spikes/alpaca-orders.md](spikes/alpaca-orders.md)). The dev paper account was flattened: no positions, no orders, $4,872.94 equity (the drop is mostly DXJ's false split loss).
 - **Accounts:** both Alpaca paper accounts are active (`dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`); the Neon `dev` database is migrated to head (0004).
-- **Open PR:** task 1.3 (`phase-1/data-clients`).
+- **Open PRs:** none. `main` has everything through task 1.3 (PR #25).
 
 ## 1. Things only you can do (before task 1.8, not urgent)
 
@@ -26,4 +26,4 @@ The 0.4 follow-ups are in those tasks now: the T−1 re-fetch, outlier filter, l
 
 ## How to resume in a new chat
 
-- "start task 1.5" (after the 1.3 PR is merged).
+- "start task 1.5".
