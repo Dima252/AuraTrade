@@ -85,7 +85,6 @@ class IndustryGroup(Base):
 
     id: Mapped[int] = mapped_column(SmallInteger, Identity(), primary_key=True)
     name: Mapped[str] = mapped_column(Text, unique=True)
-    description: Mapped[str | None] = mapped_column(Text)
     # [[low, high], ...] inclusive SIC ranges that map to this group.
     sic_ranges: Mapped[list[list[int]]] = mapped_column(JSONB, server_default=text("'[]'"))
     rs_rank: Mapped[int | None] = mapped_column(SmallInteger)

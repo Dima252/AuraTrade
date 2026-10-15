@@ -132,8 +132,11 @@ ingest:  # README §5.1, §10; see auratrade.ingest
     fred_lookback_sessions: 10
   earnings_horizon_sessions: 63      # Finnhub calendar, day by day
   earnings_usual_timing_reports: 8   # blank timing -> the company's usual over its last 8 (#119)
-  earnings_surprise_sessions: 3
-  fundamentals_refresh_sessions: 20  # each universe ticker's EDGAR facts at least every 20
+  earnings_recent_sessions: 3        # surprise, EDGAR 8-K event, fundamentals after a report
+  earnings_surprise_max_requests: 150
+  fundamentals_max_requests: 200
+  fundamentals_refresh_sessions: 20  # each tracked ticker's EDGAR facts at least every 20
+  fundamentals_quarters: 12
   industries_refresh_sessions: 5     # each universe ticker's SIC weekly
   industry_min_group_size: 15        # spike 0.3e: 102 groups
   archive_after_sessions: 63         # ~90 days

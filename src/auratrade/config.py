@@ -323,10 +323,17 @@ class IngestConfig(_Strict):
     earnings_horizon_sessions: PositiveInt
     # Blank Finnhub timing → the company's usual timing over its last N reports (#119).
     earnings_usual_timing_reports: PositiveInt
-    # Surprises are refreshed for reports in the last N sessions.
-    earnings_surprise_sessions: PositiveInt
-    # Rolling refreshes: every universe ticker once per N sessions.
+    # Reports in the last N sessions get their surprise and their EDGAR 8-K event, and a
+    # fundamentals refresh.
+    earnings_recent_sessions: PositiveInt
+    # Per-run caps that keep the job inside Lambda's 15 minutes in peak earnings weeks; what is
+    # left waits for the next evening (surprises) or the rolling refresh (fundamentals).
+    earnings_surprise_max_requests: PositiveInt
+    fundamentals_max_requests: PositiveInt
+    # Rolling refreshes: every tracked ticker once per N sessions.
     fundamentals_refresh_sessions: PositiveInt
+    # Quarters kept in Postgres per ticker (growth and acceleration need the last 8 or so).
+    fundamentals_quarters: PositiveInt
     industries_refresh_sessions: PositiveInt
     # SIC codes roll up to 3 and then 2 digits until a group has this many members.
     industry_min_group_size: PositiveInt

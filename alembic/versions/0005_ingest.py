@@ -1,7 +1,7 @@
 """Ingest (task 1.5, README §5.1).
 
 bar_corrections (the outlier filter's audit trail); earnings timing provenance, fiscal period
-and headline time; industry group descriptions; Finnhub's industry as the SIC fallback.
+and headline time; Finnhub's industry as the SIC fallback.
 
 Revision ID: 0005
 Revises: 0004
@@ -51,14 +51,12 @@ def upgrade() -> None:
         "earnings_events",
         sa.Column("headline_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.add_column("industry_groups", sa.Column("description", sa.Text(), nullable=True))
     op.add_column("tickers", sa.Column("finnhub_industry", sa.Text(), nullable=True))
 
 
 def downgrade() -> None:
     """Downgrade schema."""
     op.drop_column("tickers", "finnhub_industry")
-    op.drop_column("industry_groups", "description")
     op.drop_column("earnings_events", "headline_at")
     op.drop_column("earnings_events", "fiscal_quarter")
     op.drop_column("earnings_events", "fiscal_year")
