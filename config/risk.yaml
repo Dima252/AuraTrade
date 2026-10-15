@@ -122,8 +122,10 @@ ingest:  # README §5.1, §10; see auratrade.ingest
   max_delistings: 50                 # more vanishing in one evening = a vendor glitch: fail
   split_close_tolerance: 0.02        # re-fetched overlap bar moved > 2%: re-fetch the window
   outliers:                          # NVDA high 195.95 on 2024-06-10 (true ~122), #126
-    min_beyond_body: 0.15
+    min_beyond_body: 0.15            # floors; a volatile stock's limit is its range x multiple
     min_beyond_neighbours: 0.15
+    adr_multiple: 3.0
+    adr_sessions: 20
   corporate_actions_lookback_sessions: 5
   corporate_actions_lookahead_sessions: 5
   macro:

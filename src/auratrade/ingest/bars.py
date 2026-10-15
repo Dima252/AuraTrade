@@ -5,9 +5,10 @@
   delisting (#111). A dropped bar is a missing bar, never forward-filled.
 - **Outliers:** SIP daily bars carry bad ticks that pass the sanity check (NVDA's high of 195.95
   on 2024-06-10, true about 122). A high (low) beyond both the bar's open-close body and its
-  neighbours' highs (lows) by more than the configured fractions is replaced by the body's
-  edge; the vendor's value goes to `bar_corrections` (#126). The newest bar has only one
-  neighbour; it is checked again the next evening, when session T-1 is re-fetched.
+  neighbours' highs (lows) by more than the configured floor, or a multiple of the stock's
+  average daily range if that is larger, is replaced by the body's edge; the vendor's value
+  goes to `bar_corrections` (#126). The newest bar has only one neighbour; it is checked again
+  the next evening, when session T-1 is re-fetched.
 - **Splits:** each evening re-fetches the last stored bar. If its split-adjusted close moved,
   the vendor re-adjusted the history (a split or reverse split), and the whole window is
   re-fetched.
@@ -75,21 +76,35 @@ def combine(
     return out, missing
 
 
+def average_range(bars: Sequence[IngestBar]) -> float | None:
+    """The average daily range (high / low - 1) of `bars`, None for none."""
+    if not bars:
+        return None
+    return sum(b.high / b.low - 1 for b in bars) / len(bars)
+
+
 def find_outliers(bars: Sequence[IngestBar], cfg: OutlierConfig) -> list[Correction]:
-    """Bad highs and lows in `bars` (one security, oldest first, consecutive sessions)."""
+    """Bad highs and lows in `bars` (one security, oldest first, consecutive sessions).
+
+    "Far" scales with the stock's own volatility: beyond the body and the neighbours by more
+    than the floors or `adr_multiple` times its average daily range over the bars before it,
+    whichever is larger, so a volatile small cap's real intraday spike is kept."""
     found = []
     for i, bar in enumerate(bars):
         neighbours = [bars[j] for j in (i - 1, i + 1) if 0 <= j < len(bars)]
         if not neighbours:
             continue
+        adr = average_range(bars[max(i - cfg.adr_sessions, 0) : i]) or 0.0
+        body = max(cfg.min_beyond_body, cfg.adr_multiple * adr)
+        beside = max(cfg.min_beyond_neighbours, cfg.adr_multiple * adr)
         top, bottom = max(bar.open, bar.close), min(bar.open, bar.close)
-        if bar.high > top * (1 + cfg.min_beyond_body) and bar.high > max(
-            n.high for n in neighbours
-        ) * (1 + cfg.min_beyond_neighbours):
+        if bar.high > top * (1 + body) and bar.high > max(n.high for n in neighbours) * (
+            1 + beside
+        ):
             found.append(Correction(bar.session, BarField.HIGH, bar.high, top))
-        if bar.low < bottom * (1 - cfg.min_beyond_body) and bar.low < min(
-            n.low for n in neighbours
-        ) * (1 - cfg.min_beyond_neighbours):
+        if bar.low < bottom * (1 - body) and bar.low < min(n.low for n in neighbours) * (
+            1 - beside
+        ):
             found.append(Correction(bar.session, BarField.LOW, bar.low, bottom))
     return found
 

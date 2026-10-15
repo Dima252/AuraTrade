@@ -148,9 +148,9 @@ def ingest_bars(
     targets |= {ticker_id: symbol for symbol, ticker_id in indexes.items()}
     report.tracked = len(targets)
 
-    # Three: the overlap re-fetch starts at T-1 at the latest, and the outlier check needs the
-    # stored bar before it.
-    tails = stored_tail(conn, targets, 3)
+    # The overlap re-fetch starts at T-1 at the latest; the outlier check needs the stored bars
+    # before it for the left neighbour and the average daily range.
+    tails = stored_tail(conn, targets, cfg.outliers.adr_sessions + 2)
     starts: dict[int, date] = {}
     for ticker_id in targets:
         tail = tails.get(ticker_id)
@@ -280,10 +280,10 @@ def _corrected(
     risk: RiskConfig,
     corrections: dict[int, list[Correction]],
 ) -> list[IngestBar]:
-    """Outlier-corrected `bars`, with the stored bar before them as left context."""
+    """Outlier-corrected `bars`, with the stored bars before them as context."""
     if not bars:
         return []
-    before = [b for b in tail if b.session < bars[0].session][-1:]
+    before = [b for b in tail if b.session < bars[0].session]
     found = [
         c
         for c in find_outliers([*before, *bars], risk.ingest.outliers)

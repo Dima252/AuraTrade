@@ -283,10 +283,13 @@ class UniverseConfig(_Strict):
 
 class OutlierConfig(_Strict):
     """A high (low) is a bad tick when it lies beyond both the bar's open-close body and the
-    neighbouring bars' highs (lows) by more than these fractions (README §5.1, #126)."""
+    neighbouring bars' highs (lows) by more than these fractions, or `adr_multiple` times the
+    stock's average daily range over `adr_sessions` if larger (README §5.1, #126)."""
 
     min_beyond_body: Positive
     min_beyond_neighbours: Positive
+    adr_multiple: Positive
+    adr_sessions: PositiveInt
 
 
 class MacroIngestConfig(_Strict):

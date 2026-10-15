@@ -11,6 +11,7 @@ from auratrade.ingest.bars import (
     Correction,
     IngestBar,
     apply_corrections,
+    average_range,
     combine,
     coverage,
     find_outliers,
@@ -18,7 +19,9 @@ from auratrade.ingest.bars import (
     split_changed,
 )
 
-CFG = OutlierConfig(min_beyond_body=0.15, min_beyond_neighbours=0.15)
+CFG = OutlierConfig(
+    min_beyond_body=0.15, min_beyond_neighbours=0.15, adr_multiple=3.0, adr_sessions=20
+)
 D1, D2, D3 = date(2024, 6, 7), date(2024, 6, 10), date(2024, 6, 11)
 
 
@@ -83,6 +86,23 @@ class TestOutliers:
         # An episodic pivot: gap up 30%, a high well above the prior bar but near its own body.
         bars = [bar(D1, 50, 51, 49, 50), bar(D2, 65, 72, 64, 70), bar(D3, 70, 74, 69, 73)]
         assert find_outliers(bars, CFG) == []
+
+    def test_a_volatile_stocks_real_spike_is_kept(self) -> None:
+        # A stock moving ~10% a day: +25% beyond body and neighbours is within 3 x its range
+        # (30%), so it is kept; the same spike on a calm stock is a bad tick.
+        days = [date(2025, 1, d) for d in range(2, 31)]
+        wild = [bar(d, 10, 10.5, 9.5, 10) for d in days[:-3]]  # ~10.5% daily range
+        tail = [bar(days[-3], 10, 10.4, 9.8, 10), bar(days[-2], 10, 12.6, 9.9, 10.1)]
+        tail.append(bar(days[-1], 10, 10.3, 9.9, 10.1))
+        assert find_outliers([*wild, *tail], CFG) == []
+        calm = [bar(d, 10, 10.1, 9.9, 10) for d in days[:-3]]  # 2% range: the 15% floor
+        assert [c.session for c in find_outliers([*calm, *tail], CFG)] == [days[-2]]
+
+    def test_average_range(self) -> None:
+        assert average_range([]) is None
+        assert average_range([bar(D1, 10, 11, 10, 10), bar(D2, 10, 12, 10, 10)]) == pytest.approx(
+            0.15
+        )
 
     def test_spike_above_body_but_not_neighbours_is_kept(self) -> None:
         # Far above its own body, but the next session traded there too: a real reversal.
