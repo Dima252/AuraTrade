@@ -2,7 +2,14 @@ from __future__ import annotations
 
 import pytest
 
-from auratrade.ingest.classify import SecurityType, classify, description, with_edgar, with_sic
+from auratrade.ingest.classify import (
+    SecurityType,
+    classify,
+    description,
+    refreshed,
+    with_edgar,
+    with_sic,
+)
 
 T = SecurityType
 
@@ -77,3 +84,11 @@ def test_fund_filings() -> None:
     assert with_edgar(T.COMMON, 6798, {"10-K", "10-Q"}) is T.COMMON
     assert with_edgar(T.COMMON, 6770, {"N-CSR"}) is T.SPAC
     assert with_edgar(T.ETF, None, {"NPORT-P"}) is T.ETF
+
+
+def test_refreshed_keeps_edgar_verdicts() -> None:
+    assert refreshed(T.COMMON, "FUND", None) is T.FUND
+    assert refreshed(T.COMMON, "SPAC", None) is T.SPAC
+    assert refreshed(T.WARRANT, "FUND", None) is T.WARRANT  # a new security on the symbol
+    assert refreshed(T.COMMON, "COMMON", 6770) is T.SPAC
+    assert refreshed(T.ADR, None, None) is T.ADR

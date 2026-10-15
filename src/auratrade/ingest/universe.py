@@ -26,7 +26,7 @@ from auratrade.data.alpaca_data import Asset, DailyBar
 from auratrade.data.nasdaq import Listing
 from auratrade.db.models import DailyBar as DailyBarRow
 from auratrade.db.models import Ticker
-from auratrade.ingest.classify import SecurityType, classify, with_sic
+from auratrade.ingest.classify import SecurityType, classify, refreshed
 
 # Alpaca's exchange codes for listed US securities; ETFs trade on ARCA and BATS.
 LISTED_EXCHANGES = ("NYSE", "NASDAQ", "AMEX", "ARCA", "BATS")
@@ -149,7 +149,7 @@ def refresh_tickers(
             "alpaca_asset_id": s.asset_id,
             "name": s.name,
             "exchange": s.exchange,
-            "security_type": with_sic(s.security_type, row.sic).value,
+            "security_type": refreshed(s.security_type, row.security_type, row.sic).value,
             "active": True,
         }
         current = {k: getattr(row, k) for k in values}

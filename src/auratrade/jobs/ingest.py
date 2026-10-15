@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -139,6 +140,9 @@ def run_ingest(
     details: dict[str, Any] = {}
     alerts: list[str] = []
     failed: list[str] = []
+    # Seconds per step: the job must fit in Lambda's 15 minutes (alert at 10).
+    seconds: dict[str, float] = {}
+    clock = time.monotonic()
 
     # 1. Calendar (critical): a re-sync, so a newly announced closure is seen before tonight.
     end = date(session.year + 1, 12, 31)
@@ -164,6 +168,8 @@ def run_ingest(
     # Half days: downstream volume rules normalise by `market_sessions.minutes` (README §4).
     details["calendar"] |= {"early_close": today.is_early_close, "minutes": today.minutes}
 
+    seconds["calendar"] = round(time.monotonic() - clock, 1)
+
     # 2. Universe (critical).
     securities = listed_securities(sources.alpaca.assets(), sources.nasdaq.listings())
     with engine.begin() as conn:
@@ -182,10 +188,13 @@ def run_ingest(
         "delisted": list(refreshed.delisted),
     }
 
+    seconds["universe"] = round(time.monotonic() - clock - sum(seconds.values()), 1)
+
     # 3. Bars (critical).
     with engine.begin() as conn:
         bars = ingest_bars(conn, sources.alpaca, calendar, risk, session, now)
     details["bars"] = bars.details()
+    seconds["bars"] = round(time.monotonic() - clock - sum(seconds.values()), 1)
     if bars.status == INCOMPLETE:
         alerts.append(
             f"ingest {session}: bars INCOMPLETE (coverage {bars.coverage:.1%}, "
@@ -195,6 +204,7 @@ def run_ingest(
 
     # 4-9 degrade.
     def step(name: str, call: Callable[[], Any]) -> Any:
+        started = time.monotonic()
         try:
             result = call()
         except Exception as exc:
@@ -202,6 +212,8 @@ def run_ingest(
             details[name] = {"error": f"{type(exc).__name__}: {exc}"}
             log.error("ingest_step_failed", step=name, error=f"{type(exc).__name__}: {exc}")
             return None
+        finally:
+            seconds[name] = round(time.monotonic() - started, 1)
         details[name] = result.details()
         return result
 
@@ -272,6 +284,7 @@ def run_ingest(
     if failed:
         alerts.append(f"ingest {session}: steps failed, data left as it was: {', '.join(failed)}")
     details["failed_steps"] = failed
+    details["seconds"] = seconds
     return IngestOutcome(details, alerts)
 
 

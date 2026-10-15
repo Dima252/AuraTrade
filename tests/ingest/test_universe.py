@@ -173,6 +173,15 @@ class TestRefresh:
         [row] = tickers(pg_engine)
         assert row.security_type == "SPAC"
 
+    def test_edgar_fund_verdict_survives_the_refresh(
+        self, pg_engine: Engine, calendar: MarketCalendar
+    ) -> None:
+        with pg_engine.begin() as conn:
+            add_ticker(conn, "CEF", "FUND", alpaca_asset_id=aid(1), name="CEF Inc. Common Stock")
+        assert refresh(pg_engine, calendar, [sec("CEF", aid(1))]) == TickerRefresh(0, 0, ())
+        [row] = tickers(pg_engine)
+        assert row.security_type == "FUND"
+
     def test_mass_vanishing_is_a_vendor_glitch(
         self, pg_engine: Engine, calendar: MarketCalendar
     ) -> None:

@@ -114,3 +114,14 @@ def with_edgar(kind: SecurityType, sic: int | None, forms: Iterable[str]) -> Sec
     if kind in (SecurityType.COMMON, SecurityType.ADR) and FUND_FORMS & set(forms):
         return SecurityType.FUND
     return kind
+
+
+def refreshed(by_name: SecurityType, stored: str | None, sic: int | None) -> SecurityType:
+    """Tonight's type for a known security: the name rules', except that EDGAR's verdict (a
+    SPAC shell by SIC, a fund by its filings) stands over a name that reads like a stock."""
+    if stored in (SecurityType.SPAC, SecurityType.FUND) and by_name in (
+        SecurityType.COMMON,
+        SecurityType.ADR,
+    ):
+        return SecurityType(stored)
+    return with_sic(by_name, sic)
