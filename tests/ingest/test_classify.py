@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from auratrade.ingest.classify import SecurityType, classify, description, with_sic
+from auratrade.ingest.classify import SecurityType, classify, description, with_edgar, with_sic
 
 T = SecurityType
 
@@ -70,3 +70,10 @@ def test_blank_check_sic() -> None:
     assert with_sic(T.COMMON, 3674) is T.COMMON
     assert with_sic(T.COMMON, None) is T.COMMON
     assert with_sic(T.WARRANT, 6770) is T.WARRANT
+
+
+def test_fund_filings() -> None:
+    assert with_edgar(T.COMMON, None, {"N-CSR", "N-PX"}) is T.FUND
+    assert with_edgar(T.COMMON, 6798, {"10-K", "10-Q"}) is T.COMMON
+    assert with_edgar(T.COMMON, 6770, {"N-CSR"}) is T.SPAC
+    assert with_edgar(T.ETF, None, {"NPORT-P"}) is T.ETF

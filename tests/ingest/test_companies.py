@@ -148,8 +148,9 @@ def test_companies_step(pg_engine: Engine, calendar: MarketCalendar) -> None:
             "SHELL": add_ticker(conn, "SHELL"),
             "FRGN": add_ticker(conn, "FRGN", "ADR", "NYSE"),
             "QUIET": add_ticker(conn, "QUIET"),  # no bar tonight: not tracked
+            "CEF": add_ticker(conn, "CEF", exchange="NYSE"),
         }
-        for symbol in ("AAA", "BBB", "BRK.B", "SHELL", "FRGN"):
+        for symbol in ("AAA", "BBB", "BRK.B", "SHELL", "FRGN", "CEF"):
             bars(conn, ids[symbol], window)
         for symbol in ("IPO", "UPL"):
             bars(conn, ids[symbol], window[10:])  # first bar inside the window
@@ -163,15 +164,16 @@ def test_companies_step(pg_engine: Engine, calendar: MarketCalendar) -> None:
             4: subs("3672", filing("S-1", date(2026, 8, 1))),
             5: subs("2086", filing("10-K", date(2025, 3, 1))),  # traded OTC before (CELH-like)
             6: subs("6770"),
+            9: subs(None, filing("N-CSR", date(2026, 3, 1))),
         },
     )
     report = run(pg_engine, calendar, edgar, FakeProfiles({"FRGN": "Semiconductors"}))
     rows = tickers(pg_engine)
-    assert report.ciks_set == 7
+    assert report.ciks_set == 8
     assert rows["BRK.B"].cik == 3
     assert rows["AAA"].sic == 3674
     assert rows["SHELL"].security_type == "SPAC"
-    assert report.spacs == ["SHELL"]
+    assert report.reclassified == ["SHELL SPAC", "CEF FUND"]
     assert rows["IPO"].listed_at == window[10]
     assert rows["UPL"].listed_at is None
     assert report.traded_before_listing == ["UPL"]

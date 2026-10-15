@@ -5,12 +5,14 @@ The name rules read the security description where the directory gives one (Nasd
 "Company - Description", so "Unit Corporation - Common Stock" is a common stock), and run most
 specific first. "Common Stock / Ordinary Shares" is tested before "Trust", so REITs named
 "... Trust Inc. Common Stock" stay common (spike 0.3a); ADRs are their own type, in the
-universe (#111). Names alone can't tell every SPAC shell, so EDGAR's SIC 6770 has the last word.
+universe (#111). Names alone can't tell every SPAC shell or closed-end fund, so EDGAR has the
+last word: SIC 6770, or fund filings (N-CSR, N-PORT).
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from enum import StrEnum
 
 
@@ -94,8 +96,21 @@ def classify(symbol: str, name: str, *, is_etf: bool) -> SecurityType:
     return SecurityType.COMMON
 
 
+# Registered investment companies (closed-end funds) file these; operating companies and BDCs
+# don't. Many closed-end funds are named like REITs ("... Term Trust ... Common Stock").
+FUND_FORMS = frozenset({"N-CSR", "N-CSRS", "NPORT-P"})
+
+
 def with_sic(kind: SecurityType, sic: int | None) -> SecurityType:
     """EDGAR SIC 6770 (blank checks) marks a SPAC shell whatever its name says."""
     if sic == BLANK_CHECK_SIC and kind in (SecurityType.COMMON, SecurityType.ADR):
         return SecurityType.SPAC
+    return kind
+
+
+def with_edgar(kind: SecurityType, sic: int | None, forms: Iterable[str]) -> SecurityType:
+    """The type after EDGAR's evidence: SIC 6770 → SPAC; fund filings (N-CSR, N-PORT) → FUND."""
+    kind = with_sic(kind, sic)
+    if kind in (SecurityType.COMMON, SecurityType.ADR) and FUND_FORMS & set(forms):
+        return SecurityType.FUND
     return kind

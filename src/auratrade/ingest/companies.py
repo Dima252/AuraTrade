@@ -3,7 +3,8 @@ SPAC shells, and the listing date.
 
 - **CIK:** SEC's ticker map (class shares written `BRK-B` there, `BRK.B` at Alpaca).
 - **SIC:** from EDGAR submissions, for tracked tickers without one and for a rolling slice (each
-  tracked ticker once per `industries_refresh_sessions`). SIC 6770 marks a SPAC shell.
+  tracked ticker once per `industries_refresh_sessions`). SIC 6770 marks a SPAC shell, and fund
+  filings (N-CSR, N-PORT) a closed-end fund named like a stock.
 - **Industry groups:** a SIC code rolls up to its 3- and then 2-digit prefix until its group has
   `industry_min_group_size` tracked members (102 groups at 15 in the spike). Groups are named by
   their prefix ("SIC 367"), so a group keeps its row (and its RS history) across regroupings; a
@@ -34,7 +35,7 @@ from auratrade.config import RiskConfig
 from auratrade.data.edgar import CompanyTicker, Submissions
 from auratrade.data.finnhub import Profile
 from auratrade.db.models import DailyBar, IndustryGroup, Ticker
-from auratrade.ingest.classify import SecurityType, with_sic
+from auratrade.ingest.classify import SecurityType, with_edgar
 
 log = structlog.get_logger(__name__)
 
@@ -117,7 +118,7 @@ class CompaniesReport:
     ciks_set: int = 0
     sic_checked: int = 0
     sic_changed: int = 0
-    spacs: list[str] = field(default_factory=list)
+    reclassified: list[str] = field(default_factory=list)
     listed_at_set: list[str] = field(default_factory=list)
     traded_before_listing: list[str] = field(default_factory=list)
     profiles: int = 0
@@ -132,7 +133,7 @@ class CompaniesReport:
             "ciks_set": self.ciks_set,
             "sic_checked": self.sic_checked,
             "sic_changed": self.sic_changed,
-            "spacs": self.spacs,
+            "reclassified": self.reclassified,
             "listed_at_set": self.listed_at_set,
             "traded_before_listing": self.traded_before_listing,
             "profiles": self.profiles,
@@ -203,10 +204,11 @@ def ingest_companies(
             if sic != row.sic:
                 values["sic"] = sic
                 report.sic_changed += 1
-            kind = with_sic(SecurityType(row.security_type or "COMMON"), sic)
+            forms = {f.form for f in subs.filings}
+            kind = with_edgar(SecurityType(row.security_type or "COMMON"), sic, forms)
             if row.security_type and kind.value != row.security_type:
                 values["security_type"] = kind.value
-                report.spacs.append(row.symbol)
+                report.reclassified.append(f"{row.symbol} {kind.value}")
         if listing and row.first_bar is not None:
             if traded_before(subs, row.first_bar):
                 report.traded_before_listing.append(row.symbol)
