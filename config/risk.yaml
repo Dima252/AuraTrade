@@ -119,6 +119,7 @@ universe:  # README §5.1; point in time, on raw prices as traded that day
 ingest:  # README §5.1, §10; see auratrade.ingest
   bar_history_sessions: 504          # 2 years in Postgres; full history in Parquet
   track_margin: 0.5                  # bars kept for tickers passing half the universe filters
+  max_delistings: 50                 # more vanishing in one evening = a vendor glitch: fail
   split_close_tolerance: 0.02        # re-fetched overlap bar moved > 2%: re-fetch the window
   outliers:                          # NVDA high 195.95 on 2024-06-10 (true ~122), #126
     min_beyond_body: 0.15

@@ -43,6 +43,7 @@ TABLES = {
     "market_regime",
     "position_plans",
     "position_events",
+    "bar_corrections",
 }
 
 

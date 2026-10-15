@@ -85,6 +85,7 @@ class IndustryGroup(Base):
 
     id: Mapped[int] = mapped_column(SmallInteger, Identity(), primary_key=True)
     name: Mapped[str] = mapped_column(Text, unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
     # [[low, high], ...] inclusive SIC ranges that map to this group.
     sic_ranges: Mapped[list[list[int]]] = mapped_column(JSONB, server_default=text("'[]'"))
     rs_rank: Mapped[int | None] = mapped_column(SmallInteger)
@@ -112,10 +113,14 @@ class Ticker(Base):
     # COMMON, ADR, ETF, PREFERRED, ... as classified by ingest (#111).
     security_type: Mapped[str | None] = mapped_column(Text)
     sic: Mapped[int | None] = mapped_column(SmallInteger)
+    # Finnhub's profile industry: the group for filers without a SIC code (spike 0.3e).
+    finnhub_industry: Mapped[str | None] = mapped_column(Text)
     industry_group_id: Mapped[int | None] = mapped_column(
         SmallInteger, ForeignKey("industry_groups.id")
     )
     active: Mapped[bool] = mapped_column(Boolean, server_default=text("true"))
+    # The first public trading date (an OTC uplisting is not an IPO, #126); NULL when it is
+    # unknown or before the stored history.
     listed_at: Mapped[date | None] = mapped_column(Date)
     delisted_at: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = _created()
@@ -174,6 +179,24 @@ class DailyBar(Base):
     low: Mapped[float] = mapped_column(REAL)
     close: Mapped[float] = mapped_column(REAL)
     raw_close: Mapped[float] = mapped_column(REAL)
+
+
+BAR_FIELDS = ("HIGH", "LOW")
+
+
+class BarCorrection(Base):
+    """A bad high or low caught by ingest's outlier filter (README §5.1, #126). `daily_bars`
+    holds the corrected value; the vendor's is kept here."""
+
+    __tablename__ = "bar_corrections"
+    __table_args__ = (CheckConstraint(_in("field", BAR_FIELDS), name="field"),)
+
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"), primary_key=True)
+    session_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    field: Mapped[str] = mapped_column(Text, primary_key=True)
+    original: Mapped[float] = mapped_column(REAL)
+    corrected: Mapped[float] = mapped_column(REAL)
+    detected_at: Mapped[datetime] = _created()
 
 
 class CorporateAction(Base):
@@ -255,8 +278,15 @@ class EarningsEvent(Base):
     ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
     report_date: Mapped[date] = mapped_column(Date)
     timing: Mapped[str] = mapped_column(Text, server_default=text("'UNKNOWN'"))
-    # EDGAR 8-K Item 2.02 acceptance time sets the timing for history (README §5.1).
+    # True when the vendor left the timing blank and it came from the company's usual timing
+    # over its last reports, or the before-the-open default (#119).
+    timing_inferred: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    fiscal_year: Mapped[int | None] = mapped_column(SmallInteger)
+    fiscal_quarter: Mapped[int | None] = mapped_column(SmallInteger)
+    # History: the earlier of the 8-K Item 2.02 acceptance and the first earnings headline
+    # sets the timing (README §5.1, #119).
     accepted_at: Mapped[datetime | None]
+    headline_at: Mapped[datetime | None]
     eps_actual: Mapped[float | None] = mapped_column(Double)
     eps_estimate: Mapped[float | None] = mapped_column(Double)
     revenue_actual: Mapped[int | None] = mapped_column(BigInteger)

@@ -12,6 +12,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pandas-market-calendars>=5.5.0",
     "psycopg[binary]>=3.3.6",
+    "pyarrow>=25.0.1",
     "pydantic>=2.14.0",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
@@ -103,6 +104,11 @@ files = ["src", "scripts", "infra"]
 [[tool.mypy.overrides]]
 # No type information shipped; only sources.exchange_calendar_sessions touches it.
 module = ["pandas_market_calendars"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# No type information shipped; used only to write and read Parquet archives.
+module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

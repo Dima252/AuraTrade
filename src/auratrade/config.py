@@ -307,6 +307,9 @@ class IngestConfig(_Strict):
     # that starts passing gets its whole window fetched, so the margin only trades storage
     # (Neon's 0.5 GB) against re-fetching, never which tickers are in the universe.
     track_margin: Annotated[float, Field(gt=0.0, le=1.0)]
+    # More listed securities than this vanishing from Alpaca's asset list in one evening is a
+    # vendor glitch, not delistings: the refresh writes nothing and the job fails closed.
+    max_delistings: PositiveInt
     # A re-fetched overlap bar whose close moved by more than this is a split (or another
     # vendor re-adjustment): the ticker's whole window is re-fetched.
     split_close_tolerance: Positive
