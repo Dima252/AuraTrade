@@ -5,11 +5,11 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 ## Where things stand
 
 - **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.5; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. 968 tests pass; ruff and mypy clean.
-- **Task 1.5 (ingest):** built and checked live on a scratch local database (not Neon). **Waiting on you:** approve the build readings in PR #27 as decision #129 (README §5.1 / §13 then get updated). Neon storage: 2 years of bars for 2,761 tickers is about 140 MB per branch, so `dev` + `paper` together are about 55% of the free tier.
-- **0.4 review: closed** (sessions on 2026-10-10, 10-13 and 10-15). Every decision is in README §16 as **#113–128**, and the plan tasks carry the follow-ups. The record of what was decided and why is [spikes/review-agenda.md](spikes/review-agenda.md).
+- **Task 1.5 (ingest):** built and checked live on a scratch local database (not Neon). Merged as PR #27; its build readings are README decision **#129**. Neon storage: 2 years of bars for 2,761 tickers is about 140 MB per branch, so `dev` + `paper` together are about 55% of the free tier (open question for you: acceptable, or trim before 1.8).
+- **0.4 review: closed** (sessions on 2026-10-10, 10-13 and 10-15). Every decision is in README §16 as **#113–128** (plus #129 from the 1.5 build), and the plan tasks carry the follow-ups. The record of what was decided and why is [spikes/review-agenda.md](spikes/review-agenda.md).
 - **Spikes:** all done. 0.3b finished on Thu 2026-10-15: GO on OTO with adjustments ([spikes/alpaca-orders.md](spikes/alpaca-orders.md)). The dev paper account was flattened: no positions, no orders, $4,872.94 equity (the drop is mostly DXJ's false split loss).
 - **Accounts:** both Alpaca paper accounts are active (`dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`); the Neon `dev` database is migrated to head (0004).
-- **Open PRs:** none once PR #27 (task 1.5) is merged.
+- **Open PRs:** none. `main` has everything through task 1.5 and decision #129.
 
 ## 1. Things only you can do (before task 1.8, not urgent)
 
