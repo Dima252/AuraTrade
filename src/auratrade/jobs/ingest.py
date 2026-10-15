@@ -161,6 +161,8 @@ def run_ingest(
     if now < today.close_at + SIP_DELAY:
         # SIP is 15 minutes delayed: before then session T's bar is still forming.
         raise IngestError(f"{session}'s bars are not final until {today.close_at + SIP_DELAY}")
+    # Half days: downstream volume rules normalise by `market_sessions.minutes` (README §4).
+    details["calendar"] |= {"early_close": today.is_early_close, "minutes": today.minutes}
 
     # 2. Universe (critical).
     securities = listed_securities(sources.alpaca.assets(), sources.nasdaq.listings())

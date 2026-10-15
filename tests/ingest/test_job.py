@@ -199,7 +199,12 @@ class TestJob:
         assert again["bars"]["rows_written"] == 0
         assert again["macro"]["written"] == 0
         assert again["companies"]["assigned"] == 0
-        assert again["calendar"] == {"inserted": 0, "updated": 0}
+        assert again["calendar"] == {
+            "inserted": 0,
+            "updated": 0,
+            "early_close": False,
+            "minutes": 390,
+        }
         with pg_engine.connect() as conn:
             assert conn.execute(select(DailyBar.ticker_id)).all()
 
