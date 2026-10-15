@@ -966,6 +966,15 @@ def scenario_pdt(args: argparse.Namespace) -> None:
 
 def scenario_cleanup(args: argparse.Namespace) -> None:
     s = Spike("cleanup")
+    if args.flatten:
+        # End of the spike: everything on the dev paper account is spike state. A replaced
+        # order loses its spk- id (F's stop), and a resting stop holds the shares, so cancel
+        # every order with the close.
+        for pos in s.tc.get_all_positions():
+            assert isinstance(pos, Position)
+            s.log.event("flatten", symbol=pos.symbol, qty=pos.qty)
+        s.tc.close_all_positions(cancel_orders=True)
+        return
     keep = {rec["stop_id"] for rec in load_state(CORP_STATE).values()}
     keep_symbols = set(load_state(CORP_STATE))
     for order in s.open_orders():
@@ -973,12 +982,6 @@ def scenario_cleanup(args: argparse.Namespace) -> None:
             if order.symbol in keep_symbols and order.side == OrderSide.SELL:
                 continue
             s.cancel("cleanup", order.id)
-    if args.flatten:
-        for pos in s.tc.get_all_positions():
-            assert isinstance(pos, Position)
-            if pos.symbol not in keep_symbols:
-                s.log.event("flatten", symbol=pos.symbol, qty=pos.qty)
-                s.tc.close_position(pos.symbol)
 
 
 def main() -> None:
