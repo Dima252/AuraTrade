@@ -1,0 +1,65 @@
+{
+ "news": [
+  {
+   "author": "Benzinga Insights",
+   "content": "",
+   "created_at": "2026-10-08T09:58:26Z",
+   "headline": "Competitor Analysis: Evaluating Apple And Competitors In Technology Hardware, Storage &amp; Peripherals Industry",
+   "id": 62239061,
+   "images": [
+    {
+     "size": "large",
+     "url": "https://cdn.benzinga.com/files/images/story/2025/11/06/earnings_preview_7.jpg?width=2048&height=1536"
+    },
+    {
+     "size": "small",
+     "url": "https://cdn.benzinga.com/files/images/story/2025/11/06/earnings_preview_7.jpg?width=1024&height=768"
+    },
+    {
+     "size": "thumb",
+     "url": "https://cdn.benzinga.com/files/images/story/2025/11/06/earnings_preview_7.jpg?width=250&height=187"
+    }
+   ],
+   "source": "benzinga",
+   "summary": "In today&#39;s rapidly changing and highly competitive business world, it is imperative for investors and industry observers to carefully assess companies before making investment choices. In this article, we will",
+   "symbols": [
+    "AAPL"
+   ],
+   "updated_at": "2026-10-08T09:58:26Z",
+   "url": "https://www.benzinga.com/news/26/10/62239061/competitor-analysis-evaluating-apple-and-competitors-technology-hardware-storage-amp-peripherals-ind"
+  },
+  {
+   "author": "Anusuya Lahiri",
+   "content": "",
+   "created_at": "2026-10-08T11:48:37Z",
+   "headline": "What Is Going on With Palantir Tech Stock on Thursday?",
+   "id": 62241998,
+   "images": [
+    {
+     "size": "large",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Palantir-Technologies-Japan-Logo--Tokyo-.jpg?width=2048&height=1536"
+    },
+    {
+     "size": "small",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Palantir-Technologies-Japan-Logo--Tokyo-.jpg?width=1024&height=768"
+    },
+    {
+     "size": "thumb",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Palantir-Technologies-Japan-Logo--Tokyo-.jpg?width=250&height=187"
+    }
+   ],
+   "source": "benzinga",
+   "summary": "Palantir stock gains in premarket trading as Dan Ives names it a top 2027 tech pick and Peter Thiel highlights surging U.S. enterprise AI demand.",
+   "symbols": [
+    "AAPL",
+    "CRWD",
+    "MSFT",
+    "NVDA",
+    "PLTR"
+   ],
+   "updated_at": "2026-10-08T11:48:37Z",
+   "url": "https://www.benzinga.com/trading-ideas/movers/26/10/62241998/what-is-going-on-with-palantir-tech-stock-on-thursday"
+  }
+ ],
+ "next_page_token": "MTc5MTQ2MDExNzAwMDAwMDAwMHw2MjI0MTk5OA=="
+}

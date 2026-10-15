@@ -887,7 +887,7 @@ AuraTrade/
 │   ├── cli.py                    # operator commands (§5.13)
 │   ├── calendar/
 │   ├── db/
-│   ├── data/                     # alpaca_data, macro, edgar, finnhub, news
+│   ├── data/                     # alpaca_data, macro, edgar, finnhub, news, nasdaq (symbol directory)
 │   ├── indicators/               # MAs, ATR/ADR, RS + RS line, group RS, U/D volume, momentum rank,
 │   │                             # contractions, bases + base count, climax signals, volume pace, breadth
 │   ├── regime/

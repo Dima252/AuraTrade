@@ -1,0 +1,135 @@
+[
+ {
+  "id": "b28f4066-5c6d-479b-a2af-85dc1a8f16fb",
+  "class": "us_equity",
+  "exchange": "ARCA",
+  "symbol": "SPY",
+  "name": "State Street SPDR S&P 500 ETF Trust",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "maintenance_margin_requirement": 30,
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "shortable": true,
+  "easy_to_borrow": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "attributes": [
+   "fractional_eh_enabled",
+   "has_options",
+   "options_late_close",
+   "overnight_tradable"
+  ]
+ },
+ {
+  "id": "b0b6dd9d-8b9b-48a9-ba46-b9d54906e415",
+  "class": "us_equity",
+  "exchange": "NASDAQ",
+  "symbol": "AAPL",
+  "name": "Apple Inc. Common Stock",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "maintenance_margin_requirement": 30,
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "shortable": true,
+  "easy_to_borrow": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "attributes": [
+   "fractional_eh_enabled",
+   "has_options",
+   "overnight_tradable"
+  ]
+ },
+ {
+  "id": "71bb19d0-6c5f-4881-9552-33224badd810",
+  "class": "us_equity",
+  "exchange": "NYSE",
+  "symbol": "BRK.B",
+  "name": "BERKSHIRE HATHAWAY Class B",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "maintenance_margin_requirement": 30,
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "shortable": true,
+  "easy_to_borrow": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "attributes": [
+   "fractional_eh_enabled",
+   "has_options",
+   "overnight_tradable"
+  ]
+ },
+ {
+  "id": "64889220-2ef2-4e44-b19c-d7c6e313a896",
+  "class": "us_equity",
+  "exchange": "ARCA",
+  "symbol": "DXJ",
+  "name": "WisdomTree Japan Hedged Equity Fund",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "maintenance_margin_requirement": 30,
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "shortable": true,
+  "easy_to_borrow": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "attributes": [
+   "fractional_eh_enabled",
+   "has_options",
+   "overnight_tradable"
+  ]
+ },
+ {
+  "id": "d59e5b24-6b96-4b40-994f-3d1ccf4b16af",
+  "class": "us_equity",
+  "exchange": "BATS",
+  "symbol": "QDTE",
+  "name": "Roundhill Nasdaq-100 0DTE Covered Call ETF Strategy ETF",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "maintenance_margin_requirement": 30,
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "shortable": true,
+  "easy_to_borrow": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "attributes": [
+   "fractional_eh_enabled",
+   "has_options",
+   "overnight_tradable"
+  ]
+ },
+ {
+  "id": "626ce11f-1e10-488b-8d75-a3eff18d6d0f",
+  "class": "us_equity",
+  "exchange": "NYSE",
+  "symbol": "TSM",
+  "name": "Taiwan Semiconductor Manufacturing Company Ltd.",
+  "status": "active",
+  "tradable": true,
+  "marginable": true,
+  "maintenance_margin_requirement": 30,
+  "margin_requirement_long": "30",
+  "margin_requirement_short": "30",
+  "shortable": true,
+  "easy_to_borrow": true,
+  "borrow_status": "easy_to_borrow",
+  "fractionable": true,
+  "attributes": [
+   "fractional_eh_enabled",
+   "has_options",
+   "overnight_tradable"
+  ]
+ }
+]

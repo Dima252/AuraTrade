@@ -1,0 +1,39 @@
+{
+ "corporate_actions": {
+  "cash_mergers": [
+   {
+    "acquiree_cusip": "021CVR014",
+    "acquiree_symbol": "021CVR014",
+    "effective_date": "2026-10-02",
+    "id": "fb2436f9-413e-400c-b240-65aa7aaf6b6f",
+    "payable_date": "2026-10-02",
+    "process_date": "2026-10-02",
+    "rate": 0.9936
+   },
+   {
+    "acquiree_cusip": "493CVR013",
+    "acquiree_symbol": "493CVR013",
+    "effective_date": "2026-09-09",
+    "id": "13638831-ca52-44fd-954d-820718fbd04d",
+    "payable_date": "2026-09-09",
+    "process_date": "2026-09-09",
+    "rate": 0.47864856
+   }
+  ],
+  "stock_mergers": [
+   {
+    "acquiree_cusip": "470CNT015",
+    "acquiree_rate": 1,
+    "acquiree_symbol": "470CNT015",
+    "acquirer_cusip": "47010C862",
+    "acquirer_rate": 3.209,
+    "acquirer_symbol": "JAGX",
+    "effective_date": "2026-09-08",
+    "id": "06ea02f3-5493-46f0-ab6e-a00c8f314bd2",
+    "payable_date": "2026-09-08",
+    "process_date": "2026-09-08"
+   }
+  ]
+ },
+ "next_page_token": "NTkwQ1ZSMDE1fDIwMjYtMDktMTR8ZDEwY2FiNWMtOWYyYy00M2ZmLWI1MDUtMjNjMWYyYzQ0NDY5"
+}

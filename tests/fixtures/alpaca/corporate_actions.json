@@ -1,0 +1,45 @@
+{
+ "corporate_actions": {
+  "cash_dividends": [
+   {
+    "cusip": "77926X304",
+    "ex_date": "2026-10-01",
+    "foreign": false,
+    "id": "5fb74944-f2f2-4089-9998-6bf44349b872",
+    "payable_date": "2026-10-02",
+    "process_date": "2026-10-02",
+    "rate": 0.110957,
+    "record_date": "2026-10-01",
+    "special": false,
+    "symbol": "QDTE"
+   },
+   {
+    "cusip": "77926X304",
+    "ex_date": "2026-10-08",
+    "foreign": false,
+    "id": "6ccbcc08-000d-4917-94d1-9f4b23043d07",
+    "payable_date": "2026-10-09",
+    "process_date": "2026-10-09",
+    "rate": 0.11281,
+    "record_date": "2026-10-08",
+    "special": false,
+    "symbol": "QDTE"
+   }
+  ],
+  "forward_splits": [
+   {
+    "cusip": "97717W851",
+    "due_bill_redemption_date": "2026-10-09",
+    "ex_date": "2026-10-09",
+    "id": "9d1bd707-e3ac-4baa-bd79-492fdf593e77",
+    "new_rate": 3,
+    "old_rate": 1,
+    "payable_date": "2026-10-09",
+    "process_date": "2026-10-09",
+    "record_date": "2026-10-07",
+    "symbol": "DXJ"
+   }
+  ]
+ },
+ "next_page_token": null
+}
