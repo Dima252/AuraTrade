@@ -2,7 +2,7 @@
 
 The points to decide at the 0.4 review. Each spike note has the evidence; this page lists the decisions in one place. Nothing here changes the README until the user approves it (CLAUDE.md §5).
 
-Status: complete. Every spike finished by 2026-10-15; only #1–4 still need a decision. On 2026-10-10 the decisions and readings from the out-of-order build (2.2, 2.3, 3.1, 3.5a; PRs #12–#15) were added at the end. What is left overall: [next-steps.md](../next-steps.md).
+Status: **closed 2026-10-15.** Every item is decided and recorded in README §16 as decisions #113–128, in the PR that ticks 0.4. This page stays as the record of what was decided and why. On 2026-10-10 the decisions and readings from the out-of-order build (2.2, 2.3, 3.1, 3.5a; PRs #12–#15) were added at the end. What is left overall: [next-steps.md](../next-steps.md).
 
 ## Review progress
 
@@ -18,7 +18,13 @@ Status: complete. Every spike finished by 2026-10-15; only #1–4 still need a d
 - **`premarket_check` macro refresh:** settled closes only. If the evening read missed session T, it fetches T's close (the JSON, then the history file), re-scores and may only downgrade. CBOE's overnight-session VIX values are ignored because they can't be backtested, so the skipped pre-market snapshot isn't needed.
 - **Credit spread** (`BAMLH0A0HYM2`, only 3 years on FRED): kept in `macro_series` as LLM context only (recent values to the Portfolio Manager). No code rule uses it.
 
-**Still open:** #1–4 (Thursday's checks are done: paper didn't lower the QDTE stop for the dividend, which needs no change, see #4). Then one PR updates the README, the decision log (#113 onward) and the plan.
+**Session 3, 2026-10-15** (after Thursday's checks): approved by the user, all as proposed:
+- **#1** Entries are GTC-parent OTOs. A leg is swapped for a standalone GTC stop **only when a sale has to cut the quantity** (not on every fill), so the invariant counts a position's GTC stops together. The other option, merging into one stop right after each fill, was declined.
+- **#2** Every buy in a held symbol is an OTO with its own leg.
+- **#3** A partly filled buy counts as unprotected and is repaired at the next order job or `stop_guard` run (cancel the rest; keep an active leg, else place a standalone stop). The per-minute `fill_watcher` was declined.
+- **#4** Splits as proposed (re-place a scaled stop at 09:20; the corporate-actions check before any repair; scaled reconciliation on paper). Exiting before a split was declined. Dividends: no change.
+
+**Recorded in the README** (decision log): #1 → #113, #2 → #114, #3 → #115, #4 → #116, #5 → #117, #6 → #118, #7 → #119, #7b → #120, #8 → #121, #9 → #122, #10 → #123, #11 → #124, "Already decided" → #125 (capital in #122, OPG in #124), B1–B2 and B13–B17 → #126, B3–B8 and B18–B19 → #127, B9–B12 and B20–B21 → #128. The notes for later tasks are in their plan tasks (1.5, 3.2a, 3.7, 5.3).
 
 ## Proposed design changes (need approval)
 
