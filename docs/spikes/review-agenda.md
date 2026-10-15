@@ -2,7 +2,7 @@
 
 The points to decide at the 0.4 review. Each spike note has the evidence; this page lists the decisions in one place. Nothing here changes the README until the user approves it (CLAUDE.md §5).
 
-Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On 2026-10-10 the decisions and readings from the out-of-order build (2.2, 2.3, 3.1, 3.5a; PRs #12–#15) were added at the end. What is left overall: [next-steps.md](../next-steps.md).
+Status: complete. Every spike finished by 2026-10-15; only #1–4 still need a decision. On 2026-10-10 the decisions and readings from the out-of-order build (2.2, 2.3, 3.1, 3.5a; PRs #12–#15) were added at the end. What is left overall: [next-steps.md](../next-steps.md).
 
 ## Review progress
 
@@ -18,7 +18,7 @@ Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On
 - **`premarket_check` macro refresh:** settled closes only. If the evening read missed session T, it fetches T's close (the JSON, then the history file), re-scores and may only downgrade. CBOE's overnight-session VIX values are ignored because they can't be backtested, so the skipped pre-market snapshot isn't needed.
 - **Credit spread** (`BAMLH0A0HYM2`, only 3 years on FRED): kept in `macro_series` as LLM context only (recent values to the Portfolio Manager). No code rule uses it.
 
-**Still open:** #1–4 (after Thursday's order checks). Then one PR updates the README, the decision log (#113 onward) and the plan.
+**Still open:** #1–4 (Thursday's checks are done: paper didn't lower the QDTE stop for the dividend, which needs no change, see #4). Then one PR updates the README, the decision log (#113 onward) and the plan.
 
 ## Proposed design changes (need approval)
 
@@ -26,8 +26,8 @@ Status: being collected while the last spikes run (2026-10-09 to 2026-10-15). On
 |---|---|---|---|---|
 | 1 | OTO stop leg | The leg's time-in-force **and quantity** can't be changed after the fill (`422`) | Entries as GTC-parent OTOs. Before the first reduce or merge, swap the leg for a standalone GTC stop (cancel, then place: about 1 s with no stop, under the lock, covered by `stop_guard`); from then on every change is an atomic replace | [alpaca-orders.md](alpaca-orders.md) |
 | 2 | Adds while a stop rests | A plain buy is rejected as a "potential wash trade" while a sell stop rests; an OTO buy is accepted | Every buy in a held symbol (tranche 2, adds) goes in as an OTO with its own stop leg | alpaca-orders.md |
-| 3 | Partial fills | The stop leg stays `held` (inactive) while the parent is only partly filled | A partly filled entry counts as unprotected: cancel the rest and place a standalone stop. Still open: what cancelling a partly filled parent does to its leg | alpaca-orders.md |
-| 4 | Splits | On the ex-date Alpaca **rejects resting stops at 04:00 ET**. **Paper never applies the split to the position:** still 1 share at the old cost two sessions later (Mon 10-12), with no split entry in the account activities | Keep §5.7.10 (re-place a scaled stop at 09:20). Add: before any invariant repair, check the corporate-actions feed for a split that day, so an unadjusted position isn't read as "price through the stop" and sold. On paper, a split on a held name also leaves broker and DB quantities apart, so reconciliation must expect it (scale by the feed's ratio when comparing) and alert, instead of failing closed for the rest of the trial | alpaca-orders.md |
+| 3 | Partial fills | The stop leg stays `held` (inactive) while the parent is only partly filled | A partly filled entry counts as unprotected: cancel the rest and place a standalone stop. Untested: what cancelling a partly filled parent does to its leg (paper fills partly only at random); the proposal places a standalone stop either way | alpaca-orders.md |
+| 4 | Splits | On the ex-date Alpaca **rejects resting stops at 04:00 ET**. **Paper never applies the split to the position:** still 1 share at the old cost two sessions later (Mon 10-12), with no split entry in the account activities | Keep §5.7.10 (re-place a scaled stop at 09:20). Add: before any invariant repair, check the corporate-actions feed for a split that day, so an unadjusted position isn't read as "price through the stop" and sold. On paper, a split on a held name also leaves broker and DB quantities apart, so reconciliation must expect it (scale by the feed's ratio when comparing) and alert, instead of failing closed for the rest of the trial. **Dividends (Thu 10-15):** paper left the QDTE stop at $25.05 on the ex-date (no FINRA 5330 reduction). No change: #72's invariant already re-raises a stop if a live broker lowers it | alpaca-orders.md |
 | 5 | Evening VIX | CBOE's history files updated at 18:31 / 21:11 ET (readers see them up to 30 min later), after the 17:25 regime job; FRED lags at least a full session. **Monday's watch:** the delayed-quote JSON was final at **16:32 ET** and equalled the history row (2 of 2 samples) | The evening VIX/VIX3M come from CBOE's delayed-quote JSON (accepted only if `last_trade_time` ≥ 16:15 on T); the history file (checked by its last row date, not `Last-Modified`) and FRED are fallbacks | [macro.md](macro.md) |
 | 6 | Daily-bar volume | Volume of bars fetched at 16:58 grew later (187 of 195 bars; up to +62%) | The evening ingest re-fetches session T−1's bar | [alpaca-data.md](alpaca-data.md) |
 | 7 | Earnings timing | Finnhub's free calendar has no past dates and leaves before/after-market timing blank for 61% of upcoming reports; 8-K Item 2.02 timing matches news in 96% of events | History from 8-K Item 2.02; timing = the earlier of the 8-K acceptance and the first earnings headline; upcoming timing falls back to the company's own 8-K habit | [fundamentals.md](fundamentals.md) |
