@@ -2,7 +2,7 @@
 
 An autonomous, event-driven swing-trading system for US equities. It is modelled as closely as possible on the documented methods of successful growth/momentum swing traders: Mark Minervini (**SEPA / VCP**), William O'Neil and IBD (**CAN SLIM**: market direction, bases and sell rules) and Kristjan Kullamägi (**breakouts and episodic pivots**). A **market-regime layer** switches strategy and risk as conditions change. The sources behind each rule are listed in [§18](#18-methodology-sources).
 
-An LLM (Claude) makes the trading and capital-allocation decisions. Python computes the facts the LLM reasons over, carries out each position's exit plan, and enforces hard risk limits the LLM cannot override. The system runs serverless on AWS, on a budget of **under $150/month** (about $40–65/month expected).
+An LLM (Claude) makes the trading and capital-allocation decisions. Python computes the facts the LLM reasons over, carries out each position's exit plan, and enforces hard risk limits the LLM cannot override. The system runs serverless on AWS, on a budget of **under $150/month** (about $20–30/month expected, measured in spike 0.3g).
 
 > **Status:** design complete and frozen (decision #105); the build is in progress. The step-by-step build plan and progress tracker are in [docs/execution-plan.md](docs/execution-plan.md); the builder's working rules are in [CLAUDE.md](CLAUDE.md).
 >
@@ -66,7 +66,7 @@ flowchart TD
         PRE[premarket_check 07:30<br/>macro · news · earnings]
         PMG[portfolio_manager 08:40/08:45<br/>gaps + EP candidates → LLM: regime view · EP review · allocation · plans]
         GR{{guardrails}}
-        EXO[execute_open 09:20 + 09:31 check<br/>OPG exits · hard stops]
+        EXO[execute_open 09:20 + 09:31 check<br/>hard stops · morning exits at 09:31]
         EXE[execute_entries 09:36<br/>pivot / opening-range-high triggers]
         MON[intraday_monitor ×3<br/>early-behaviour rules<br/>+ stop_guard every 5 min]
         EOD[eod_review<br/>code: soft rules · LLM: tranche 2, failures]
@@ -124,22 +124,22 @@ All times are US/Eastern (EventBridge Scheduler, `America/New_York`). **Every jo
 |---|---|---|
 | **Evening (session T)** | | |
 | 16:20 | `post_market` | Reconcile; journal; equity snapshot; risk multiplier (§8); Telegram daily report |
-| 17:00 | `ingest` | Gap-fill bars through T; universe and industries; corporate actions; macro; earnings calendar and surprises; rolling fundamentals |
+| 17:00 | `ingest` | Gap-fill bars through T, and re-fetch T−1's bar (its volume grows after the evening, #118); universe and industries; corporate actions; macro (the evening VIX from CBOE's delayed quotes, #117); earnings calendar and surprises; rolling fundamentals |
 | 17:15 (fallback) | `simulate` | Simulates session T for the **baseline book** (from T−1's list), records session T's triggers and completed 5-session results in the **breakout tracker**, and **scores past Analyst verdicts** (§5.12). It needs only session T's bars, not tonight's scan, so it runs before `regime` and the leadership-health pillar sees results through T |
 | 17:25 (fallback) | `regime` | 5 pillars → state machine → **computed regime** |
 | 17:35 (fallback) | `scan` | Trend Template → **all** strategy scans → features (base count, RS line, up/down volume, momentum rank, ADR) → ranking + cap → charts. Also updates **position-plan levels** and raises **position events** (climax signals, faltering RS, time stops, earnings cushion, corporate actions) |
 | 17:50 (fallback) | `analyst_submit` | Submit Analyst reviews as one Claude batch |
 | 19:00, 21:00, 06:00 | `analyst_collect` | Collect results (idempotent). Not done by 06:00 → no new evening-pipeline entries tomorrow, plus an alert |
 | **Trading day (session T+1)** | | |
-| 07:30 | `premarket_check` | Macro refresh (computed regime may only **downgrade**); overnight news; earnings-date changes |
+| 07:30 | `premarket_check` | Macro refresh from settled closes (computed regime may only **downgrade**, #117); overnight news; earnings-date changes |
 | 08:40 | `portfolio_manager` (gap step) | Gaps are measured from **15-minute-delayed SIP** pre-market trades (to 08:25); IEX pre-market is too thin (spike 0.3a, #110). Setups gapping > 5% above their pivot are invalid today (EPs excepted: their gap is the signal, §7.1). **Episodic-pivot candidates**: pre-market gap ≥ 7% on earnings/news, confirmed ≥ 10% at the open |
 | 08:45 | `portfolio_manager` (decision step) | **Only if there's something to decide.** LLM regime view, **EP review**, allocation, exit plans for new entries, tightening of existing plans → guardrails → `signals`. **Hard deadline 09:10:** no valid decision by then → no new entries today (existing plans still run) |
-| 09:20 | `execute_open` | Reconcile → OPG exits/trims (stop quantity reduced first, §5.7) → hard-stop replacements |
-| 09:31 | `execute_open` (check run) | Reconcile + stop invariant only. Catches an OPG exit that was rejected or didn't fill at the open, so the shares aren't left without a stop until 09:36 |
-| 09:36 | `execute_entries` | Reconcile + stop invariant (catches any rejected OPG order) → re-check the actual open vs each pivot → place entry orders with their triggers: pivot, or the **5-minute opening-range high** when the opening range traded above the pivot, and for momentum breakouts and EPs. Skip anything more than 5% above its pivot. An opening-range entry whose symbol had **no IEX trade in 09:30–09:34** waits for 09:51 (#109) |
+| 09:20 | `execute_open` | Reconcile → stops re-placed for splits with an ex-date today (§5.7) → hard-stop replacements (upward only). **No sales:** before the open a stop can't be reduced to free shares (spike 0.3b, #124) |
+| 09:31 | `execute_open` (check run) | Reconcile + stop invariant → planned morning exits and trims, and sales left unfilled at yesterday's close, through the sell sequence (marketable limit, §5.7) |
+| 09:36 | `execute_entries` | Reconcile + stop invariant → re-check the actual open vs each pivot → place entry orders with their triggers: pivot, or the **5-minute opening-range high** when the opening range traded above the pivot, and for momentum breakouts and EPs. Skip anything more than 5% above its pivot. An opening-range entry whose symbol had **no IEX trade in 09:30–09:34** waits for 09:51 (#109) |
 | 09:51 | `execute_entries` (delayed-SIP run) | Opening-range entries without an IEX range: trigger = the consolidated 09:30–09:34 high from delayed SIP; same trigger, limit and "already through the trigger" rules (§7.1) |
 | 10:30, 12:30, 14:00 | `intraday_monitor` | Reconcile fills; volume pace; **early-behaviour rules** (§7); raise hard stops when a milestone was hit intraday (breakeven, round-trip); cancel invalid entries; crisis check |
-| Every 5 min, 09:35–16:00 | `stop_guard` | Invariant-only check (§5.7): every position has a GTC stop covering its full quantity. It asks the broker first and opens a database connection and takes the lock only to repair. This bounds the unprotected time after a job dies mid-sequence to about 5 minutes, not the hours until the next scheduled order job. Merged into the `fill_watcher` if 0.3b requires one |
+| Every 5 min, 09:35–16:00 | `stop_guard` | Invariant-only check (§5.7): every position's GTC stops cover its full quantity, and a partly filled entry counts as unprotected (#115). It asks the broker first and opens a database connection and takes the lock only to repair. This bounds the unprotected time after a job dies mid-sequence, or after a partial fill, to about 5 minutes, not the hours until the next scheduled order job |
 | 15:40 (12:40 on half days) | `eod_review` | Code: soft-rule exits (trailing MA closes, heavy-volume reversals, climax and cushion actions), decided on the **15:40 decision price** and executed at once (§7.3). LLM, **only if needed**: tranche-2 adds that passed the gate, failed breakouts. **Hard deadline 15:50 (12:50):** no valid LLM decision → no adds, and failed breakouts follow their default (hold) |
 | **Other** | | |
 | Saturday 10:00 | `weekly_review` | Performance, "your numbers" (average gain/loss, win rate), LLM vs baseline, calibration, **proposed** lessons |
@@ -171,7 +171,7 @@ if session is None:
   | `weekly_review` | Saturdays, regardless of sessions |
   | `watchdog` | Checks only heartbeats that were *expected* given that day's calendar |
 
-**Holidays:** no calls or orders; hard stops are GTC at the broker; entry orders are day orders.
+**Holidays:** no calls or orders; hard stops are GTC at the broker; no entry order rests overnight (entry parents are GTC for their stop leg's sake, and the EOD review cancels any unfilled one, §5.7).
 
 **Gap-fill ingest:** fetch every session since the last stored one.
 
@@ -205,15 +205,23 @@ if session is None:
   - **Point in time:** backtests rebuild the universe for each historical session from the symbols that were listed then, **including later-delisted ones**, as far as the vendor covers them. Coverage is measured in spike 0.3a and its gap is reported in every backtest (§15).
     - Alpaca's asset list forgets most delistings before ~2018, but its bars endpoint still serves them. The backfill adds **ticker-enumeration snapshots** (every 1–4 letter ticker that traded in a given week; ~3 minutes each) to the asset list.
     - **Zero-volume bars are dropped:** Alpaca repeats the last close with volume 0 for months after a delisting.
-    - History is keyed by ticker, and tickers get reused, so securities are keyed by Alpaca asset id / CUSIP where known, and a ticker with a trading gap of more than 30 sessions is split into separate securities.
+    - History is keyed by ticker, and tickers get reused, so securities are keyed by Alpaca asset id / CUSIP where known, and a ticker with a trading gap of more than 30 sessions is split into separate securities. Such a relisting has an unreliable base count (§5.3).
+  - **Listing date** = the first *public trading* date, not the exchange listing date: an uplisting from OTC (e.g. CELH in 2017) is not an IPO. The base count anchors on it (§5.3, #126).
 - **Bars:** Alpaca SIP daily bars, `adjustment=split`, plus the raw close (for the universe filter); rolling **2 years** in Postgres, full history (2016 onward) in **Parquet**.
+  - **Session T−1's bar is re-fetched** each evening: the volume of bars fetched at 16:58 grew later for 187 of 195 symbols, by up to 62% (spike 0.3a, #118).
+  - **Outlier filter:** SIP daily bars carry bad ticks that pass a plain OHLC check (NVDA's high of 195.95 on 2024-06-10, true ≈ 122). A high or low far outside both the bar's open–close range and the neighbouring bars is flagged and not used, and the base count never trusts a single-bar extreme (#126).
   - **Split-only adjustment, not dividend adjustment:** pivots and stops computed from the bars become broker orders, so they must be in the prices the stock actually traded at. Dividend-adjusted history sits below real prices, and it changes all earlier bars on every ex-date, which gap-fill ingest would never re-fetch. RS and momentum use price returns, as IBD's RS rating does.
 - **Corporate actions:** splits, reverse splits, mergers and symbol changes for held symbols and open orders (§5.7).
 - **Validation:** coverage ≥ 90%, OHLC sanity, split re-fetch, idempotent upserts.
 - **Industries:** SEC SIC codes → about 100 industry groups (Finnhub profile as fallback).
-- **Macro:** CBOE VIX/VIX3M (primary), FRED (fallback), FRED credit spread.
+- **Macro** (spike 0.3d, #117):
+  - **Evening VIX/VIX3M** come from CBOE's delayed-quote JSON, accepted only if its `last_trade_time` is ≥ 16:15 on session T (it was final at 16:32 ET). CBOE's history files update only at about 18:30–21:30 ET, after the 17:25 `regime` job, and FRED lags at least a full session.
+  - **Fallbacks, in order:** the CBOE history file, if its last row's date is T (never its `Last-Modified` header); then FRED (T−1); then the staleness rule (§4). The next evening checks the JSON value against the history row and logs any difference.
+  - **Backtests** use the CBOE history files, filtered to `market_sessions` dates (the VIX file has rows on holidays).
+  - **Credit spread** (FRED `BAMLH0A0HYM2`, only 3 years of history): stored for the Portfolio Manager's context only; no code rule uses it.
 - **Earnings:** Finnhub calendar **and surprises** (actual vs estimate), refreshed daily.
-  - **History (for backtests):** report dates and timing from SEC EDGAR 8-K filings with Item 2.02 (results of operations). The filing's acceptance time sets the timing: before 09:30 → before the open, after 16:00 → after the close. Finnhub's free history is too short to apply the blackout and cushion rules back to 2016 (spike 0.3e checks both).
+  - **History (for backtests):** report dates from SEC EDGAR 8-K filings with Item 2.02 (results of operations). The timing is the **earlier of the 8-K acceptance and the first earnings headline**: before 09:30 → before the open, after 16:00 → after the close. Many "during the session" 8-Ks are morning releases filed later, and the headline catches them; with no headline (9%), the 8-K alone. Finnhub's free calendar has no past dates (spike 0.3e, #119).
+  - **Upcoming timing:** Finnhub leaves before/after-market blank for 61% of upcoming reports. Then the company's usual timing from its last 8 reports applies; with no history, the report counts as before the open (the cushion runs one session earlier).
 - **Fundamentals:** SEC EDGAR company facts → quarterly EPS and revenue growth and acceleration.
   - **Point in time:** every fact is keyed on its **`filed` date** (when the market could see it), never the fiscal period end. Backtests read a quarter only from the session after its filing. The period end is 4–6 weeks earlier, and using it would look ahead.
 - **News:** Alpaca news API, on demand.
@@ -224,7 +232,7 @@ Five pillars, each **+1, 0 or −1**:
 
 | Pillar | +1 | −1 | Source |
 |---|---|---|---|
-| **Index trend** | **Both** SPY and QQQ: close > 50 SMA > 200 SMA, 50 SMA rising | **Either** closes < 200 SMA with the 50 SMA falling | Bars |
+| **Index trend** | **Both** SPY and QQQ: close > 50 SMA > 200 SMA, 50 SMA rising (above its value 10 sessions earlier) | **Either** closes < 200 SMA with the 50 SMA falling | Bars |
 | **Breadth** | > 60% of the universe above its 50 SMA, and new highs − new lows (10-session average) > 0 | < 35% above the 50 SMA, or new lows > new highs (same 10-session average) | Full universe |
 | **Volatility** | VIX < 20 and VIX/VIX3M < 0.9 | VIX/VIX3M > 1.0 or VIX > 30 | CBOE / FRED |
 | **Distribution** | ≤ 3 distribution days in the last 25 sessions | ≥ 6 | SPY and QQQ counted separately; the **higher** count is used ([IBD](#18-methodology-sources)) |
@@ -243,7 +251,7 @@ Five pillars, each **+1, 0 or −1**:
 | CORRECTION, then a follow-through day | `EARLY_UPTREND` |
 
 - **Naming.** IBD's "rally attempt" is the stretch *before* a follow-through day. Here it is tracked as a sub-state inside `CORRECTION` (rally day count, rally low). `EARLY_UPTREND` is the period *after* the FTD, when only starter positions are allowed. Every prompt defines the four labels this way, so the LLM doesn't map them onto IBD's wording.
-- **Distribution day** (IBD): an index down ≥ 0.2% on volume higher than the prior session, counted per index (SPY, QQQ). **Both counts reset to zero after a follow-through day.** ETF volume stands in for exchange volume. Sessions with quarterly option expirations or index rebalances inflate it, so distribution days on those sessions are flagged, and the regime backtest decides whether to exclude them.
+- **Distribution day** (IBD): an index down ≥ 0.2% on volume higher than the prior session, counted per index (SPY, QQQ). **Both counts reset to zero after a follow-through day.** ETF volume stands in for exchange volume. Sessions with quarterly option expirations or index rebalances inflate it, so distribution days on those sessions are flagged, and the regime backtest decides whether to exclude them. The flagged sessions are the third Friday of March, June, September and December (the session before, if that's a holiday) and the S&P 500 and Nasdaq-100 rebalance dates; they count by default (#127).
 - **Follow-through day** (IBD): day 4 or later of a rally attempt, **either** index up ≥ 1.25% on volume higher than the prior session.
   - **Correction low:** each index's lowest intraday low since the session the regime entered `CORRECTION`. This also covers a `CORRECTION` entered on the score while the index is near its high: the low is then that session's low, and the rally attempt can start right away.
   - Day 1 is the first up close after that index's correction low. A new lower low restarts the count.
@@ -273,6 +281,8 @@ Five pillars, each **+1, 0 or −1**:
 
   **The 10-session minimum** keeps the starter limits (§6) in force for their full 10 sessions on both paths. Without it, the `no_ftd` path, which enters at a score ≥ +3, would reach `CONFIRMED_UPTREND` within 3 sessions.
 - **Crisis override (code):** VIX/VIX3M > 1.0 for ≥ 2 sessions (for as long as it lasts), or SPY −4% in a session (for the rest of that session and the next one) → no new entries.
+  - VIX/VIX3M is the latest value on or before the session, from any source in the order above (§5.1). The override is also set, with an alert, when every source is more than 2 sessions stale. With one stale day, the 2-session check can read the same observation twice; that is accepted (#127).
+- **Starting state:** `CORRECTION` (fail closed). A replay starts at least 252 sessions before the first label it needs.
 - **Conservatism ladder** (by the risk each state allows, §6): `CORRECTION` < `EARLY_UPTREND` < `UNDER_PRESSURE` < `CONFIRMED_UPTREND`. "More conservative" always means lower on this ladder.
 - **LLM view** in the Portfolio Manager call; **effective regime = the lower of the computed regime and the LLM view.** The LLM may return the computed label or any label below it, except `EARLY_UPTREND`: only the state machine assigns that, because it requires a follow-through day. `premarket_check` downgrades along the same ladder.
 - **A morning downgrade doesn't fund unreviewed strategies.** The evening scan sends only the computed regime's fundable strategies to the Analyst. A strategy that becomes fundable only through a morning downgrade has no verdicts, so it isn't funded until the next evening's scan. With the current mapping (§6) this can't happen: `UNDER_PRESSURE`'s strategies are a subset of `CONFIRMED_UPTREND`'s, and `EARLY_UPTREND` is never assigned in the morning. The rule stays for any future mapping.
@@ -314,7 +324,7 @@ The 8 rules:
 
 | Feature | Definition | Source |
 |---|---|---|
-| **Base count** | Bases since the stage-2 start. A new base counts only after a ≥ 20% advance; the count **resets** if a base undercuts the prior base's low; a base-on-base counts as one | IBD |
+| **Base count** | Bases since the stage-2 start. A new base counts only after a ≥ 20% advance; the count **resets** if a base, or any low between two bases, undercuts the prior base's low, or a base fails (a decline deeper than 50%); a base-on-base counts as one. The final contraction's high is the pivot only in the upper half of the base's range, otherwise the base high. The count is **reliable** only when it starts from a real IPO in the history or from a reset seen in the data; an unreliable count is sized like a 3rd base (§8, #126) | IBD |
 | **RS line** | Price / SPY; at a new high before or at the breakout = strong, declining = weak | IBD |
 | **Up/down volume ratio** | 50-session up-day volume ÷ down-day volume; ≥ 1.0 = accumulation | IBD |
 | **Momentum rank** | Percentile of 1-, 3- and 6-month returns | Kullamägi |
@@ -348,6 +358,7 @@ The 8 rules:
 ### 5.5 Pre-market check (`premarket_check`)
 
 - **07:30:** macro refresh (downgrade-only), overnight news, earnings-date changes.
+  - The macro refresh uses settled closes only. If the evening read missed session T's VIX, it fetches T's close (the delayed-quote JSON, then the history file) and re-scores. CBOE's overnight-session VIX values are ignored, because they can't be backtested (#117).
 - **08:40** (first step of `portfolio_manager`), from **delayed-SIP pre-market trades up to 08:25** (#110; by 08:40 IEX had a pre-market print for only 17 of 80 sampled ≥ 10% gappers, delayed SIP for 78):
   - pre-market gap vs pivot: above pivot + 5% → invalid today
   - **EP candidates:** stocks that reported after yesterday's close or before today's open, or had major news, with a pre-market gap ≥ 7% (the screen; ≥ 10% is confirmed at the open), with charts, the surprise and the latest filed growth numbers. EDGAR lags the earnings release, so the new quarter is represented by the surprise and the headlines.
@@ -357,7 +368,7 @@ The 8 rules:
 
 - **Runs only if** there are fundable setups, EP candidates or position events.
 - **Inputs:**
-  - account state (equity, buying power, exposure, PDT status, **risk multiplier**, "your numbers")
+  - account state (equity, buying power, exposure, **risk multiplier**, "your numbers")
   - computed regime and pillars
   - fundable setups with flags
   - **EP candidates**
@@ -368,47 +379,50 @@ The 8 rules:
 
 ### 5.7 Execution (`execute_open` / `execute_entries`)
 
-1. **Reconcile.** **Invariant (every job that touches orders):** every position has a broker stop that is **GTC**, covers its **full quantity**, and sits at or above its plan's hard-stop level. Otherwise repair immediately, alert and block entries.
+1. **Reconcile.** **Invariant (every job that touches orders):** every position's resting broker sell stops are **GTC**, together cover its **full quantity**, and each sits at or above its plan's hard-stop level. Usually that is one stop; after a two-tranche entry or an add it can be one stop leg per buy (below). Otherwise repair immediately, alert and block entries.
    - **Between scheduled jobs**, the `stop_guard` (every 5 minutes, 09:35–16:00) checks existence, quantity and GTC from the broker alone. It repairs under the lock only when something is missing, using the plan level from the database. A job that dies after reducing a stop and before selling therefore leaves the shares unprotected for minutes, not until the next scheduled order job. `stop_guard` doesn't wait for the lock: while another job holds it, a sell sequence may legitimately be in progress, so it skips to its next run.
    - Order jobs are also invoked with Lambda's async retries on (they are idempotent through `client_order_id`), so a crashed job re-runs, reconciling first, within a few minutes.
-   - OTO child legs may inherit the parent's `day` time-in-force, so after a fill the stop is converted to a standalone GTC stop if needed (verified in spike 0.3b).
-   - **Contingency, chosen in advance:** if 0.3b shows that a stop-limit entry can't carry an attached stop leg, entries go in as plain stop-limit orders. A `fill_watcher` job then runs every minute from 09:36 to 16:00 (about 380 cheap Lambda runs a day) and attaches a GTC stop to each new fill. The unprotected window is at most about 2 minutes, and it is logged per fill.
+   - **OTO stop legs** (spike 0.3b, #113). A leg takes its parent's time-in-force, and after the fill neither its time-in-force nor its quantity can be changed, only its stop price. So every entry parent is **GTC**, which makes the leg GTC from the start; the EOD review cancels any parent still unfilled (`post_market` as a backstop), so no entry rests overnight.
+     - A leg stays in place, and stop raises replace its price, until a sale has to cut the quantity. Then, under the lock, the position's legs are cancelled and one standalone GTC stop is placed for the shares that remain: about 1 second with no stop, which `stop_guard` covers. From then on every change is an atomic replace. If the new stop is rejected because the price is already through its level, the shares are sold at once (step 2).
+     - Alpaca sets leg `client_order_id`s itself, so reconciliation finds legs through their parent's `legs`, not by our prefix.
+   - **The `fill_watcher` contingency isn't needed:** 0.3b showed that a stop-limit entry carries an attached stop leg, so the per-minute job that would have attached stops to plain entries isn't built.
 2. **Sell sequencing.** A full-quantity stop reserves all the shares, so the broker would reject any other sell order. Every partial sale, trim or exit therefore:
-   1. replaces the stop with the remaining quantity (or cancels it for a full exit)
+   1. replaces the stop with the remaining quantity (or cancels it for a full exit); an OTO leg is first swapped for a standalone stop (step 1)
    2. submits the sell
    3. on rejection or no fill, restores the stop at once
 
    **Price already through the stop level.** Sometimes the market is at or below the level a stop would go at: when restoring a stop after a failed sell, raising one, or repairing the invariant after a gap down. Then no stop is placed. The shares are sold at once, by the same run, still holding the lock:
-   - before the open: an OPG order
    - during the session: a marketable limit order. If it hasn't filled after a short wait (about 30 seconds, configured), the run re-prices it once, then replaces it with a market order. Leaving the retry to "the next order-touching job" could take hours, and after a 15:40 exit the next job runs after the close.
-   - a sale still unfilled at the close goes in as an OPG order for the next morning, with an alert
+   - before the open: nothing is sold; the 09:31 check run sells (a stop couldn't trigger before 09:30 either)
+   - a sale still unfilled at the close is retried by the next morning's 09:31 check run, with an alert. No OPG orders are used (#124)
 
-   That is what the stop would have done. 0.3b checks whether Alpaca rejects such a stop or triggers it at once; either way this path doesn't end the run with the shares unprotected and unsold.
-3. **09:20 (`execute_open`):** OPG exits and trims (using the sell sequence); hard-stop replacements (only upward, full quantity). A **09:31 check run** reconciles and enforces the invariant, so an OPG exit that was rejected or didn't fill gets its stop back (or is sold, per the rule above) within a minute of the open.
-4. **09:36 (`execute_entries`):** compute each entry's trigger and limit (§7.1), size it in code on the **worst fill (the limit price)**, clip by the limits, and submit an **OTO buy-stop-limit** (day) with the stop leg. If the last price is already above the trigger but at or below the limit, the entry goes in as an **OTO limit buy at the limit** instead: the same worst fill it was sized on, never a market buy. Above the limit, it is skipped.
+   That is what the stop would have done. Alpaca rejects a sell stop above the market (`422 stop price must be less than current price`, spike 0.3b), so this path is required.
+3. **09:20 (`execute_open`):** hard-stop replacements (only upward) and stops for splits (step 10). **No sales before the open:** on a closed market a stop replace stays `pending_replace` and keeps every share reserved, so an OPG sale is rejected and the stop can't be restored (spike 0.3b).
+   **09:31 check run:** reconciles and enforces the invariant, then carries out the morning's planned exits and trims (plan rules and Portfolio Manager decisions) and any sale left unfilled at the last close, each through the sell sequence with a marketable limit. The cost is about one minute of exposure to the open, which the resting stop covers (#124).
+4. **09:36 (`execute_entries`):** compute each entry's trigger and limit (§7.1), size it in code on the **worst fill (the limit price)**, clip by the limits, and submit an **OTO buy-stop-limit** (GTC parent, step 1) with the stop leg. If the last price is already above the trigger but at or below the limit, the entry goes in as an **OTO limit buy at the limit** instead: the same worst fill it was sized on, never a market buy. Above the limit, it is skipped.
+   - **Every buy in a held symbol** (tranche 2, adds) is also an OTO with its own GTC stop leg. While a sell stop rests, Alpaca rejects a plain buy as a "potential wash trade" and accepts an OTO (spike 0.3b, #114). The new shares are protected from their fill, and the existing stop is untouched.
 5. **Intraday stop raises:** `intraday_monitor` raises hard stops when a milestone (breakeven, round-trip) is reached intraday, never down.
 6. **Idempotency:** `idempotency_key` = `client_order_id`.
 7. **Single writer.**
    - Every section of code that changes orders holds one account-wide Postgres advisory lock. It is held only while orders are being changed, never during an LLM call, and other jobs wait for it.
-   - EventBridge and async Lambda invocations are at-least-once, and the `stop_guard` and `fill_watcher` (if used) run alongside other jobs. Without the lock, one job's invariant repair could re-place a full-quantity stop in the middle of another job's sell sequence.
+   - EventBridge and async Lambda invocations are at-least-once, and the `stop_guard` runs alongside other jobs. Without the lock, one job's invariant repair could re-place a full-quantity stop in the middle of another job's sell sequence.
    - The lock is taken on a direct (unpooled) Neon connection, because session-level advisory locks don't work through a transaction-mode pooler. The job releases it in a `finally` block. A Lambda that times out or is frozen may not close its connection at once, so the lock connection also has a server-side idle timeout, set longer than any order section, as a backstop.
-   - A job that waits more than 2 minutes alerts. The `fill_watcher` and `stop_guard` don't wait; they skip to their next run. If the lock stays taken for longer than the backstop idle timeout, `stop_guard` alerts.
+   - A job that waits more than 2 minutes alerts. The `stop_guard` doesn't wait; it skips to its next run. If the lock stays taken for longer than the backstop idle timeout, `stop_guard` alerts.
 8. **Partial fills.**
    - The filled quantity is the position. The stop covers what actually filled, and the invariant always checks actual broker quantities.
-   - At the EOD review, the unfilled rest of a partly filled entry is cancelled and its reserved exposure released.
+   - **A partly filled buy counts as unprotected.** Its stop leg stays `held` (inactive) until the parent fills completely (spike 0.3b). The next order job or `stop_guard` (within about 5 minutes) cancels the unfilled rest, re-reads the orders, keeps the leg if it has become an active GTC stop for the filled shares, and otherwise places a standalone GTC stop for them (#115). The position is smaller than planned, which only lowers risk, and the rest's reserved exposure is released.
    - Tranche 2 is sized so total risk ≤ plan, given tranche 1's actual fill.
-   - When a sell fills only partly, the stop is restored on the remaining shares at once, and the rest of the sale is retried by the next order-touching job (or by an OPG order the next morning).
-9. **Adaptive account rules:** if PDT-restricted, entries are limited by the remaining day trades. EP and momentum entries, whose stop is the low of the day, are the most likely to stop out the same day, so they're the first to be withheld when the allowance is low.
-   - **Exits are never withheld for PDT.** If the broker rejects a same-day exit under PDT rules, the hard stop stays in place (the invariant), an alert fires, and the exit goes in as an OPG order the next morning.
+   - When a sell fills only partly, the stop is restored on the remaining shares at once, and the rest of the sale is retried by the next order-touching job (at the latest, the next morning's 09:31 check run).
+9. **No margin, no PDT rule.** FINRA's pattern-day-trader rule (4 day trades in 5 sessions, the $25,000 minimum) was replaced by an intraday margin standard from 2026-06-04 (Rule 4210 amendment, SEC Release 34-105226). Spike 0.3b ran six same-day round trips on a $4,875 paper account with none blocked, and the account API has no PDT fields (#123). So entries are never limited by day trades. Instead, entries never use margin: total exposure, with pending entries at their limit price, stays ≤ 100% of equity (§6, §8), so an entry can't create an intraday margin deficit. Alpaca's live-account behaviour is confirmed before Phase 8, because paper may not model intraday margin calls.
 10. **Corporate actions on held positions** (from ingest's corporate-action feed, checked again by reconciliation):
 
     | Event | Handling |
     |---|---|
-    | Split / reverse split | Before the ex-date open, `execute_open` writes a new plan version with every level and quantity scaled by the ratio (not a loosening), then replaces the broker stop at the scaled level. Some brokers cancel or adjust resting orders on splits; 0.3b checks Alpaca's behaviour |
-    | Definitive cash acquisition | Position event + alert; code exits at the next open. The stock now trades on the deal spread, not momentum |
+    | Split / reverse split | On the ex-date Alpaca **rejects resting stops at 04:00 ET** (spike 0.3b). At 09:20, `execute_open` writes a new plan version with every level and quantity scaled by the ratio (not a loosening), then places a new stop at the scaled level for the broker's actual quantity; if the broker refuses it before the open, the 09:31 check run places it. **Every invariant repair checks the corporate-actions feed first,** so a position not yet adjusted, with an unscaled plan level, isn't read as "price through the stop" and sold. **Paper never applies splits to positions** (DXJ stayed 1 share at the old cost until it was closed), so reconciliation compares quantities scaled by the feed's ratio and alerts, instead of failing closed for the rest of the trial (#116) |
+    | Definitive cash acquisition | Position event + alert; code exits at the next session's 09:31 check run. The stock now trades on the deal spread, not momentum |
     | Stock-for-stock merger, spin-off, symbol change | Position event + alert; no new entries in the symbol; a `mismatches` row is resolved by hand (`auratrade resolve`) before entries resume |
     | Trading halt (LULD / news) | Alert. The stop rests unchanged and runs when trading resumes |
-    | Cash dividend | Under FINRA Rule 5330 a broker may lower resting sell stops by the dividend on the ex-date. The invariant catches a lowered stop and replaces it at the plan level; 0.3b checks Alpaca's behaviour |
+    | Cash dividend | Under FINRA Rule 5330 a broker may lower resting sell stops by the dividend on the ex-date. Alpaca paper doesn't (QDTE's stop was unchanged on its 2026-10-15 ex-date, spike 0.3b). If a live broker does, the invariant catches the lowered stop and replaces it at the plan level (#72) |
 
 ### 5.8 Intraday monitor (`intraday_monitor`)
 
@@ -558,8 +572,9 @@ Stop width is measured from the pivot/trigger; risk is sized on the limit, so sl
 - **Two-tranche entries** (Minervini's "pilot buy, then add on confirmation"):
   - tranche 1 = 50% at the trigger
   - tranche 2 = 50% at the EOD review on days 1–3, but only if the strategy's **confirmation gate** passes (below)
-  - tranche 2 is re-sized on the actual price so total risk ≤ plan, and the hard stop is replaced to cover the full quantity
+  - tranche 2 is re-sized on the actual price so total risk ≤ plan, and goes in as an OTO with its own GTC stop leg, so the two legs together cover the full quantity (§5.7)
   - tranche 2 is added only while the strategy is still fundable in the effective regime, with no crisis override, halt or kill switch active. Otherwise the reservation is released
+- **Whole shares** (#122). Share counts are floored, because a GTC stop can't be fractional. An entry sized to 0 shares is skipped, and one sized under 2 shares goes in as a single tranche at the trigger. At $5,000 this skips some high-priced leaders, and the backtests size the same way (§15).
 - **Confirmation gate, per strategy** (on the 15:40 decision price; volume projected to the full day):
 
   | Strategy | Gate | Why |
@@ -589,12 +604,12 @@ These are the candidate rules for a position's first 20 sessions. Which of them 
 | **Breakeven** | Stop → breakeven after the first partial **or** at +3R, whichever comes first | Minervini |
 | **Round-trip rule** (in O'Neil's set; for other strategies, added only if the backtest shows it helps) | Once a gain has reached +10%, the stop is at least breakeven | IBD: don't let a double-digit gain become a loss |
 | **8-week hold** (chosen at entry: on/off) | If +20% within 15 sessions of the breakout: suspend profit-target partials and replace the trail with the 50-day for 40 sessions from the breakout; exit only on the hard stop (≥ breakeven), a close below the 50-day, or climax signals | IBD |
-| **Trail** | First close below the 10-day / 21 EMA / 50 SMA | Kullamägi (10/20-day), Minervini / O'Neil (50-day) |
-| **Climax sale** | ≥ 2 signals → sell ½; ≥ 3 → sell all. Signals: largest daily gain since the move began; exhaustion gap; heaviest-volume up day since the breakout; ≥ 7 up days in 8 or ≥ 8 in 10; ≥ 70% above the 200-day; ≥ 25% gain in ≤ 15 sessions after an extended run | IBD |
-| **Late-stage base** | New entries: base count 3 → risk × 0.5; ≥ 4 → not fundable. Held positions: a breakout from a 4th-stage base → sell ½ into strength | O'Neil: about 80% of fourth-stage bases fail |
+| **Trail** | First close below the 10-day (a 10-session SMA) / 21 EMA / 50 SMA | Kullamägi (10/20-day), Minervini / O'Neil (50-day) |
+| **Climax sale** | ≥ 2 signals → sell ½; ≥ 3 → sell all. Signals: largest daily gain since the move began; exhaustion gap (an open ≥ 1% above the prior session's high); heaviest-volume up day since the breakout; ≥ 7 up days in 8 or ≥ 8 in 10; ≥ 70% above the 200-day; ≥ 25% gain in ≤ 15 sessions after an extended run (15 is provisional; the baseline backtest chooses it) | IBD |
+| **Late-stage base** | New entries: base count 3, or an unreliable count (§5.3), → risk × 0.5; ≥ 4 → not fundable. Held positions: a breakout from a 4th-stage base → sell ½ into strength, once; it ranks with the climax sales, and an 8-week hold doesn't suppress it | O'Neil: about 80% of fourth-stage bases fail |
 | **Faltering RS** | RS line drops to a 50-session low → position event (Portfolio Manager review) | IBD |
 | **Time stop** | §7.2 | — |
-| **Regime-downgrade tightening** (safety rule; tested on vs off) | On a downgrade of the computed regime: to `UNDER_PRESSURE`, the trail tightens one step (50 SMA → 21 EMA → 10-day); to `CORRECTION`, the trail becomes the 10-day and any 8-week hold ends. Tranche-2 adds stop once the strategy is no longer fundable (§7.1) | IBD (market direction comes first) |
+| **Regime-downgrade tightening** (safety rule; tested on vs off) | On a downgrade of the computed regime: to `UNDER_PRESSURE`, the trail tightens one step (50 SMA → 21 EMA → 10-day), including an active 8-week hold's trail, and stays tightened after the hold ends; to `CORRECTION`, the trail becomes the 10-day and any 8-week hold ends. Tranche-2 adds stop once the strategy is no longer fundable (§7.1) | IBD (market direction comes first) |
 
 **Default exit sets.** The menu mixes rules from three traders, and nobody has traded the full combination. Breakout systems live on a few large winners, and each extra early exit can cut one. So each strategy's default plan starts from **one trader's own exit set**: the trader its entry comes from (the "Source" column in §5.3).
 
@@ -604,6 +619,7 @@ These are the candidate rules for a position's first 20 sessions. Which of them 
 | Minervini | `VcpBreakout`, `LeaderPullback` | (c) ⅓–½ at +2–3R | After the partial or at +3R | 50 SMA | — |
 | O'Neil | `EmergingLeader` | (b) ¼–½ at +20–25% | — | 50 SMA | Round-trip rule, 8-week hold, climax sales, heavy-volume reversal, late-stage sale |
 
+- **Provisional menu values** until the baseline backtest (3.8) chooses them: Kullamägi ⅓ at session 3, Minervini ⅓ at +2R, O'Neil ¼ at +20% (#128).
 - Every set also has the hard stop and the **safety rules**: the earnings cushion (§7.4) and regime-downgrade tightening. Each safety rule is tested on vs off, and is kept unless it cuts expectancy by more than noise without reducing max drawdown, on both periods.
 - Rules from outside a strategy's set (other partials and trails, the round-trip rule, time stops, climax sales, the 8-week hold, the heavy-volume reversal) are added only if they beat the set by more than noise on both the tuning and the holdout periods (§15).
 - The baseline backtest also runs the full combination and a floor (hard stop + trail only), so the cost of stacking early exits is measured directly. Changing one rule at a time can't show it: when several rules catch the same winners, removing any one of them changes little.
@@ -612,7 +628,7 @@ These are the candidate rules for a position's first 20 sessions. Which of them 
 **Execution split:**
 - **Hard stop** at the broker (GTC, full quantity): initial → breakeven → round-trip level.
 - **Soft rules** carried out by code at the EOD review.
-  - **"Close-based" means the 15:40 decision price** (12:40 on half days): the IEX real-time price at 15:40. Volume conditions use delayed-SIP volume projected to the full day with the pace curve.
+  - **"Close-based" means the 15:40 decision price** (12:40 on half days): the last IEX trade if it is ≤ 2 minutes old; else the IEX quote midpoint if the quote is ≤ 1 minute old with a sane spread; else there is no price. Then entries and adds are skipped, and a soft exit waits for the next session's decision price while the hard stop rests. Outside the 500 most liquid names the last IEX trade is a median 4 minutes old (p90 66 minutes), while IEX quotes stay fresh (spike 0.3a, #120). Volume conditions use delayed-SIP volume projected to the full day with the pace curve.
   - An exit fires as a marketable limit sell straight away, using the sell sequence. Selling the next morning instead would leave the overnight gap risk.
   - Live trading, the baseline and the verdict scorecard all use the same 15:40 price. Historical backtests use the daily close as a proxy, and on a sample of sessions they report how often the 15:40 and closing decisions differ (§15).
 
@@ -628,7 +644,7 @@ The order:
 1. Hard stop
 2. Earnings cushion
 3. Early-behaviour exits
-4. Climax sales
+4. Climax sales and the late-stage sale
 5. Regime-downgrade tightening
 6. 8-week-hold constraints
 7. Strength partials
@@ -637,7 +653,7 @@ The order:
 
 ### 7.4 Earnings cushion (open positions)
 
-At the EOD review of the last session before a report. For a **before-open** report, that's the prior session. For an **after-close** report, it's the report day itself. `earnings_events` stores the timing.
+At the EOD review of the last session before a report. For a **before-open** report, that's the prior session. For an **after-close** report, it's the report day itself. `earnings_events` stores the timing; a report during the session or with unknown timing counts as before the open.
 
 | Unrealized gain | Action |
 |---|---|
@@ -645,7 +661,7 @@ At the EOD review of the last session before a report. For a **before-open** rep
 | 1R to 3R | Trim to half; stop at least breakeven |
 | ≥ 3R | May hold full; stop at least breakeven |
 
-**Unknown next date:** the cushion runs at the EOD review of the session before the estimated ±10-session window starts (last report + 53 sessions, §8), and again on the real timing once the date is announced. Without this, a held position with no known date would carry its full size through the report.
+**Unknown next date:** the cushion runs at the EOD review of the session before the estimated ±10-session window starts (the window starts at last report + 53 sessions, §8, so the cushion runs at + 52), and again on the real timing once the date is announced. Without this, a held position with no known date would carry its full size through the report.
 
 ---
 
@@ -679,6 +695,7 @@ Effective risk = regime base risk × multiplier × late-stage factor, **hard cap
 |---|---|---|
 | Max risk per trade | Effective risk, **cap 1.5%** | Clip |
 | Max position size | 25% of equity (Minervini ~25%; Kullamägi never > 30% overnight) | Clip |
+| Whole shares | Floored; 0 shares → skipped; under 2 → a single tranche (§7.1) | Clip / Reject |
 | Max total exposure / positions | Regime-dependent (§6); a two-tranche entry reserves its **full planned size** | Reject |
 | **Max open risk ("heat")** | Σ over positions of max(0, avg entry − hard stop) × shares, plus the full planned risk of pending entries: **≤ 6% of equity**. Positions with stops at breakeven or higher add nothing. A new entry's risk is **clipped to the room left**, and rejected only if that room is under half of its planned risk. Rejecting outright would make the 1.25 "trading well" multiplier deploy *less* risk than normal: 4 positions × 1.25% = 5%, and a 5th is rejected, where 6 × 1% = 6% fit | Clip / Reject |
 | **Max per correlated cluster** | 2 positions. A cluster is the same industry group **or** a 60-session daily-return correlation ≥ 0.7 with a held position. SIC groups miss real links (e.g. AI-infrastructure names spread across several SIC codes) | Reject |
@@ -687,9 +704,9 @@ Effective risk = regime base risk × multiplier × late-stage factor, **hard cap
 | Max stop width | VCP / emerging: ≤ 8% below the **limit price** (worst fill); pullback: ≤ 1.5 × ATR below the trigger; momentum: ≤ 1 × ADR below the trigger; EP: ≤ 1.5 × pre-gap ADR below the trigger (§7.1) | Reject |
 | **Keep losses small vs gains** | **Per strategy**, after ≥ 20 closed trades of that strategy: max stop width = **min**(its default rule, ½ × its rolling 20-trade average gain %). If that is below the strategy's **noise floor**, the entry is **rejected**: the stop is never squeezed into normal noise. Noise floor: 1 × ATR for VCP / emerging / pullback; 0.5 × ATR for momentum / EP. Their default width is in ADR units (1 × for momentum, 1.5 × for EP), and ADR ≤ ATR, so a 1 × ATR floor would reject most of them | Reject |
 | Max chase | ≤ 5% above the **code** pivot, so a nudged pivot doesn't extend it (an EP's pivot is its opening-range high, §7.1); never > 25% above the 50-day (momentum and EPs exempt, §5.3) | Reject |
-| Base count | 3 → risk × 0.5; ≥ 4 → reject | Clip / Reject |
-| Hard stop: GTC, full quantity, ≥ plan level | Invariant check in every order-touching job | Auto-repair + alert |
-| Sell sequencing | Stop reduced before any sell; restored on failure, or the shares sold at once if the price is already through the stop level (§5.7) | Enforced in the order layer |
+| Base count | 3, or an unreliable count (§5.3), → risk × 0.5; ≥ 4 → reject | Clip / Reject |
+| Hard stop: GTC, covering the full quantity, ≥ plan level | Invariant check in every order-touching job and `stop_guard`; a partly filled buy counts as unprotected (§5.7) | Auto-repair + alert |
+| Sell sequencing | Stop reduced before any sell (an OTO leg is first swapped for a standalone stop); restored on failure, or the shares sold at once if the price is already through the stop level (§5.7) | Enforced in the order layer |
 | Single writer | One account-wide advisory lock around every order change (§5.7) | Enforced in the order layer |
 | Plans are tighten-only | Including the round-trip rule | Reject |
 | Tranche 2 | Only via the gate, ≤ 3 sessions after tranche 1, total risk ≤ plan, not inside an earnings blackout, and only while the strategy is fundable in the effective regime with no crisis override | Reject |
@@ -698,7 +715,7 @@ Effective risk = regime base risk × multiplier × late-stage factor, **hard cap
 | Early-close days | No new entries or adds | Reject |
 | Tradable symbols | Today's setups / approved EPs (entries); open positions (exits) | Reject |
 | Order types | Entries always limit-protected | Reject |
-| PDT allowance | If restricted: entries limited by remaining day trades. Exits are never withheld (§5.7) | Reject |
+| No margin | Total exposure, with pending entries at their limit price, ≤ 100% of equity (§5.7) | Reject |
 | Daily / weekly loss halt | −2% / −5% | No new entries or adds; stops and exits continue (§5.13) |
 | Drawdown halt | −15% from peak | No new entries or adds until manually re-enabled; stops and exits continue (§5.13) |
 | Crisis override | VIX backwardation for 2+ sessions (while it lasts) or SPY −4% (that session and the next) | No new entries or adds |
@@ -712,7 +729,7 @@ Effective risk = regime base risk × multiplier × late-stage factor, **hard cap
 
 | Role | Model | Mode | Effort | Calls / day |
 |---|---|---|---|---|
-| Trade Analyst | `claude-opus-5-5` | **Batch** (evening), shared prefix cached | `medium` or `high`, chosen by test in Phase 4 | ≤ 40 (fewer with the verdict cache) |
+| Trade Analyst | `claude-opus-5-5` | **Batch** (evening), shared prefix cached | `medium` or `high`, chosen on quality in task 4.5 (both cost the same, spike 0.3g) | ≤ 40 (fewer with the verdict cache) |
 | Portfolio Manager (+ regime view + EP review) | `claude-opus-5-5` | Real-time, with tools | `high` | 0–1 |
 | EOD review | `claude-opus-5-5` | Real-time | `high` | 0–1 |
 | Weekly review | `claude-opus-5-5` | Real-time | `high` | 1 per week |
@@ -732,11 +749,12 @@ Effective risk = regime base risk × multiplier × late-stage factor, **hard cap
 | Compact facts, small charts | Image tokens ≈ w × h / 750 |
 | *Optional, not adopted:* two-stage Analyst | Revisit only if costs exceed budget |
 
-**Expected LLM cost: about $35–65/month** (an upper estimate: it assumes no cache hits and a full 40 requests a session). Measured in spike 0.3g, which replaces these assumptions, and tracked daily. The estimate:
-- Opus 5.5 costs $4 / $20 per million input / output tokens; the Batch API halves that. **Thinking tokens bill as output**, and they dominate the cost.
-- **Analyst:** 40 requests × (about 8k input × $2/M + 2–4k output incl. thinking × $10/M) ≈ $1.45–2.25 per session before the verdict cache → about $30–47/month. The verdict cache lowers this by an amount 0.3g and the first weeks of 4.6 will show.
-- **Portfolio Manager** (tool loop, `high`): about $0.3–0.6 on days it runs → about $5–12/month.
-- **EOD and weekly:** about $3–5/month. EP reviews add a little during earnings season.
+**Expected LLM cost: about $17–22/month**, measured in spike 0.3g (#121). It is an upper estimate (no verdict cache, a full 40 requests every session), tracked daily and re-measured in 4.6, since real prompts will grow somewhat:
+- Opus 5.5 costs $4 / $20 per million input / output tokens; the Batch API halves that. Thinking tokens bill as output.
+- **Analyst:** about 4,000 input tokens a request (the two charts included) and 650–850 output tokens including thinking: about $0.016 a request in the batch, so at most about $13/month. Effort barely changes it. Caching inside the batch was roughly cost-neutral (2 of 10 requests read the cache); pre-warming it with one real-time request before submission is tested in Phase 4.
+- **Portfolio Manager** (tool loop, `high`): $0.10 measured with 4 tool calls in 39 seconds; allow up to $0.30 on busy mornings → about $2–6/month.
+- **EOD and weekly:** about $2–3/month. EP reviews add a little during earnings season.
+- **Cost alerts:** above $1.00 for an Analyst batch, and above $0.50 for a real-time call.
 
 **API usage:**
 - structured outputs into Pydantic models
@@ -782,7 +800,7 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 | `macro_series` | VIX, VIX3M, credit spread, with `fetched_at` |
 | `fundamentals` | Quarterly EPS and revenue, growth and acceleration |
 | `earnings_events` | Date, timing, actual vs estimate (surprise), source |
-| `bases` | Detected bases per symbol: start/end, depth, contractions, pivot, **stage number** |
+| `bases` | Detected bases per symbol: start/end, depth, contractions, pivot, **stage number**, whether the count is reliable |
 | `market_regime` | Per session: 5 pillars, features, computed / LLM / effective regime, crisis flag |
 | `daily_watchlist` | Scanner output: strategy, rank and features (JSONB), chart keys |
 | `setups` | Analyst verdicts, `valid_until`, **watch note** |
@@ -802,7 +820,7 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 | `job_runs`, `system_flags` | Heartbeats; kill switch (`trading_enabled`) and halts |
 | `mismatches` | Reconciliation and corporate-action mismatches: detected, details, resolved_at, resolution note. An open row blocks entries in its symbol (or all entries, if account-level) |
 
-**Retention (to stay within the 0.5 GB free tier):** `daily_bars` 2 years; `daily_watchlist`, `breakout_tracker` and `llm_decisions` output 90 days in Postgres, then archived to Parquet in S3. Journal, plans, signals, orders, regime and lessons are kept forever (small). Size is checked in the daily report, with an alert at 70%.
+**Retention (to stay within the 0.5 GB free tier):** `daily_bars` 2 years; `daily_watchlist`, `breakout_tracker` and `llm_decisions` output 90 days in Postgres, then archived to Parquet in S3. Journal, plans, signals, orders, regime, lessons and `bases` are kept forever (small). The base count carries forward from `bases` rows, so they must outlive the 2-year bar window (#126). Size is checked in the daily report, with an alert at 70%.
 
 **Backup:** the free tier's restore window is short, and the kept-forever tables are the validation record (principle 8). So `post_market` exports them to S3 every night (Parquet, one file per table per day; S3 lifecycle keeps 90 days of dailies plus month-ends).
 
@@ -839,15 +857,15 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
   - **Each environment has its own Alpaca account and Neon branch.** If two systems share one paper account, each one's reconciliation sees the other's positions as mismatches and "repairs" stops it doesn't own. `dev` (local work and Phase 5 end-to-end tests) and `paper` (the deployed skeleton, then the trial) therefore use separate Alpaca paper accounts.
 - **AWS budget alarms** at $10 and $25.
 - **Public project site** (`AuraTradePublicSite`, decision #108): static files from `web/` in a **private** S3 bucket, served by **CloudFront** with origin access control, so the bucket is readable only through CloudFront. It is HTTPS only, has security headers with a strict content-security policy, and has no backend: nothing on the internet reaches Neon, Alpaca or SSM. The optional custom domain uses an ACM certificate (us-east-1) and Route 53 records for the apex and `www`. Data panels read one allow-listed file, `data/snapshot.json`, written nightly by `post_market` (task 5.7). It publishes closed trades only, never open positions, stops or IDs, and site deploys never prune it.
-- **Neon free-tier compute:** the watchdog and any `fill_watcher` keep the database awake for much of the day. Compute hours are checked against the free allowance in 1.8. The `fill_watcher` and `stop_guard` ask the broker first and open a database connection only when there is something to do.
+- **Neon free-tier compute:** the watchdog keeps the database awake for much of the day. Compute hours are checked against the free allowance in 1.8. The `stop_guard` asks the broker first and opens a database connection only when there is something to do.
 
 | Item | Monthly estimate |
 |---|---|
-| Claude API | ~$35–65 (upper estimate, §9) |
+| Claude API | ~$17–22 (upper estimate, §9) |
 | AWS | ~$1–5 |
 | Public site domain (optional) | ~$1.50 (about $13/year for a `.com`, plus $0.50 for the Route 53 zone); CloudFront and S3 stay in the free tier |
 | Data, database, alerts | $0 (free tiers) |
-| **Total** | **~$40–70** (budget: < $150) |
+| **Total** | **~$20–30** (budget: < $150) |
 
 ---
 
@@ -899,7 +917,7 @@ AuraTrade/
 - **Kill switch:** `system_flags.trading_enabled` in the database (§5.13), flipped with `auratrade kill on|off`. It is deliberately not an environment variable, so it works without a redeploy. A new database starts with it on (entries disabled; a missing flag row reads the same way), so a fresh environment trades only after someone runs `auratrade kill off`.
 - **Models / effort:** `ANALYST_MODEL`, `PM_MODEL`, `EOD_MODEL`, `WEEKLY_MODEL`, `*_EFFORT`; `ANALYST_MAX_CANDIDATES=40`.
 - **`config/risk.yaml`:** regime thresholds, fundable strategies, entry rules, exit-plan menus and defaults, guardrails, multiplier rules, early-behaviour rules, the cushion table. Its hash is logged with every run.
-- **Paper account:** set the Alpaca paper equity to the intended live capital.
+- **Paper account:** set the Alpaca paper equity to the intended live capital ($5,000, #122).
 
 ---
 
@@ -913,6 +931,7 @@ The backtests choose real thresholds and defaults, so they follow rules that kee
 - **Holdout:** tune on 2016–2022. Report 2023–present **once**, untouched; if it is re-run after changes, the report says so. The regime holdout is opened only for the final 5-pillar model, not for the earlier 4-pillar run.
   - **It's a confirmation set, not a clean test.** "Beats on both periods" is applied to about 20 comparisons and to the baseline gate, so 2023+ also acts as a filter, and the adopted configuration's 2023+ numbers are somewhat flattering. Reports label it a confirmation period. The only truly out-of-sample evidence is forward: the 4.6 scorecard and the paper trial.
   - **Per-year results.** 2023–25 was unusually kind to momentum, so every report shows results per calendar year, and no conclusion may rest on a single year.
+- **Real account size** (#122): the simulator sizes in whole shares at the real account size ($5,000), so 0-share skips and single tranches under 2 shares appear in the results, as they will live. Re-sizing the 0.3h edge-check trades this way: 1% / 3% / 10% got 0 shares at 1% / 0.5% / 0.25% risk, flooring put on about 85–90% of the planned risk, and the skipped trades' expectancy didn't differ from the rest.
 - **Warm-up:** the history starts in 2016 and the rules need about 252 sessions of it (RS rating, the 200-day slope, the 52-week range). So trading in the tuning period effectively starts in early 2017, and each report says so.
 - **Minimum sample:** a cell (strategy × regime × option) with fewer than 30 trades keeps the **source default** and is not tuned.
 - **Burden of proof on change:** a non-default option is adopted only if it beats the source default (for exits, the strategy's single-trader set, §7.3) on both the tuning and the holdout periods, by a margin that matters (expectancy or drawdown), not by noise. "Not noise" means the session-block bootstrap 90% interval for the difference excludes zero on the tuning period, and the holdout difference has the same sign. Otherwise the practitioner's rule stays.
@@ -1084,6 +1103,23 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 | 110 | Pre-market gap source | The 08:40 gap step reads 15-minute-delayed SIP pre-market trades (to 08:25), not IEX; EP candidates are screened at ≥ 7% and confirmed ≥ 10% at the open. Amends #44. *Why:* by 08:40 only 17 of 80 sampled ≥ 10% gappers had any IEX pre-market print (10 flagged), against 78 with delayed SIP (54 flagged at ≥ 10%, 64 at ≥ 7%, 4 false alarms in 79 near-misses) |
 | 111 | Universe and survivorship | ADRs are in the universe; classification = Nasdaq Trader ETF flag → symbol suffix → name rules → SIC 6770; the backtest universe adds ticker-enumeration snapshots to Alpaca's asset list; zero-volume bars are dropped; securities are keyed by asset id / CUSIP, with long trading gaps splitting a ticker. *Why:* Alpaca's asset API has no type flag; its asset list misses ~20% of the liquid 2016–17 universe although the bars exist; it emits zero-volume bars after delistings; tickers are reused. IBD and Minervini trade ADRs |
 | 112 | Edge check: continue | The 0.3h result (both simple setups ≈ 0R before costs, −0.08R after 0.2% a side; 34% delisted names in the universe) does not pause the build. The 3.8 baseline gate must clearly beat this naive reference, with liquidity-scaled slippage. *Why:* the result is borderline, not clearly negative, and regime-shaped (VCP +0.25R in 2017, −0.70R in 2022); the design never trades these setups ungated or without ranking and plan exits |
+| | *Spike review 0.4, 2026-10-10 to 10-15 (spikes 0.3a–0.3h and the out-of-order build; allowed under #105)* | |
+| 113 | OTO entries and stop legs | Entries are OTOs with a **GTC parent**, so the stop leg is GTC from the start; the EOD review cancels unfilled parents. A leg stays until a sale must cut the quantity; then, under the lock, the legs are cancelled and one standalone GTC stop is placed (about 1 s with no stop, covered by `stop_guard`). The invariant counts a position's GTC stops together. The `fill_watcher` contingency isn't built. Amends #64. *Why:* spike 0.3b: a leg takes the parent's time-in-force (a `day` leg expired at 16:00 and left SOFI unprotected), and its time-in-force and quantity can't be changed after the fill (`422`), only its price. Swapping only when needed means a position that never trims never has a gap |
+| 114 | Buys in a held symbol | Tranche 2 and adds go in as OTOs with their own GTC stop leg. *Why:* while a sell stop rests, Alpaca rejects a plain buy as a "potential wash trade" and accepts an OTO; cancelling the stop to buy would leave the whole position unprotected while the buy works |
+| 115 | Partial entry fills | A partly filled buy counts as unprotected: the next order job or `stop_guard` cancels the rest, keeps the leg if it became an active GTC stop for the filled shares, and otherwise places a standalone stop. Amends #72. *Why:* the leg stays `held` (inactive) while the parent is only partly filled, and the old rule cancelled the rest only at the EOD review, hours later. What cancelling a partly filled parent does to its leg is untested (paper fills partly only at random); the rule works either way |
+| 116 | Splits and dividends | On a split's ex-date Alpaca rejects resting stops at 04:00 ET; `execute_open` places a scaled stop at 09:20 (09:31 if refused), every invariant repair checks the corporate-actions feed first, and reconciliation compares quantities scaled by the ratio and alerts. Dividends need nothing new (#72). *Why:* spike 0.3b: paper never applied DXJ's 3:1 split to the position, and an unadjusted position against an unscaled plan stop would read as "price through the stop" and be sold; QDTE's stop wasn't lowered on its ex-date |
+| 117 | Evening VIX | CBOE's delayed-quote JSON (accepted if `last_trade_time` ≥ 16:15 on T), then the history file (by its last row's date), then FRED; backtests use the history files filtered to sessions. `premarket_check` uses settled closes only and may only downgrade. The credit spread is LLM context only. *Why:* spike 0.3d: the JSON was final at 16:32 ET and matched the history row, which itself updates only at 18:30–21:30 ET, after `regime`; FRED lags a full session; overnight VIX values can't be backtested; the spread series has only 3 years |
+| 118 | Daily-bar volume | The evening ingest re-fetches session T−1's bar. *Why:* spike 0.3a: the volume of bars fetched at 16:58 grew later for 187 of 195 symbols, by up to 62% |
+| 119 | Earnings timing | Historical timing = the earlier of the 8-K Item 2.02 acceptance and the first earnings headline; upcoming timing falls back to the company's usual timing over its last 8 reports, else before the open. Amends #71. *Why:* spike 0.3e: Finnhub's free calendar has no past dates and leaves timing blank for 61% of upcoming reports; 8-K timing matched news in 96% of events, and morning releases filed later in the day need the headline |
+| 120 | Decision price | The last IEX trade if ≤ 2 minutes old, else the IEX quote midpoint if ≤ 1 minute old with a sane spread, else no price (skip entries; a soft exit waits, the hard stop rests). *Why:* spike 0.3a: outside the 500 most liquid names the last IEX trade is a median 4 minutes old (p90 66 minutes), while IEX quotes stay fresh (median 6 s) |
+| 121 | LLM cost | About $17–22/month (Analyst about $0.016 a request); alerts above $1.00 an Analyst batch and $0.50 a real-time call; effort is chosen on quality. Amends #65, #78. *Why:* spike 0.3g: requests are about 4,000 input tokens (the README assumed 8,000), thinking is short, and `high` costs about the same as `medium` |
+| 122 | Account size and whole shares | $5,000 for the paper trial and live (confirmed 2026-10-09). Shares are floored; 0 shares → skipped; under 2 → a single tranche. The simulator and backtests size in whole shares at the real account size. *Why:* GTC stops can't be fractional, so high-priced leaders get 0–1 shares at $25–50 risk; on the edge-check trades this skips 1–10% depending on risk, puts on 85–90% of the planned risk, and the skipped trades don't differ in expectancy |
+| 123 | No PDT rule | The PDT allowance is removed (§5.6 input, §5.7, §8); entries never use margin instead. Amends #12, #72. *Why:* FINRA's Rule 4210 amendment (effective 2026-06-04) replaced the pattern-day-trader test and the $25,000 minimum with an intraday margin standard; spike 0.3b ran six same-day round trips with none blocked, and the account API has no PDT fields. Live behaviour is confirmed before Phase 8 |
+| 124 | No OPG exits | Nothing is sold before the open. Planned morning exits and trims, and sales left unfilled at the last close, run at the 09:31 check run through the sell sequence with a marketable limit. Amends #54, #67, #72, #86. *Why:* spike 0.3b: on a closed market a stop replace stays `pending_replace` and keeps every share reserved, so the OPG sale is rejected (`403`) and the stop can't be restored (`422`); OPG orders are also accepted only from 19:00 to 09:28. Approved by the user on 2026-10-10 |
+| 125 | Recorded as built | `days_until_next_open` (calendar days) for long weekends, since in sessions the next open is always 1 away (PR #9); the climax setting `fast_gain_min_move_sessions = 15` is provisional, chosen by 3.8; a new database starts with entries disabled until `auratrade kill off`; tasks 2.1–2.3, 3.1 and 3.5a were built before Phase 1 finished, with approval (PRs #12–15); testing gates in the plan: a real-data smoke run (1.6), a fake broker with automated chaos tests before anything runs unattended (1.7), and CI coverage floors (95% overall, 100% on `guardrails/` from 3.5b) |
+| 126 | Base count and bars | The count also resets when a low between two bases undercuts the prior base's low, or a base fails (decline > 50%); the final contraction's high is the pivot only in the upper half of the base's range; a count is reliable only from a real IPO in the history or a reset seen in the data, and an unreliable count is sized like a 3rd base (half risk); ingest filters outlier highs and lows and the count never trusts a single-bar extreme; the listing date is the first public trading date; `bases` rows are kept forever. *Why:* the 2.2 build: a crash that recovered into a higher base kept counting up; NVDA's bad 195.95 tick created a false failed base; CELH's OTC uplisting isn't an IPO; the count carries forward past the 2-year bar window |
+| 127 | Regime readings | "50 SMA rising" = above its value 10 sessions earlier; VIX/VIX3M is the latest value from any source, and the crisis override is set (with an alert) when every source is more than 2 sessions stale, accepting that one stale day can count one observation twice; expiration flags = quarterly third Fridays (or the session before a holiday) plus S&P 500 and Nasdaq-100 rebalances, counted by default (2.4 decides); start in `CORRECTION`, at least 252 sessions before the first label needed; one rally attempt across both indexes, each with its own low; `EARLY_UPTREND` counts distribution days since entering it; the label at t governs t+1; a downgrade beats an upgrade and an FTD beats the `no_ftd` fallback; an `EARLY_UPTREND` LLM view fails closed to `CORRECTION` when the computed regime isn't `EARLY_UPTREND`; recomputing a row keeps its stored LLM view. *Why:* the 2.3 build needed each of these defined; details in PR #15 |
+| 128 | Plan readings | The exhaustion gap opens ≥ 1% above the prior high; the "10-day" trail is a 10-session SMA; a downgrade to `UNDER_PRESSURE` tightens an active 8-week hold's trail one step (to `CORRECTION` the hold ends); the late-stage sale ranks with the climax sales, fires once and isn't suppressed by a hold; provisional menu values Kullamägi ⅓ at session 3, Minervini ⅓ at +2R, O'Neil ¼ at +20% (3.8 chooses); the 3.5a readings (entry session = session 1; breakeven at +3R and the round-trip rule read the highest high, other rules the decision price; partials fire once; a close below the pivot in the first 20 sessions holds and blocks tranche 2; a stop raised through the price exits as `HARD_STOP`; unknown earnings timing counts as before the open; the cushion with no known date runs at last report + 52; a session's changes fold into one plan version). *Why:* the 3.5a build needed each of these defined; details in PR #14 |
 
 ---
 
@@ -1094,7 +1130,7 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 - **LLM output is non-deterministic.** Tighten-only plans, logging and guardrails contain it.
 - **Prompt injection.** News and filing text reach the LLM. They are passed as delimited data (§9), and the guardrails bound the damage, but a planted headline could still bias a choice among valid setups.
 - **Statistical power.** The BUY-vs-SKIP comparison may need more than a year of triggered setups to reach significance. The rules for an inconclusive result are fixed before the trial (§15).
-- **Paper fills are optimistic.**
+- **Paper fills are optimistic.** Paper also never applies splits to positions, doesn't lower stops for dividends, and fills partly only at random (spike 0.3b), so those paths are tested on the fake broker (task 1.7), and a split on a held name during the trial needs the reconciliation rule in §5.7.
 - **Survivorship bias:** delisted coverage is good but not complete (ticker enumeration misses 5-letter tickers, and ticker reuse can mix securities), so backtests may still miss some failed and delisted stocks and overstate breakout results. Each report quantifies the gap (§15); treat backtested expectancy as an upper bound.
 - **Free-tier data limits:** IEX opening ranges sit slightly below the consolidated ones, and some opening-range entries wait until 09:51 for delayed SIP (#109); pre-market gaps are 15 minutes old (#110); intraday volume is 15 minutes delayed; history starts in 2016; EP backtests use a gap + volume proxy for "news"; EDGAR fundamentals lag earnings releases; IBD measures distribution and follow-through on index exchange volume, approximated here with SPY/QQQ volume.
 - **Gap risk:** stops don't protect against overnight gaps.

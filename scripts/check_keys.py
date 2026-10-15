@@ -124,11 +124,9 @@ def check_alpaca_account(env: Env, http: httpx.Client, opts: Options) -> Result:
     notes = []
     if account.trading_blocked or account.account_blocked:
         notes.append("BLOCKED")
-    if equity < 25_000:
-        notes.append("equity < $25k: PDT rules apply")
+    # No PDT note: FINRA dropped the pattern-day-trader rule in 2026 (README decision #123).
     detail = (
-        f"paper account ...{account.account_number[-4:]}, {account.status}, "
-        f"equity ${equity:,.2f}, PDT flag {account.pattern_day_trader}"
+        f"paper account ...{account.account_number[-4:]}, {account.status}, equity ${equity:,.2f}"
     )
     if notes:
         detail += f" [{'; '.join(notes)}]"

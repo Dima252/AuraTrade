@@ -29,7 +29,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 0.3e Spike: fundamentals, earnings, industries *(ADJUST: earnings timing = earlier of 8-K and headline; approved at 0.4 as #7)*
 - [x] 0.3f Spike: news
 - [x] 0.3g 👤 Spike: Claude batch cost (paid; needs your OK) *(approved 2026-10-09; spent ~$0.26; ~$0.016 per Analyst request, ~$17–22/month; ADJUST for README §9, approved at 0.4 as #8)*
-- [ ] 0.4 👤 Review spike findings; amend README/decisions
+- [x] 0.4 👤 Review spike findings; amend README/decisions *(2026-10-10 to 10-15: decisions #113–128; the agenda is in `docs/spikes/review-agenda.md`)*
 - [x] 0.5 Public project site (landing page + S3/CloudFront stack; deployed in 1.8)
 
 **Phase 1: Data layer**
@@ -114,7 +114,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 | Item | When | Notes |
 |---|---|---|
 | Alpaca **paper** API keys + secrets: **two paper accounts** | Phase 0 | One for `dev` (local work, Phase 5 end-to-end tests), one for `paper` (the deployed skeleton, then the trial). Sharing one would make each system's reconciliation fight the other's positions (README §12). Set each one's equity to the capital you intend to trade live |
-| The capital you intend to trade | Phase 0 | Decides PDT handling (< $25k is restricted) and the position count (§6). Check the current FINRA pattern-day-trader rules too: they have been under revision |
+| The capital you intend to trade | Phase 0 | **$5,000, confirmed 2026-10-09.** It sets the position count (§6) and whole-share sizing (README #122). The FINRA pattern-day-trader rule no longer applies (README #123) |
 | Anthropic API key | Phase 0 | **Set a monthly spend limit in the Anthropic Console** (e.g. $40) |
 | FRED API key | Phase 0 | Free |
 | Finnhub API key | Phase 0 | Free tier |
@@ -214,33 +214,35 @@ Added at the user's request (decision #108). A public page with a link, explaini
 
 ### 1.3 Data clients (M)
 
-- `alpaca_data` (bars, IEX quotes, assets, news), `macro` (CBOE + FRED), `edgar` (company facts, submissions/SIC), `finnhub` (earnings, profile fallback).
+- `alpaca_data` (bars, IEX quotes, assets, news), `macro` (CBOE delayed-quote JSON and history files + FRED, README §5.1 / #117), `edgar` (company facts, submissions/SIC, 8-K Item 2.02 filings), `finnhub` (earnings, profile fallback).
 - httpx + tenacity, client-side rate limiting, typed responses, recorded fixtures.
 
 ### 1.4 Market calendar (M)
 
 - Sync `market_sessions` from Alpaca, cross-check with the library, flag disagreements.
-- Helpers: `session_for`, `previous_session`, `sessions_between`, `n_sessions_back`, `is_early_close`, `session_minutes`, `sessions_until_next_open`.
+- Helpers: `session_for`, `previous_session`, `sessions_between`, `n_sessions_back`, `is_early_close`, `session_minutes`, `days_until_next_open`.
 
 ### 1.5 Ingest job (L)
 
-- Universe refresh with filters, applied to **raw** prices.
-- Gap-fill bars.
+- Universe refresh with filters, applied to **raw** prices. Store each security's **first public trading date** as its listing date (an OTC uplisting isn't an IPO; README §5.1, #126).
+- Gap-fill bars, and **re-fetch session T−1's bar** (late volume, #118).
 - Corporate actions for the universe → `corporate_actions`.
 - **Validation:**
   - coverage ≥ 90%, otherwise `INCOMPLETE`
   - OHLC sanity
+  - the **outlier filter** for bad highs and lows in SIP daily bars (README §5.1, #126; e.g. NVDA 195.95 on 2024-06-10)
   - split detection → re-fetch
   - half-day flag
 - **Retention:** prune bars beyond 2 years; archive 90-day-old `daily_watchlist`, `breakout_tracker` and `llm_decisions` output rows to Parquet; report DB size daily, with an alert at 70% of the free tier.
-- Macro.
-- Earnings calendar.
+- Macro: the evening VIX/VIX3M from CBOE's delayed-quote JSON (`last_trade_time` ≥ 16:15 on T), then the history file by its last row's date, then FRED (README §5.1, #117); the credit spread as LLM context only.
+- Earnings calendar; upcoming timing from the company's 8-K habit when Finnhub leaves it blank (#119).
+- `calendar.sync`: batch the inserts (row by row it takes about 8 minutes from the PC to Neon).
 - Fundamentals: rolling refresh within free limits, plus a refresh after each report.
 - **Industry classification:** SIC → industry group; refreshed weekly.
 
 ### 1.6 Historical backfill and real-data smoke run (M)
 
-`scripts/backfill.py`: 2016 → today, **including delisted symbols** the vendor covers, with a point-in-time membership table so backtests can rebuild each session's universe. Split-adjusted bars plus the raw close. **Historical earnings dates and timing** from EDGAR 8-K Item 2.02 filings (per the 0.3e findings), so the backtests can apply the blackout and cushion rules. **Fundamentals keyed on the EDGAR `filed` date**, never the period end (README §5.1). Parquet partitioned by year; the last 2 years loaded into Postgres.
+`scripts/backfill.py`: 2016 → today, **including delisted symbols** the vendor covers, with a point-in-time membership table so backtests can rebuild each session's universe. Split-adjusted bars plus the raw close. **Historical earnings dates and timing** from EDGAR 8-K Item 2.02 filings, timed by the earlier of the 8-K acceptance and the first earnings headline (#119), so the backtests can apply the blackout and cushion rules. **Fundamentals keyed on the EDGAR `filed` date**, never the period end (README §5.1). Parquet partitioned by year; the last 2 years loaded into Postgres.
 
 **Accept (1.1–1.6):**
 - Running `ingest` twice is a no-op the second time.
@@ -260,16 +262,17 @@ One thin pass through the **whole daily loop**, built from the real modules in m
 - **Rule-only pick:** the top 3 by RS. No LLM.
 - **Sizing:** on the worst fill, at a fixed 0.25% risk.
 - **Order-layer core:**
-  - OTO entry at 09:36 (or the `fill_watcher` fallback, per 0.3b)
-  - GTC stop conversion
+  - OTO entry at 09:36 with a **GTC parent** (its stop leg is then GTC); unfilled parents cancelled at the EOD review (README §5.7, #113)
+  - the leg-to-standalone swap (cancel the legs, place one GTC stop) before the first sale that cuts the quantity
+  - every buy in a held symbol as an OTO with its own leg (#114)
   - reconcile + **stop invariant** in every order-touching job, plus the 09:31 check run
   - the **`stop_guard`** (every 5 minutes in market hours): broker-only check of stop existence, quantity and GTC; it takes the lock and opens the database only to repair, and skips while the lock is held (README §5.7)
   - order jobs safe under Lambda's async retries (idempotent through `client_order_id`)
   - the **single-writer lock** (account-wide advisory lock on a direct connection, released in `finally`, with a server-side idle timeout as a backstop, README §5.7)
   - the **price-through-the-stop** path: sell at once instead of placing a stop above the market, escalating within the run (marketable limit → one re-price → market)
-  - partial-fill handling (the filled quantity is the position)
+  - partial-fill handling: the filled quantity is the position, and a partly filled buy counts as unprotected (cancel the rest, keep an active leg or place a standalone stop, #115)
   - kill switch (entries only) as the `system_flags` row, with `auratrade kill on|off`; `kill on` cancels resting entry orders at once
-- **Fake broker (minimal):** `sim/` gets an in-memory broker implementing the order layer's broker interface (orders, OTO legs, replace, cancel, positions, fills set by the test), with the 0.3b behaviours as amended at 0.4 and **fault injection** (a 500 on submit, a deleted stop, a dropped connection, a process killed between two calls). It has no fill model yet: 3.6 extends **this same module**, so there is still only one simulator (README §5.12, decision #63). The order code is tested against it before it ever runs unattended in 1.8.
+- **Fake broker (minimal):** `sim/` gets an in-memory broker implementing the order layer's broker interface (orders, OTO legs, replace, cancel, positions, fills set by the test), with the 0.3b behaviours (README #113–116, #124: legs take the parent's time-in-force and have a fixed quantity; a held leg while the parent is partly filled; the wash-trade rejection of a plain buy; a sell stop above the market rejected; a replace on a closed market left `pending_replace`; stops rejected on a split's ex-date and no split applied to the position) and **fault injection** (a 500 on submit, a deleted stop, a dropped connection, a process killed between two calls). It has no fill model yet: 3.6 extends **this same module**, so there is still only one simulator (README §5.12, decision #63). The order code is tested against it before it ever runs unattended in 1.8.
 - **Exits:** the hard stop, plus a single soft rule (close below the 21 EMA at the 15:40 decision price) using the **sell sequence**.
 - **`post_market`:** a journal row, the Telegram daily report, and the nightly backup export to storage.
 - `TRADING_MODE` stays `dry_run` by default; paper orders need the explicit `paper` flag.
@@ -289,7 +292,7 @@ One thin pass through the **whole daily loop**, built from the real modules in m
 - an API 500 on submit, and a dropped connection after the broker accepted the order
 - a stop deleted at the broker
 - the price already through the stop level: sell at once, escalating marketable limit → re-price → market
-- a partly filled entry: the filled quantity is protected
+- a partly filled entry: the filled quantity is protected by the next `stop_guard` run
 
 Phase 5 extends this suite to the full chaos list (5.5); these cases keep running there.
 
@@ -416,7 +419,7 @@ Vectorized 8-rule screen; one unit test per rule (pass and fail).
 The three strategies that carry `CONFIRMED_UPTREND`, where most of the risk is taken, are built and verified first.
 - `strategies/base.py` interface: `scan()`, `build_llm_context()`, `system_prompt`, `entry_policy`, `exit_policy`, `default_risk`.
 - Each scan outputs the code-computed **pivot and structural stop** that the Analyst's levels are checked against (README §8, "Price levels").
-- `VcpBreakout` (Minervini): contraction sequence (2–4, up to 6, each shallower), volume dry-up, pivot, distance to pivot.
+- `VcpBreakout` (Minervini): contraction sequence (2–4, up to 6, each shallower), volume dry-up, pivot, distance to pivot. Its own contraction rules: 2.2's `contraction_count` is noisy on volatile names (a fixed 3% zigzag gives 30–50 in some long bases).
 - `MomentumBreakout` (Kullamägi): top ~2% momentum rank; a 30–100%+ move in the last 1–3 months; a 10–40-session consolidation with higher lows and a tightening range; riding the rising 10/20-day. **Exempt from the 25%-above-50-day rule** (README §5.3).
 - `EpisodicPivot` (Kullamägi): live detection comes in task 5.6. For backtests, a proxy: gap ≥ 10% on ≥ 3× average volume, preferably after an earnings date, with no big rally over the prior 3–6 months. The proxy can't require an earnings beat (no free surprise history); the report notes the difference from the live rule.
 - **All scans run every evening.** `risk.yaml` defines which strategies are fundable in each regime.
@@ -464,7 +467,8 @@ Daily (1 year, ~800×600, 10/21/50/150/200 MAs, volume, pivot, RS line) and week
 These are pure functions, and the 3.8 backtest compares several of them on vs off: the heat cap, clusters and the multiplier. So they're built here, not in Phase 5. Phase 5 wires them into the live LLM and order pipeline.
 - `guardrails/`: one pure function per README §8 rule, including:
   - **tighten-only** (with the round-trip rule) and the **tranche-2 rules** (incl. the earnings blackout, and the strategy still fundable with no crisis override)
-  - **per-strategy stop width** (VCP / emerging 8% from the limit price; pullback 1.5 × ATR, momentum 1 × ADR and EP 1.5 × pre-gap ADR from the trigger) and the **base-count limits**
+  - **per-strategy stop width** (VCP / emerging 8% from the limit price; pullback 1.5 × ATR, momentum 1 × ADR and EP 1.5 × pre-gap ADR from the trigger) and the **base-count limits** (an unreliable count is sized like a 3rd base: half risk, #126)
+  - **no margin:** total exposure, with pending entries at their limit price, ≤ 100% of equity (#123; replaces the PDT allowance)
   - **keep losses small vs gains**, in its precise form: min(default, ½ avg gain), below the strategy's **noise floor** (1 × ATR, or 0.5 × ATR for momentum / EP) → reject
   - the 25%-above-50-day limit and the **earnings cushion**
   - **price levels** (LLM pivot ±3%, stop tighter only; at order time: last price below the trigger → buy-stop-limit; last price past the trigger but at or below the limit → limit buy at the limit; above the limit → skip; an EP's pivot is its opening-range high; max chase measured from the code pivot)
@@ -483,7 +487,7 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
   - a property test that a momentum / EP stop at 1 × ADR passes the noise floor whenever ATR ≤ 2 × ADR (the regression test for the old 1 × ATR floor, which rejected them all)
   - a VCP chased to pivot × 1.05 whose structural stop is 8% below the pivot is rejected (8% is measured from the limit)
 - **100% branch coverage, enforced in CI:** a step that fails the build if `guardrails/` drops below 100% (e.g. `coverage report --include="src/auratrade/guardrails/*" --fail-under=100`).
-- `execution/sizing.py`: planned size on the worst fill; tranche split; tranche-2 re-sizing on the actual price and tranche 1's actual (possibly partial) fill.
+- `execution/sizing.py`: planned size on the worst fill, in **whole shares** (floored; 0 → skip; under 2 → a single tranche at the trigger, #122); tranche split; tranche-2 re-sizing on the actual price and tranche 1's actual (possibly partial) fill.
 - `execution/triggers.py` (pure): pivot vs **5-min opening-range high** from 1-min bars (the opening-range high whenever the range traded above the level, README §7.1), low-of-day stops for momentum and EPs, max-chase checks, the skip when the opening-range high is above pivot × 1.05, the **limit buy at the limit** when the price at 09:36 is already above the trigger but within the limit (skip above it), and the limit price min(trigger × (1 + min(2%, ½ × ADR%)), code pivot × 1.05). Tested with a stock that opens below its pivot and breaks it before 09:36, and with one that breaks its opening-range high at 09:35.
 - `journal/risk_multiplier.py`: progressive-exposure state from the journal and equity peak, following the README §8 table exactly:
   - win / loss / scratch definitions
@@ -499,7 +503,8 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
 
 - `sim/`: **one** fill simulator, built on the in-memory fake broker from 1.7 (the same module, extended; the same broker interface as the order layer).
 - It calls the live pure functions (plans, triggers, sizing, guardrails, multiplier from 3.5a–3.5b), never copies of them.
-- The fake broker models what 0.3b found about partial fills, stops above the market and PDT rejections, so replay and chaos tests exercise those paths.
+- The fake broker models what 0.3b found (as in 1.7): held legs on partly filled parents, stops above the market, the wash-trade rejection, splits not applied, so replay and chaos tests exercise those paths.
+- Sizing in whole shares at the real account size ($5,000), so 0-share skips and single tranches show up in every result (README §15, #122).
 - **Fill model** (README §5.12):
   - entries placed at 09:36 on 1-minute bars, as live (incl. pivot triggers, the limit buy when the price is already past the trigger but within the limit, and the skip above the limit)
   - **levels from IEX, fills from SIP:** opening-range highs, the 09:36 last price and the 15:40 decision price come from IEX minute bars (where history exists); fills and volume from SIP minute bars
@@ -518,7 +523,7 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
   - takes setups in rank order until the limits are full
   - EPs come from the morning candidate list (rule-based). Until task 5.6 builds that list, the baseline runs without EPs.
 - **Evening simulation** in its own `simulate` job (README §3), chained after `ingest` and before `regime`: the baseline is simulated after the close from that day's IEX and SIP minute bars (fetched for its symbols only), through `sim/`: 09:36 triggers, opening-range highs, low-of-day stops, the EOD gate and soft rules on the 15:40 decision price. The breakout tracker's new triggers and completed results, and the scorecard, run in the same job, within Lambda's 15 minutes.
-- **Breakout tracker:** records every trigger from the full uncapped scan, regardless of regime, and its 5-session result → leadership health (only results that are complete, T−24 to T−5).
+- **Breakout tracker:** records every trigger from the full uncapped scan, regardless of regime, and its 5-session result → leadership health (only results that are complete, T−24 to T−5). The pillar from 2.3 needs a result for every breakout in the window (`sessions_ago`, above its trigger 5 sessions later); a missing one is an error. Until then it scores 0.
 - **Verdict scorecard:** the plumbing for scoring Analyst verdicts forward through `sim/` (README §5.12). Verdicts arrive in Phase 4; test it here on synthetic verdicts.
   - one unit per setup (ticker, strategy, code pivot), labelled with the verdict in force at its trigger
   - BUY vs SKIP on triggered setups; trigger rates separately
@@ -537,6 +542,8 @@ These are pure functions, and the 3.8 backtest compares several of them on vs of
 - **Results per calendar year** in every table; no conclusion may rest on a single year.
 - **Point-in-time fundamentals** (EDGAR `filed` dates) and a quality score without the surprise.
 - Cells with fewer than 30 trades keep the source default.
+- **Whole shares at $5,000** (#122): the report shows how many trades were skipped at 0 shares or entered as a single tranche, per strategy and risk level.
+- Chooses the provisional values: the climax `fast_gain_min_move_sessions` (15) and the menu partials (Kullamägi ⅓ at session 3, Minervini ⅓ at +2R, O'Neil ¼ at +20%; #125, #128).
 - Daily bars drive most rules.
 - **Intraday-dependent rules** (every 09:36 entry, pivot triggers included, opening-range-high triggers, low-of-day stops, the 15:40 confirmation gate, heavy-volume reversals) use **1-minute bars fetched only for trigger days** of candidate symbols (IEX for levels where its history exists, SIP for fills and volume, README §5.12), cached in Parquet. This keeps the data volume and rate-limit use small.
 - On a sample of about 200 held position-days, compare soft-rule decisions on the 15:40 price vs the close, and report the disagreement rate.
@@ -601,7 +608,7 @@ Each comparison changes **one** dimension against the source-default reference, 
   - prompt caching on the stable prefix
   - refusal handling with server-side fallbacks
   - retries and timeouts
-  - usage → cost
+  - usage → cost, with alerts above $1.00 for an Analyst batch and $0.50 for a real-time call (README §9, #121)
   - payload → storage
   - a `llm_decisions` row for every call, with the prompt version, the requested model and the answering model (`response.model`; a server-side fallback can differ)
 - `llm/batch.py`: build requests with an identical cached prefix, submit, poll, collect; `llm_batches` table.
@@ -635,11 +642,11 @@ Each comparison changes **one** dimension against the source-default reference, 
 ### 4.5 Prompt sanity set and effort decision (S)
 
 - 20–30 hand-labelled historical setups, checked for format, consistency and reasoning quality. It isn't a performance test.
-- Run the set at Analyst effort `medium` vs `high` and pick the cheaper one when quality is equivalent.
+- Run the set at Analyst effort `medium` vs `high` and choose on quality: 0.3g measured the same cost for both (#121).
 
 **Accept:**
 - Evening and morning pipelines run end to end in `dry_run` for 5 consecutive sessions.
-- Every call is logged with cost, and the measured average is within the **daily limit set from the 0.3g measurement** (README §9's upper estimate is about $1.45–2.25 per session for the Analyst, plus $0.3–0.6 on days the Portfolio Manager runs).
+- Every call is logged with cost, and the measured average is within the **daily limit set from the 0.3g measurement** (0.3g measured about $0.62 a session for 40 Analyst requests and $0.10 for a Portfolio Manager call; README §9).
 - Skip logic is verified on a quiet day; a deliberately slow call is discarded at its deadline.
 - Out-of-bounds Analyst levels, and a changed strategy, are stored as `WATCH`.
 - Outputs read sensibly.
@@ -669,39 +676,38 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
 
 ### 5.2 Account constraints (S)
 
-- `execution/account.py` → `AccountConstraints` (equity, buying power, PDT, day trades, shorting), from the fields 0.3b found.
+- `execution/account.py` → `AccountConstraints` (equity, buying power, exposure, shorting), from the fields 0.3b found. No PDT fields: the account API has none, and the rule is gone (#123).
 - Live opening-range highs from IEX 1-min bars (per the 0.3a findings) fed to the pure `execution/triggers.py` from 3.5b.
 
 ### 5.3 Orders and signal lifecycle (M)
 
 - Extends the 1.7 order-layer core (same modules).
-- Tranche-1 or single-tranche OTO entry placed at 09:36 (or the `fill_watcher` path if 0.3b required it); limit prices per README §7.1 (min(trigger × (1 + min(2%, ½ ADR%)), code pivot × 1.05), from `execution/triggers.py`); tranche-2 marketable-limit add; **full-quantity stop replacement** and **GTC conversion** of child stops (per the 0.3b findings).
-- **Sell sequencing** for every OPG trim, intraday partial and EOD exit: reduce the stop → sell → restore the stop on rejection or no fill. If the price is already through the stop level, sell at once instead, escalating within the same run: marketable limit → one re-price → market; still unfilled at the close → OPG next morning + alert (README §5.7).
-- **Partial fills** (README §5.7): the filled quantity is the position; partly filled entries are cancelled at the EOD review and their reservation released; a partly filled sell restores the stop on what's left and retries.
-- **PDT:** exits are never withheld; a PDT-rejected same-day exit keeps its stop and goes in as an OPG order the next morning.
+- Tranche-1 or single-tranche OTO entry (GTC parent) placed at 09:36; limit prices per README §7.1 (min(trigger × (1 + min(2%, ½ ADR%)), code pivot × 1.05), from `execution/triggers.py`); tranche 2 and adds as marketable-limit **OTOs with their own leg** (#114); the leg-to-standalone swap before the first quantity cut (#113).
+- **Sell sequencing** for every 09:31 exit or trim, intraday partial and EOD exit: reduce the stop → sell → restore the stop on rejection or no fill. If the price is already through the stop level, sell at once instead, escalating within the same run: marketable limit → one re-price → market; still unfilled at the close → the next morning's 09:31 check run + alert. No OPG orders (README §5.7, #124).
+- **Partial fills** (README §5.7): the filled quantity is the position; a partly filled buy counts as unprotected, so the next order job or `stop_guard` cancels the rest, releases its reservation and protects the filled shares (#115); a partly filled sell restores the stop on what's left and retries.
 - Exposure reservation for the full planned position at tranche 1.
 - `signals` state machine with a `tranche` field; idempotency key = `client_order_id`.
 - **Corporate actions** (README §5.7 table):
-  - splits scale plan levels and quantities as a new plan version, and the stop is replaced
-  - cash acquisitions exit at the next open
+  - splits scale plan levels and quantities as a new plan version, and a new stop is placed at 09:20 (Alpaca rejects resting stops at 04:00 on the ex-date); invariant repair checks the corporate-actions feed first; reconciliation compares quantities scaled by the ratio, because paper never applies the split (#116)
+  - cash acquisitions exit at the next 09:31 check run (#124)
   - a stop lowered by the broker for a dividend is caught by the invariant and replaced at the plan level
   - other events raise a position event and a `mismatches` row, and block entries in the symbol until resolved
-- Migrations: `signals`, `orders`, `positions`.
+- Migrations: `signals`, `orders`, `positions`; add the foreign key from `position_plans.position_id` (3.5a left it out until `positions` exists).
 
 ### 5.4 Reconciliation and invariants (M)
 
 - Broker vs DB for positions, orders and fills.
 - All order changes run under the single-writer lock from 1.7.
-- **Invariant in every order-touching job** (`execute_open` incl. its 09:31 check run, `execute_entries`, `intraday_monitor`, `eod_review`, `post_market`, `fill_watcher`, `stop_guard`): every open position has a **GTC** broker stop covering its **full quantity** at ≥ its plan's hard-stop level. If not: repair immediately, alert, and block entries. `stop_guard` (from 1.7) runs every 5 minutes between the scheduled jobs.
+- **Invariant in every order-touching job** (`execute_open` incl. its 09:31 check run, `execute_entries`, `intraday_monitor`, `eod_review`, `post_market`, `stop_guard`): every open position's **GTC** broker stops together cover its **full quantity**, each at ≥ its plan's hard-stop level, and a partly filled buy counts as unprotected. If not: repair immediately, alert, and block entries. `stop_guard` (from 1.7) runs every 5 minutes between the scheduled jobs.
 
 ### 5.5 Jobs (L)
 
-- `execute_open` (09:20: OPG exits, stop replacements; 09:31: the check run) and `execute_entries` (09:36: triggers and entries).
+- `execute_open` (09:20: stop replacements and split stops, no sales; 09:31: the check run, then the morning's exits and trims) and `execute_entries` (09:36: triggers and entries).
 - `intraday_monitor`: volume pace, **early-behaviour rules**, **intraday hard-stop raises** on milestones (breakeven, round-trip), cancellations, crisis.
 - `stop_guard` (extended from 1.7): the 5-minute invariant check, with plan levels used for repairs.
 - Rule precedence comes from `plans/resolve.py` (3.5a); the jobs call it, never re-implement it.
 - `eod_review`:
-  - code: trailing-MA closes, heavy-volume reversals, climax sales, 8-week-hold state, cushion exits, decided on the **15:40 decision price** (IEX real-time) and executed at once through the sell sequence
+  - code: trailing-MA closes, heavy-volume reversals, climax sales, 8-week-hold state, cushion exits, decided on the **15:40 decision price** (the last IEX trade if ≤ 2 minutes old, else a fresh IEX quote midpoint, else none, #120) and executed at once through the sell sequence
   - LLM, only when needed: tranche-2 adds that passed the gate, failed breakouts
 - `post_market`: journal (incl. the **sim R** and **default-plan R** replays from 3.7), MAE/MFE, snapshots, risk multiplier, report, nightly backup.
 - `weekly_review`: calibration, the LLM-vs-baseline section (on sim R, with paper fills alongside), the plan counterfactual (sim R vs default-plan R), and fallback-model answers reported separately.
@@ -720,17 +726,16 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
 - **Chaos tests** (extending the automated suite from 1.7, in CI): each of these produces **no duplicate orders and no unprotected position**:
   - killing a job mid-run, or running it twice
   - **killing a job right after it reduced or cancelled a stop and before the sell** (`stop_guard` or the Lambda retry restores protection within about 5 minutes)
-  - **two runs of order jobs at the same time** (e.g. `fill_watcher` during an `eod_review` sell)
+  - **two runs of order jobs at the same time** (e.g. `stop_guard` during an `eod_review` sell)
   - an API 500 during submission
   - a stop deleted at the broker
-  - **a rejected OPG exit**, and **an OPG exit that doesn't fill** (caught by the 09:31 check)
+  - **a morning exit that doesn't fill at 09:31** (escalated within the run)
   - **a failed sell after the stop was reduced**, including when the price has already fallen through the stop level
   - **a marketable-limit exit at 15:40 that doesn't fill** (the run escalates to a market order before releasing the lock)
   - **a Lambda that dies holding the lock** (the next order job gets the lock after the backstop timeout)
   - **a gap below the plan stop** before a stop raise
   - **a partly filled entry** and **a partly filled sell**
-  - **a PDT-rejected same-day exit**
-  - **a split on a held position** and **a dividend that lowers a resting stop**
+  - **a split on a held position** (stop rejected at 04:00, position not adjusted) and **a dividend that lowers a resting stop**
 - `auratrade kill on` cancels resting entries at once. With the kill switch and every halt active, stops and plan exits still fire (tested).
 
 ### 5.6 Live `EpisodicPivot` path (M)
@@ -738,7 +743,7 @@ The guardrail functions themselves were built in 3.5b. This task puts them in th
 EP has more special cases than any other strategy, and its live rule can't be backtested (there's no free surprise history). So its live morning path is built here, after the core loop works end to end, and the core isn't held up waiting for it. The backtest proxy (3.2a) and the strategy's guardrail, trigger and plan rules (3.5a–3.5b) already exist; this task adds the live parts:
 - `portfolio_manager` gap step (08:40): **EP candidates** (README §5.5): reported after yesterday's close or before today's open, or major news, gapping ≥ 10%, with charts, the surprise and the latest filed growth numbers → `ep_candidates` migration.
 - The Portfolio Manager's EP review criteria, as a new prompt version (4.2), and EP decisions run through the guardrails (5.1).
-- EP entries through the order layer (5.3): the opening-range-high trigger, the low-of-day stop with the 1.5 × pre-gap ADR cap, a single tranche, and PDT withholding first when the allowance is low (README §5.7).
+- EP entries through the order layer (5.3): the opening-range-high trigger, the low-of-day stop with the 1.5 × pre-gap ADR cap, a single tranche (README §5.7).
 - The baseline book takes its EPs from the same candidate list (rule: gap ≥ 10%, volume, surprise > 0), as in README §5.12.
 - Add 3–5 recorded historical EP mornings to the 4.5 sanity set.
 
@@ -762,7 +767,7 @@ The public site (0.5) gets its numbers from one file, so the internet never reac
 
 - **6.1 Complete the CDK stack (M):**
   - one Lambda per job (all jobs, replacing the skeleton's)
-  - EventBridge Scheduler in `America/New_York` (including the half-day slots, the 09:31 `execute_open` check run, the 5-minute `stop_guard` and, if 0.3b required it, the per-minute `fill_watcher`); evening jobs chained, with their scheduled times as fallbacks; async retries on for order jobs
+  - EventBridge Scheduler in `America/New_York` (including the half-day slots, the 09:31 `execute_open` check run, the 5-minute `stop_guard`); evening jobs chained, with their scheduled times as fallbacks; async retries on for order jobs
   - the evening pipeline from 4.6 folded into this stack, without interrupting it
   - SSM parameters
   - S3 with a lifecycle rule
