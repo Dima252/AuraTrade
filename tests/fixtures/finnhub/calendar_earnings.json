@@ -1,0 +1,70 @@
+{
+ "earningsCalendar": [
+  {
+   "symbol": "ADC",
+   "date": "2026-10-20",
+   "hour": "amc",
+   "quarter": 3,
+   "year": 2026,
+   "epsEstimate": 0.4848,
+   "epsActual": null,
+   "revenueEstimate": 211033844,
+   "revenueActual": null
+  },
+  {
+   "symbol": "ADX",
+   "date": "2026-10-20",
+   "hour": "",
+   "quarter": 3,
+   "year": 2026,
+   "epsEstimate": null,
+   "epsActual": null,
+   "revenueEstimate": null,
+   "revenueActual": null
+  },
+  {
+   "symbol": "ALK",
+   "date": "2026-10-20",
+   "hour": "amc",
+   "quarter": 3,
+   "year": 2026,
+   "epsEstimate": 0.2866,
+   "epsActual": null,
+   "revenueEstimate": 4356892550,
+   "revenueActual": null
+  },
+  {
+   "symbol": "ALLY",
+   "date": "2026-10-20",
+   "hour": "bmo",
+   "quarter": 3,
+   "year": 2026,
+   "epsEstimate": 1.3814,
+   "epsActual": null,
+   "revenueEstimate": 2348578631,
+   "revenueActual": null
+  },
+  {
+   "symbol": "ARR",
+   "date": "2026-10-20",
+   "hour": "",
+   "quarter": 3,
+   "year": 2026,
+   "epsEstimate": 0.7252,
+   "epsActual": null,
+   "revenueEstimate": 96367736,
+   "revenueActual": null
+  },
+  {
+   "symbol": "ASRV",
+   "date": "2026-10-20",
+   "hour": "",
+   "quarter": 3,
+   "year": 2026,
+   "epsEstimate": null,
+   "epsActual": null,
+   "revenueEstimate": null,
+   "revenueActual": null
+  }
+ ]
+}

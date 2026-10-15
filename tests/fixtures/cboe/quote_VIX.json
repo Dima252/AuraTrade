@@ -1,0 +1,28 @@
+{
+ "timestamp": "2026-10-15 17:43:34",
+ "data": {
+  "symbol": "^VIX",
+  "security_type": "index",
+  "exchange_id": 5,
+  "current_price": 16.76,
+  "price_change": -0.11,
+  "price_change_percent": -0.652,
+  "bid": 0.0,
+  "ask": 0.0,
+  "bid_size": 0,
+  "ask_size": 0,
+  "open": 17.64,
+  "high": 18.01,
+  "low": 16.62,
+  "close": 16.76,
+  "prev_day_close": 16.87,
+  "volume": 0,
+  "iv30": 47.849,
+  "iv30_change": -36.623,
+  "iv30_change_percent": -43.3552,
+  "seqno": 31845123455,
+  "last_trade_time": "2026-10-15T13:28:31",
+  "tick": "up"
+ },
+ "symbol": "_VIX"
+}

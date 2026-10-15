@@ -1,0 +1,52 @@
+{
+ "corporate_actions": {
+  "spin_offs": [
+   {
+    "due_bill_redemption_date": "2026-08-24",
+    "ex_date": "2026-08-24",
+    "id": "bac48c24-00c3-4924-984b-6309f34979bc",
+    "new_cusip": "G1R79P102",
+    "new_rate": 0.169464,
+    "new_symbol": "G1R79P102",
+    "payable_date": "2026-08-24",
+    "process_date": "2026-08-24",
+    "record_date": "2026-07-24",
+    "source_cusip": "00091F304",
+    "source_rate": 1,
+    "source_symbol": "ABVC"
+   },
+   {
+    "ex_date": "2026-07-08",
+    "id": "3fc39f40-b5ad-4cbe-88d6-5c0240e57728",
+    "new_cusip": "021CVR014",
+    "new_rate": 1,
+    "new_symbol": "021CVR014",
+    "payable_date": "2026-08-17",
+    "process_date": "2026-08-17",
+    "record_date": "2026-07-08",
+    "source_cusip": "02156U200",
+    "source_rate": 1,
+    "source_symbol": "ATER"
+   }
+  ],
+  "name_changes": [
+   {
+    "id": "0d6b028a-e037-4186-a565-1f077b8f6492",
+    "new_cusip": "87975E792",
+    "new_symbol": "PRVT",
+    "old_cusip": "87975E792",
+    "old_symbol": "AAUM",
+    "process_date": "2026-07-06"
+   },
+   {
+    "id": "b1d4831a-8742-40e6-a41b-6e24f36201bf",
+    "new_cusip": "00373V100",
+    "new_symbol": "ABVEF",
+    "old_cusip": "00373V100",
+    "old_symbol": "ABVE",
+    "process_date": "2026-06-02"
+   }
+  ]
+ },
+ "next_page_token": null
+}

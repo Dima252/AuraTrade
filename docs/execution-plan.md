@@ -35,7 +35,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 **Phase 1: Data layer**
 - [x] 1.1 Config and job framework *(runner wired to the `job_runs` store in 1.2 and the calendar in 1.4)*
 - [x] 1.2 Database and initial migration *(Neon `dev` branch: you add its URL to `.env` and run `alembic upgrade head`; tests run on Docker Postgres)*
-- [ ] 1.3 Data clients
+- [x] 1.3 Data clients *(`src/auratrade/data/`: Alpaca bars, IEX quotes, corporate actions, assets and news; CBOE + FRED; EDGAR; Finnhub; the Nasdaq symbol directory. Recorded fixtures, 100% branch coverage, each client checked once live)*
 - [x] 1.4 Market calendar *(daily re-sync wired into `ingest` at 1.5; run `python -m auratrade.calendar.sync` once against the Neon `dev` branch)*
 - [ ] 1.5 Ingest job
 - [ ] 1.6 Historical backfill + real-data smoke run of the modules built early
@@ -226,7 +226,7 @@ Added at the user's request (decision #108). A public page with a link, explaini
 
 - Universe refresh with filters, applied to **raw** prices. Store each security's **first public trading date** as its listing date (an OTC uplisting isn't an IPO; README §5.1, #126).
 - Gap-fill bars, and **re-fetch session T−1's bar** (late volume, #118).
-- Corporate actions for the universe → `corporate_actions`.
+- Corporate actions for the universe → `corporate_actions`. Alpaca's feed filters on **`process_date`**, not the ex-date (a dividend going ex on 10-15 has process date 10-16), and lists announced splits ahead with a process date on or a day before the ex-date (checked 2026-10-15). So query a window padded by a few days and filter on `CorporateAction.effective_date`; looking a few sessions ahead lets the evening before a split's ex-date see it.
 - **Validation:**
   - coverage ≥ 90%, otherwise `INCOMPLETE`
   - OHLC sanity

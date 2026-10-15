@@ -1,0 +1,71 @@
+{
+ "news": [
+  {
+   "author": "Radhika Anilkumar Nadig",
+   "content": "",
+   "created_at": "2026-10-08T07:31:32Z",
+   "headline": "King Charles, Tim Cook Launch Apple-Backed Creative Labs for Young People: 'Opportunities to Learn' From Experts",
+   "id": 62237744,
+   "images": [
+    {
+     "size": "large",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Apple-Ceo--Tim-Cook-Opens-The-Door-Of-Th.jpg?width=2048&height=1536"
+    },
+    {
+     "size": "small",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Apple-Ceo--Tim-Cook-Opens-The-Door-Of-Th.jpg?width=1024&height=768"
+    },
+    {
+     "size": "thumb",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Apple-Ceo--Tim-Cook-Opens-The-Door-Of-Th.jpg?width=250&height=187"
+    }
+   ],
+   "source": "benzinga",
+   "summary": "Apple&#39;s Chairman Tim Cook hosted King Charles in London to launch Creative Labs, a King&#39;s Trust program to help young people start creative careers.",
+   "symbols": [
+    "AAPL"
+   ],
+   "updated_at": "2026-10-08T07:31:32Z",
+   "url": "https://www.benzinga.com/markets/tech/26/10/62237744/tim-cook-honored-to-host-king-charles-as-apple-launches-creative-labs"
+  },
+  {
+   "author": "Radhika Anilkumar Nadig",
+   "content": "",
+   "created_at": "2026-10-08T09:29:43Z",
+   "headline": "Apple's Smart Home Ambitions Hammer REZI, ARLO and ALLE Stocks: Here's What's Happening",
+   "id": 62238712,
+   "images": [
+    {
+     "size": "large",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Apple-logo-is-seen-at-the-Apple-Wangfuji.jpg?width=2048&height=1536"
+    },
+    {
+     "size": "small",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Apple-logo-is-seen-at-the-Apple-Wangfuji.jpg?width=1024&height=768"
+    },
+    {
+     "size": "thumb",
+     "url": "https://cdn.benzinga.com/files/images/story/2026/10/08/Apple-logo-is-seen-at-the-Apple-Wangfuji.jpg?width=250&height=187"
+    }
+   ],
+   "source": "benzinga",
+   "summary": "Resideo, Arlo and Allegion led smart home stocks lower Wednesday after a report that Apple is building connected home devices with LG.",
+   "symbols": [
+    "AAPL",
+    "ALLE",
+    "ALRM",
+    "AMZN",
+    "ARLO",
+    "CARR",
+    "GOOG",
+    "GOOGL",
+    "GOOL",
+    "JCI",
+    "REZI"
+   ],
+   "updated_at": "2026-10-08T09:29:43Z",
+   "url": "https://www.benzinga.com/markets/tech/26/10/62238712/apple-smart-home-report-resideo-arlo-allegion-stocks-fall"
+  }
+ ],
+ "next_page_token": "MTc5MTQ1MTc4MzAwMDAwMDAwMHw2MjIzODcxMg=="
+}
