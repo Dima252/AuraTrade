@@ -157,11 +157,14 @@ def test_edgar_history(tmp_path: Path) -> None:
         ),
     )
     edgar = FakeEdgar()
+    # Without the news the companies are still downloaded (cached), then it stops.
     with pytest.raises(NewsNotFetchedError):
         edgar_history(store, edgar, CALENDAR, START, END, work, workers=2)
+    assert sorted(edgar.calls) == [1, 2]
     fetch_news(FakeNews([RELEASE, CHATTER]), store, START, END, workers=2)
 
     report = edgar_history(store, edgar, CALENDAR, START, END, work, workers=2)
+    assert sorted(edgar.calls) == [1, 2]
     assert report.details() == {
         "securities_with_cik": 2,
         "companies": 2,

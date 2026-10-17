@@ -264,9 +264,6 @@ def edgar_history(
     workers: int,
 ) -> EdgarReport:
     report = EdgarReport()
-    missing = missing_months(store, start, end)
-    if missing:
-        raise NewsNotFetchedError(f"news history missing for {missing[:6]} ({len(missing)})")
     table = get_table(store, table_key(SECURITIES))
     if table is None:
         raise FileNotFoundError("no securities table: run the bars stage first")
@@ -280,6 +277,10 @@ def edgar_history(
         source, (s["cik"] for s in named), start, work, workers=workers
     )
     report.companies = len(companies)
+    # Checked after the downloads, so this stage can fill its cache while the news is fetched.
+    missing = missing_months(store, start, end)
+    if missing:
+        raise NewsNotFetchedError(f"news history missing for {missing[:6]} ({len(missing)})")
 
     headlines = headline_index(read_news(store, start, end))
     first = datetime.combine(start, datetime.min.time(), tzinfo=UTC)

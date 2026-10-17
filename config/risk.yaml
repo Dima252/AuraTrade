@@ -147,7 +147,7 @@ ingest:  # README §5.1, §10; see auratrade.ingest
   db_size_alert_fraction: 0.70
 
 history:  # README §5.1, §10; the Parquet history and its backfill (scripts/backfill.py)
-  start: 2016-01-01                  # Alpaca SIP daily bars begin 2016-01-04
+  start: 2016-01-04                  # the first session; Alpaca SIP daily bars begin here
   max_gap_sessions: 30               # a longer gap in trading = a new security (ticker reuse)
   enumeration_every_sessions: 126    # 1-4 letter ticker sweep spacing (< min_history_sessions)
   enumeration_window_sessions: 5     # sessions per sweep (~3 minutes each, spike 0.3a)

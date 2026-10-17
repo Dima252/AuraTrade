@@ -78,8 +78,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     key = settings.alpaca_api_key.get_secret_value()
     secret = settings.alpaca_secret_key.get_secret_value()
     http = alpaca_http(key, secret)
-    alpaca = AlpacaDataClient(http)
     cfg = risk.history
+    alpaca = AlpacaDataClient(http, workers=cfg.workers)
     try:
         with engine.connect() as conn:
             calendar = load_calendar(conn)
