@@ -80,6 +80,9 @@ uv run alembic upgrade head               # apply migrations (from task 1.2)
 uv run python -m auratrade.calendar.sync  # sync market_sessions from Alpaca + cross-check (from task 1.4)
 uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
 uv run python -m auratrade.jobs.ingest --direct --session 2026-10-14   # ingest without the runner (its predecessor post_market comes in 1.7)
+uv run python scripts/backfill.py all     # the Parquet history since 2016 (hours, resumable; from task 1.6)
+uv run python scripts/backfill.py postgres   # the 2-year window's earnings, fundamentals, VIX into Postgres (after an ingest run)
+uv run python scripts/smoke_real_data.py  # the early modules over the whole history -> docs/backtests/smoke.md
 cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 ```
 

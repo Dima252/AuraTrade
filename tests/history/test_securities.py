@@ -53,6 +53,13 @@ def test_segments_split_on_long_gaps() -> None:
     assert segments([], position, max_gap=5) == []
 
 
+def test_segments_split_on_level_jumps() -> None:
+    position = {d: i for i, d in enumerate(D)}
+    closes = [10.0, 10.5, 50.0, 49.0, 12.0, 11.0]  # x4.8 up, then down to a quarter
+    assert segments(D[:6], position, 5, closes=closes, max_jump=4.0) == [(0, 1), (2, 3), (4, 5)]
+    assert segments(D[:6], position, 5, closes=closes, max_jump=5.0) == [(0, 5)]
+
+
 def test_one_piece_takes_the_active_asset() -> None:
     [sec] = securities_for("ABC", [(D[0], D[9])], [asset("a1", True)], trading_since=D[5])
     assert (sec.key, sec.alpaca_asset_id, sec.source, sec.active) == (

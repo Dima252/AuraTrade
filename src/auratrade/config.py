@@ -358,6 +358,13 @@ class HistoryConfig(_Strict):
     # A ticker that didn't trade for more than this many sessions is a new security after the
     # gap: tickers get reused (#111).
     max_gap_sessions: PositiveInt
+    # A one-bar move of this factor or more in the split-adjusted close (up, or down to its
+    # inverse) is a new security too: a reorganization, an unadjusted reverse split, a spin-off.
+    max_jump: Annotated[float, Field(gt=1.0)]
+    # Two securities whose bars are identical on at least this share of the shorter one's
+    # sessions are one company under two tickers (the old ticker of a rename keeps serving the
+    # new one's bars): the shorter, or the one no active asset names, is dropped.
+    duplicate_share: Fraction
     # Alpaca's asset list forgets most delistings, but the bars endpoint still serves them: every
     # 1-4 letter ticker is tried over a few sessions at this spacing. A security in the universe
     # has traded for at least `universe.min_history_sessions`, so a spacing below that sees it.

@@ -102,6 +102,8 @@ def vendor() -> tuple[FakeAlpaca, FakeDirectory]:
     fake.add("SPY", S, price=500.0, volume=1000)
     fake.add("ETFX", S, price=10.0, volume=1000)
     fake.set_bar("AAA", S[20], high=90.0)  # a bad tick
+    # A renamed company: the old ticker keeps serving AAA's bars up to the rename.
+    fake.raw["OLDA"] = {d: fake.raw["AAA"][d] for d in S[:12]}
     return fake, directory
 
 
@@ -109,9 +111,9 @@ def test_discover_fetch_and_build(tmp_path: Path) -> None:
     fake, directory = vendor()
     cfg = risk()
     work = tmp_path / "work"
-    tickers = ["AAA", "OLD", "REU", "MID", "NEW", "SPY", "ETFX", "ZZZ"]
+    tickers = ["AAA", "OLD", "OLDA", "REU", "MID", "NEW", "SPY", "ETFX", "ZZZ"]
     found = discover(fake, directory, S, cfg, work, tickers=tickers)
-    assert found.symbols == ["AAA", "NEW", "OLD", "REU", "SPY"]
+    assert found.symbols == ["AAA", "NEW", "OLD", "OLDA", "REU", "SPY"]
     assert "MID" not in found.swept
     by_symbol = {a.symbol: a for a in found.assets}
     assert by_symbol["OLD"].active is False
@@ -132,7 +134,9 @@ def test_discover_fetch_and_build(tmp_path: Path) -> None:
 
     store = LocalStore(tmp_path / "store")
     report = build_history(store, work, found.assets, S, cfg)
-    assert report.tickers == 5
+    assert report.tickers == 6
+    assert report.duplicates == {f"OLDA:{S[0].isoformat()}": "a-aaa"}
+    assert report.duplicate_symbols == ["OLDA=AAA"]
     assert report.by_source == {"ACTIVE": 3, "INACTIVE": 1, "ENUMERATED": 2}
     assert (report.securities, report.active, report.type_assumed, report.relisted) == (6, 3, 2, 1)
     assert report.dropped == {"zero volume": 20}

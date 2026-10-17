@@ -8,14 +8,16 @@
 - **Build:** each ticker's bars through `history.bars.prepare` (the ingest rules), split into
   securities (`history.securities`), then written one object per session, with the securities
   table, the bar corrections and the universe membership: the securities of a universe type (on
-  a universe exchange where known) passing the README §5.1 filters at each session.
+  a universe exchange where known) passing the README §5.1 filters at each session. A security
+  that repeats another's bars (one company under its old and new ticker) is dropped first.
 """
 
 from __future__ import annotations
 
+import itertools
 import json
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from datetime import date
@@ -203,6 +205,9 @@ class BuildReport:
     corrections: int = 0
     sessions_written: int = 0
     members: dict[str, int] = field(default_factory=dict)  # min / median / max per session
+    # Dropped duplicate → the security kept (one company under two tickers).
+    duplicates: dict[str, str] = field(default_factory=dict)
+    duplicate_symbols: list[str] = field(default_factory=list)  # "OLD=NEW", the first 30
 
     def details(self) -> dict[str, object]:
         return {
@@ -217,6 +222,8 @@ class BuildReport:
             "corrections": self.corrections,
             "sessions_written": self.sessions_written,
             "members": self.members,
+            "duplicates": len(self.duplicates),
+            "duplicate_symbols": self.duplicate_symbols,
         }
 
 
@@ -250,6 +257,7 @@ def build_ticker(
         raw,
         position,
         max_gap=risk.history.max_gap_sessions,
+        max_jump=risk.history.max_jump,
         outliers=risk.ingest.outliers,
     )
     dropped.update(prepared.dropped)
@@ -385,8 +393,17 @@ def build_history(
         report.bars += len(bars)
         log.info("backfill_build_chunk", chunk=i, of=len(staged), bars=len(bars))
 
-    _write_sessions(store, built, sessions, report)
-    _write_members(store, built, sessions, report)
+    report.duplicates = find_duplicates(built, sessions, securities, risk.history.duplicate_share)
+    symbol_of = {s["security"]: s["symbol"] for s in securities}
+    report.duplicate_symbols = [
+        f"{symbol_of[lose]}={symbol_of[keep]}"
+        for lose, keep in list(report.duplicates.items())[:30]
+    ]
+    gone = set(report.duplicates)
+    securities = [s for s in securities if s["security"] not in gone]
+    corrections = [c for c in corrections if c["security"] not in gone]
+    _write_sessions(store, built, sessions, report, gone)
+    _write_members(store, built, sessions, report, gone)
     put_table(store, table_key(SECURITIES), pa.Table.from_pylist(securities, SECURITY_SCHEMA))
     put_table(store, table_key(CORRECTIONS), pa.Table.from_pylist(corrections, CORRECTION_SCHEMA))
     report.securities = len(securities)
@@ -408,15 +425,56 @@ def _years(sessions: Sequence[date]) -> range:
     return range(sessions[0].year, sessions[-1].year + 1)
 
 
+def find_duplicates(
+    built: Path, sessions: Sequence[date], securities: Sequence[Mapping[str, Any]], share: float
+) -> dict[str, str]:
+    """Securities whose bars repeat another's on at least `share` of their sessions: the old
+    ticker of a renamed company keeps serving the new ticker's bars up to the rename (PKI and
+    RVTY, TASR and AXON; found by the 1.6 smoke run). The one to keep: an active security, then
+    one with an asset id, then the longer history. Returns dropped → kept."""
+    files = sorted(str(p) for p in built.glob("bars-*.parquet"))
+    if not files:
+        return {}
+    dataset = ds.dataset(files, format="parquet", schema=BAR_SCHEMA)
+    keys = ["session_date", "open", "high", "low", "close", "volume"]
+    shared: Counter[tuple[str, str]] = Counter()
+    for year in _years(sessions):
+        table = dataset.to_table(columns=[*keys, "security"], filter=_year_filter(year))
+        groups = table.group_by(keys).aggregate([("security", "list")])
+        for group in groups.column("security_list").to_pylist():
+            if len(group) > 1:
+                shared.update(itertools.combinations(sorted(set(group)), 2))
+    info = {s["security"]: s for s in securities}
+
+    def rank(key: str) -> tuple[bool, bool, int, str]:
+        s = info[key]
+        return (bool(s["active"]), s["alpaca_asset_id"] is not None, int(s["bars"]), key)
+
+    dropped: dict[str, str] = {}
+    for (a, b), n in sorted(shared.items(), key=lambda kv: (-kv[1], kv[0])):
+        if n < share * min(info[a]["bars"], info[b]["bars"]):
+            continue
+        keep, lose = sorted((a, b), key=rank, reverse=True)
+        while keep in dropped:  # a chain of renames: keep the last survivor
+            keep = dropped[keep]
+        if lose not in dropped and lose != keep:
+            dropped[lose] = keep
+    return dropped
+
+
 def _write_sessions(
-    store: ObjectStore, built: Path, sessions: Sequence[date], report: BuildReport
+    store: ObjectStore,
+    built: Path,
+    sessions: Sequence[date],
+    report: BuildReport,
+    gone: Collection[str] = (),
 ) -> None:
     files = sorted(str(p) for p in built.glob("bars-*.parquet"))
     if not files:
         return
     dataset = ds.dataset(files, format="parquet", schema=BAR_SCHEMA)
     for year in _years(sessions):
-        table = dataset.to_table(filter=_year_filter(year)).sort_by(
+        table = _without(dataset.to_table(filter=_year_filter(year)), gone).sort_by(
             [("session_date", "ascending"), ("symbol", "ascending")]
         )
         for session, part in _by_session(table):
@@ -425,14 +483,18 @@ def _write_sessions(
 
 
 def _write_members(
-    store: ObjectStore, built: Path, sessions: Sequence[date], report: BuildReport
+    store: ObjectStore,
+    built: Path,
+    sessions: Sequence[date],
+    report: BuildReport,
+    gone: Collection[str] = (),
 ) -> None:
     files = sorted(str(p) for p in built.glob("members-*.parquet"))
     counts: list[int] = []
     if files:
         dataset = ds.dataset(files, format="parquet", schema=MEMBER_SCHEMA)
         for year in _years(sessions):
-            table = dataset.to_table(filter=_year_filter(year)).sort_by(
+            table = _without(dataset.to_table(filter=_year_filter(year)), gone).sort_by(
                 [("session_date", "ascending"), ("security", "ascending")]
             )
             put_table(store, membership_key(year), table)
@@ -444,6 +506,12 @@ def _write_members(
             "median": ordered[len(ordered) // 2],
             "max": ordered[-1],
         }
+
+
+def _without(table: pa.Table, gone: Collection[str]) -> pa.Table:
+    if not gone:
+        return table
+    return table.filter(pc.invert(pc.is_in(table["security"], pa.array(sorted(gone), pa.string()))))
 
 
 def _by_session(table: pa.Table) -> list[tuple[date, pa.Table]]:

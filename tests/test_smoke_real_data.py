@@ -88,6 +88,12 @@ def test_smoke_run_on_a_synthetic_history(tmp_path: Path) -> None:
     text = smoke.render(result, risk)
     for heading in ("## Inputs", "## Regime (2.3)", "## Trend Template (3.1)", "## Bases"):
         assert heading in text
+    report = tmp_path / "smoke.md"
+    hand = "## Reading\n\nBy hand.\n"
+    report.write_text(f"{text}\n{hand}", encoding="utf-8")
+    again = smoke.render(result, risk, smoke.kept_reading(report))
+    assert again.endswith(hand)
+    assert smoke.kept_reading(tmp_path / "missing.md") == ""
     smoke.write_detail(result, tmp_path / "detail")
     rows = (tmp_path / "detail" / "regime.csv").read_text(encoding="utf-8").splitlines()
     assert len(rows) == N  # a header and one row per classified session

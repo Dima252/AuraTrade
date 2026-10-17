@@ -6,7 +6,10 @@
   `enumeration_every_sessions`; a symbol found only this way has no name, and its type is
   assumed to be common stock.
 - **Keys:** bars come back by ticker, and tickers get reused. A ticker's bars split into separate
-  securities wherever it didn't trade for more than `max_gap_sessions` sessions. The newest piece
+  securities wherever it didn't trade for more than `max_gap_sessions` sessions, and wherever its
+  split-adjusted close moved `max_jump` times or more in one bar: a bankruptcy reorganization, a
+  reverse split the vendor didn't adjust, or a spin-off (spike 1.6; a real move that size is
+  rare, and the new piece starts without history, the conservative side). The newest piece
   takes the Alpaca asset id of the ticker's active asset if it still trades (else an inactive
   one), the piece before it an inactive asset id not yet used, and the rest a key of the symbol
   and their first session. Ticker ids differ per database, so the history never uses them.
@@ -94,15 +97,26 @@ def sweep_windows(sessions: Sequence[date], every: int, length: int) -> list[tup
 
 
 def segments(
-    days: Sequence[date], position: Mapping[date, int], max_gap: int
+    days: Sequence[date],
+    position: Mapping[date, int],
+    max_gap: int,
+    *,
+    closes: Sequence[float] | None = None,
+    max_jump: float | None = None,
 ) -> list[tuple[int, int]]:
     """Index ranges [first, last] of `days` (one ticker's traded sessions, oldest first) split
-    wherever more than `max_gap` sessions passed without a bar. `position` maps a session to its
-    index in the calendar."""
+    wherever more than `max_gap` sessions passed without a bar, or, given `closes` and
+    `max_jump`, where the split-adjusted close moved by that factor or more in one bar (up or
+    down). `position` maps a session to its index in the calendar."""
     out: list[tuple[int, int]] = []
     first = 0
     for i in range(1, len(days)):
-        if position[days[i]] - position[days[i - 1]] - 1 > max_gap:
+        gap = position[days[i]] - position[days[i - 1]] - 1 > max_gap
+        jump = False
+        if closes is not None and max_jump is not None:
+            ratio = closes[i] / closes[i - 1]
+            jump = ratio >= max_jump or ratio <= 1 / max_jump
+        if gap or jump:
             out.append((first, i - 1))
             first = i
     if days:

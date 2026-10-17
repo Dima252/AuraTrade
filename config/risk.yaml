@@ -149,6 +149,8 @@ ingest:  # README §5.1, §10; see auratrade.ingest
 history:  # README §5.1, §10; the Parquet history and its backfill (scripts/backfill.py)
   start: 2016-01-04                  # the first session; Alpaca SIP daily bars begin here
   max_gap_sessions: 30               # a longer gap in trading = a new security (ticker reuse)
+  max_jump: 4.0                      # so is a 4x (or 1/4x) one-day close move: reorganizations
+  duplicate_share: 0.9               # bars identical on 90% of sessions = one company, two tickers
   enumeration_every_sessions: 126    # 1-4 letter ticker sweep spacing (< min_history_sessions)
   enumeration_window_sessions: 5     # sessions per sweep (~3 minutes each, spike 0.3a)
   bar_chunk_symbols: 50

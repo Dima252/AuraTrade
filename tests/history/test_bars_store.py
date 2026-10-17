@@ -24,7 +24,7 @@ def test_prepare_drops_bad_bars_splits_gaps_and_corrects_outliers() -> None:
     bars[2] = bar(days[2], high=90.0)  # a bad tick: far above the body and both neighbours
     bars[4] = bar(days[4], volume=0)  # a zombie bar
     raw = {d: 100.0 for d in days if d != days[5]}  # no raw bar for one session
-    out = prepare(bars, raw, POSITION, max_gap=5, outliers=RISK.ingest.outliers)
+    out = prepare(bars, raw, POSITION, max_gap=5, max_jump=4.0, outliers=RISK.ingest.outliers)
     assert out.dropped == {NO_RAW: 1, "zero volume": 1}
     assert [(p.first, p.last) for p in out.pieces] == [(D[0], D[3]), (D[12], D[15])]
     first = out.pieces[0]
@@ -73,3 +73,11 @@ def test_bar_sessions_write_merge_and_read(tmp_path: Path) -> None:
     # Without merge the session is replaced.
     write_bar_session(store, D[1], [row(D[1], "a", "AAA", 5.0)], merge=False)
     assert read_bars(store, D[1], D[1]).num_rows == 1
+
+
+def test_prepare_starts_a_new_piece_at_a_level_jump() -> None:
+    # A reorganization: the old shares at $0.50, the new ones at $30, no gap in trading.
+    bars = [bar(d, 0.5) for d in D[:5]] + [bar(d, 30.0) for d in D[5:10]]
+    raw = {d: b.close for d, b in zip(D, bars, strict=False)}
+    out = prepare(bars, raw, POSITION, max_gap=5, max_jump=4.0, outliers=RISK.ingest.outliers)
+    assert [(p.first, p.last) for p in out.pieces] == [(D[0], D[4]), (D[5], D[9])]

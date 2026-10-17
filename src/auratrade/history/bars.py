@@ -3,7 +3,8 @@
 The same rules as the evening ingest (`ingest.bars`), so the history matches what Postgres
 holds: the raw close attached (a session without one is dropped: it can't pass the
 point-in-time price filter), the sanity check (zero-volume zombie bars after a delisting go),
-then the gap split (`securities.segments`), then the outlier filter within each piece.
+then the split at gaps and level jumps (`securities.segments`), then the outlier filter within
+each piece. The jump split comes before the outlier filter, which looks only at highs and lows.
 """
 
 from __future__ import annotations
@@ -52,6 +53,7 @@ def prepare(
     position: Mapping[date, int],
     *,
     max_gap: int,
+    max_jump: float,
     outliers: OutlierConfig,
 ) -> Prepared:
     """`adjusted`: split-adjusted bars, oldest first (`raw_close` not yet attached);
@@ -68,7 +70,14 @@ def prepare(
         else:
             dropped[problem] = dropped.get(problem, 0) + 1
     pieces = []
-    for first, last in segments([b.session for b in kept], position, max_gap):
+    found_pieces = segments(
+        [b.session for b in kept],
+        position,
+        max_gap,
+        closes=[b.close for b in kept],
+        max_jump=max_jump,
+    )
+    for first, last in found_pieces:
         bars = kept[first : last + 1]
         found = find_outliers(bars, outliers)
         pieces.append(Piece(apply_corrections(bars, found), found))

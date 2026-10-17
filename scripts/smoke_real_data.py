@@ -8,7 +8,8 @@ position plans on a few sample trades (3.5a) run on the Parquet history (scripts
 It checks that nothing raises and that no NaN or infinite value appears where the inputs were
 complete, and summarises what the modules produce so a human can judge whether it is plausible.
 Nothing is tuned here: a clear miss goes to task 2.4 (regime) or the module's own task.
-Per-session detail goes to var/smoke/ (git-ignored).
+Per-session detail goes to var/smoke/ (git-ignored). A `## Reading` section written by hand at
+the end of the report (what the numbers mean) is kept when the report is regenerated.
 """
 
 from __future__ import annotations
@@ -252,6 +253,7 @@ def run_smoke(
             smoke.exceptions.append(f"bases {key}: {type(exc).__name__}: {exc}")
             continue
         current: int | None = None
+        passed = passes_of.get(key) or [False] * len(s)
         done = sorted((b for b in scan.bases if b.end is not None), key=lambda b: b.end or 0)
         j = 0
         for i, d in enumerate(s.dates):
@@ -259,7 +261,7 @@ def run_smoke(
                 b = done[j]
                 current = b.stage if b.status is BaseStatus.BROKEN_OUT else None
                 j += 1
-            if passes_of.get(key, [False] * len(s))[i] and key in members.get(d, ()):
+            if passed[i] and key in members.get(d, ()):
                 stage_mix[d][_stage_label(current)] += 1
         for b in done:
             if b.status is BaseStatus.FAILED:
@@ -272,7 +274,7 @@ def run_smoke(
             smoke.stages_by_year.setdefault(day.year, Counter())[min(stage, 4)] += 1
             if stage >= 5:
                 smoke.high_stage.append((stage, str(sec["symbol"]), key, day, b.count_reliable))
-            if passes_of.get(key, [False] * len(s))[b.end or 0]:
+            if passed[b.end or 0]:
                 breakouts.append((key, b))
     smoke.stage_mix = dict(stage_mix)
     smoke.high_stage.sort(reverse=True)
@@ -429,8 +431,11 @@ def regime_runs(
     return runs
 
 
-def render(smoke: Smoke, risk: RiskConfig) -> str:
+def render(smoke: Smoke, risk: RiskConfig, reading: str = "") -> str:
+    """The report; `reading` (the hand-written section of an earlier report) goes at the end."""
     regimes = ("CORRECTION", "EARLY_UPTREND", "UNDER_PRESSURE", "CONFIRMED_UPTREND")
+    warm = risk.universe.min_history_sessions
+    settled = smoke.members[warm - 1 :]
     lines = [
         "# Real-data smoke run (task 1.6)",
         "",
@@ -447,9 +452,9 @@ def render(smoke: Smoke, risk: RiskConfig) -> str:
         f"in it at some session; {smoke.delisted_members} of them "
         f"({_pct(smoke.delisted_members / max(smoke.member_securities, 1))}) no longer trade, and "
         f"{smoke.assumed_type_members} were found only by the ticker sweep (type assumed common).",
-        f"- Universe size per session: min {min(smoke.members, default=0)}, median "
-        f"{statistics.median(smoke.members) if smoke.members else 0:.0f}, max "
-        f"{max(smoke.members, default=0)}.",
+        f"- Universe size per session after the first {warm} (no security has "
+        f"{warm} bars before then): min {min(settled, default=0)}, median "
+        f"{statistics.median(settled) if settled else 0:.0f}, max {max(settled, default=0)}.",
         f"- With a CIK (earnings dates and fundamentals): {smoke.with_cik_members} of "
         f"{smoke.member_securities} "
         f"({_pct(smoke.with_cik_members / max(smoke.member_securities, 1))}).",
@@ -583,7 +588,20 @@ def render(smoke: Smoke, risk: RiskConfig) -> str:
         for t in smoke.trades
     ]
     lines += ["", "Run time (s): " + ", ".join(f"{k} {v}" for k, v in smoke.seconds.items()), ""]
-    return "\n".join(lines)
+    text = "\n".join(lines)
+    return f"{text}\n{reading.strip()}\n" if reading.strip() else text
+
+
+READING = "## Reading"
+
+
+def kept_reading(path: Path) -> str:
+    """The hand-written part of an existing report: from its `## Reading` heading on."""
+    if not path.exists():
+        return ""
+    text = path.read_text(encoding="utf-8")
+    at = text.find(f"\n{READING}")
+    return text[at + 1 :] if at >= 0 else ""
 
 
 def write_detail(smoke: Smoke, folder: Path) -> None:
@@ -647,7 +665,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     write_detail(smoke, DETAIL)
     args.report.parent.mkdir(parents=True, exist_ok=True)
-    args.report.write_text(render(smoke, risk), encoding="utf-8")
+    report = render(smoke, risk, kept_reading(args.report))
+    args.report.write_text(report, encoding="utf-8")
     print(f"wrote {args.report}; exceptions {len(smoke.exceptions)}", file=sys.stderr)
     return 1 if smoke.exceptions or sum(smoke.non_finite.values()) else 0
 
