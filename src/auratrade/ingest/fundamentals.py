@@ -268,7 +268,7 @@ def ingest_fundamentals(
             report.no_facts.append(row.symbol)
             continue
         written[row.id] = quarters(facts)[-cfg.fundamentals_quarters :]
-    report.rows_written = _write(conn, written)
+    report.rows_written = write_quarters(conn, written)
     return report
 
 
@@ -286,7 +286,8 @@ _VALUES = (
 )
 
 
-def _write(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Quarter]]) -> int:
+def write_quarters(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Quarter]]) -> int:
+    """Upsert each ticker's quarters and drop its older ones; returns the rows changed."""
     rows = [
         {
             "ticker_id": ticker_id,

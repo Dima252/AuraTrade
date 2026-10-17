@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -349,6 +350,25 @@ class IngestConfig(_Strict):
     db_size_alert_fraction: Fraction
 
 
+class HistoryConfig(_Strict):
+    """The Parquet history and its backfill (README §5.1, §10; task 1.6)."""
+
+    # Alpaca's SIP daily bars start on 2016-01-04 (spike 0.3a).
+    start: date
+    # A ticker that didn't trade for more than this many sessions is a new security after the
+    # gap: tickers get reused (#111).
+    max_gap_sessions: PositiveInt
+    # Alpaca's asset list forgets most delistings, but the bars endpoint still serves them: every
+    # 1-4 letter ticker is tried over a few sessions at this spacing. A security in the universe
+    # has traded for at least `universe.min_history_sessions`, so a spacing below that sees it.
+    enumeration_every_sessions: PositiveInt
+    enumeration_window_sessions: PositiveInt
+    # Symbols per bars request: small requests spread over the workers finish sooner than the
+    # 1,000-symbol maximum, whose pages are fetched one after another.
+    bar_chunk_symbols: PositiveInt
+    workers: PositiveInt
+
+
 class JobsConfig(_Strict):
     chain_wait_minutes: PositiveInt
     duration_alert_minutes: PositiveInt
@@ -365,6 +385,7 @@ class RiskConfig(_Strict):
     data: DataConfig
     universe: UniverseConfig
     ingest: IngestConfig
+    history: HistoryConfig
     jobs: JobsConfig
     trend_template: TrendTemplateConfig
     bases: BasesConfig

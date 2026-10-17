@@ -146,6 +146,14 @@ ingest:  # README §5.1, §10; see auratrade.ingest
   db_size_limit_mb: 512              # Neon free tier
   db_size_alert_fraction: 0.70
 
+history:  # README §5.1, §10; the Parquet history and its backfill (scripts/backfill.py)
+  start: 2016-01-01                  # Alpaca SIP daily bars begin 2016-01-04
+  max_gap_sessions: 30               # a longer gap in trading = a new security (ticker reuse)
+  enumeration_every_sessions: 126    # 1-4 letter ticker sweep spacing (< min_history_sessions)
+  enumeration_window_sessions: 5     # sessions per sweep (~3 minutes each, spike 0.3a)
+  bar_chunk_symbols: 50
+  workers: 8                         # concurrent requests, under Alpaca's 200 a minute
+
 jobs:  # README §2
   chain_wait_minutes: 30
   duration_alert_minutes: 10
