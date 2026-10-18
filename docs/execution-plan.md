@@ -388,6 +388,7 @@ Every function is unit-tested on hand-built series with known answers.
 - SPY forward returns and drawdowns by regime
 - each pillar's score distribution, and the total score's
 - **false `CORRECTION` spells**: longer than 15 sessions, with SPY never closing 8% or more below its prior 52-week high
+  - a known case from the 1.6 smoke run: the regime sat in `CORRECTION` from April to June 2017, a calm market that never produced a follow-through day (`docs/backtests/smoke.md`)
 - comparisons: excluding expiration/rebalance distribution days vs not; the `no_ftd` fallback after 10 sessions vs other lengths; the 10-session minimum in `EARLY_UPTREND` vs none; **an immediate downgrade to `CORRECTION` vs one that needs 2 sessions at ≤ −1** (with the index-trend pillar at −1 still immediate)
 
 Thresholds are **tuned on 2016–2022 only** (trading effectively from early 2017, after the warm-up). Only about 4–5 major episodes exist in the data, so prefer IBD's published thresholds unless a change clearly helps on both periods. The report goes to `docs/backtests/regime.md`.
