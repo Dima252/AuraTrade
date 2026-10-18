@@ -10,7 +10,7 @@ from typing import Any
 
 import pytest
 import structlog
-from sqlalchemy import Engine, select
+from sqlalchemy import Engine, select, text
 
 from auratrade.calendar.sessions import DbCalendar
 from auratrade.calendar.sources import SessionTimes
@@ -336,3 +336,12 @@ def test_missing_vendors_are_skipped(pg_engine: Engine, tmp_path: Path) -> None:
     assert details["companies"] == {"skipped": "EDGAR_USER_AGENT not set"}
     assert details["earnings"] == {"skipped": "FINNHUB_API_KEY or EDGAR_USER_AGENT not set"}
     assert "fundamentals" not in details
+
+
+def test_step_transactions_may_idle_past_neons_limit(pg_engine: Engine) -> None:
+    # Neon ends a transaction idle for 5 minutes; a first fill's bar fetch takes about 15.
+    show = text("SHOW idle_in_transaction_session_timeout")
+    with ingest_job._transaction(pg_engine, RISK) as conn:
+        assert conn.execute(show).scalar() == f"{RISK.ingest.transaction_idle_minutes}min"
+    with pg_engine.connect() as conn:  # raised for that transaction only
+        assert conn.execute(show).scalar() != f"{RISK.ingest.transaction_idle_minutes}min"

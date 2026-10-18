@@ -143,6 +143,7 @@ ingest:  # README §5.1, §10; see auratrade.ingest
   industry_min_group_size: 15        # spike 0.3e: 102 groups
   archive_after_sessions: 63         # ~90 days
   http_workers: 4                    # concurrent requests per vendor, under its rate limit
+  transaction_idle_minutes: 30       # a step's transaction waits on vendor calls; Neon allows 5
   db_size_limit_mb: 512              # Neon free tier
   db_size_alert_fraction: 0.70
 

@@ -346,6 +346,10 @@ class IngestConfig(_Strict):
     # Concurrent requests per vendor: the bar and EDGAR requests are bound by response time, and
     # the vendor's rate limiter still applies across the workers.
     http_workers: PositiveInt
+    # Each step's transaction stays open across its vendor calls (a first fill fetches for about
+    # 15 minutes), and Neon ends a transaction idle for 5. Raised for the ingest's own
+    # transactions only, and still bounded so a lost client's locks are freed.
+    transaction_idle_minutes: PositiveInt
     db_size_limit_mb: PositiveInt
     db_size_alert_fraction: Fraction
 
