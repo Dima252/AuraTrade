@@ -153,7 +153,8 @@ class EdgarClient:
             }
             for taxonomy, tags in (body.get("facts") or {}).items()
         }
-        return CompanyFacts(int(body["cik"]), body.get("entityName") or "", facts)
+        # Some filers' facts come without "cik" (closed-end funds, a few small companies).
+        return CompanyFacts(int(body.get("cik") or cik), body.get("entityName") or "", facts)
 
 
 def _filings(columns: Mapping[str, Sequence[Any]]) -> list[Filing]:

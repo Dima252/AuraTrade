@@ -61,6 +61,13 @@ def test_news_dedupes_items_across_symbol_chunks() -> None:
     assert server.params(0)["include_content"] == "true"
 
 
+def test_news_for_every_symbol_sends_no_symbol_filter() -> None:
+    server = news_pages()
+    items = news_client(server).news(None, START, END)
+    assert len(items) == 4
+    assert "symbols" not in server.params(0)
+
+
 def test_news_unexpected_shape() -> None:
     with pytest.raises(VendorError, match="unexpected response"):
         news_client(Server(ok([]))).news(["AAPL"], START, END)

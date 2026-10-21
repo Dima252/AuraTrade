@@ -31,6 +31,7 @@ from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import RiskConfig
 from auratrade.data.edgar import CompanyFacts, FactValue
 from auratrade.db.models import DailyBar, EarningsEvent, Fundamental, Ticker
+from auratrade.ingest.bar_store import WRITE_CHUNK
 from auratrade.ingest.companies import session_index
 
 REVENUE_TAGS = (
@@ -55,6 +56,8 @@ QUARTER_AGO_DAYS = range(80, 101)
 # A first filing this long after the period end is a comparative figure that first appeared
 # in a later report: its fiscal labels are the later report's, so the quarter is skipped.
 MAX_FILING_LAG_DAYS = 120
+# A first filing before the period end is a mis-tagged fact (seen in 14 of 167,520 quarters
+# since 2012, e.g. a 10-K filed in June carrying September and December period ends): skipped.
 _FISCAL_QUARTER = {"Q1": 1, "Q2": 2, "Q3": 3, "FY": 4}
 
 
@@ -141,7 +144,7 @@ def quarters(facts: CompanyFacts) -> list[Quarter]:
     for end in ends:
         e, r = eps.get(end), revenue.get(end)
         latest = max((v for v in (e, r) if v is not None), key=lambda v: v.filed)
-        if (latest.filed - end).days > MAX_FILING_LAG_DAYS:
+        if not 0 <= (latest.filed - end).days <= MAX_FILING_LAG_DAYS:
             continue
         if latest.fiscal_year is None or latest.fiscal_quarter is None:
             continue
@@ -268,7 +271,7 @@ def ingest_fundamentals(
             report.no_facts.append(row.symbol)
             continue
         written[row.id] = quarters(facts)[-cfg.fundamentals_quarters :]
-    report.rows_written = _write(conn, written)
+    report.rows_written = write_quarters(conn, written)
     return report
 
 
@@ -286,7 +289,8 @@ _VALUES = (
 )
 
 
-def _write(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Quarter]]) -> int:
+def write_quarters(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Quarter]]) -> int:
+    """Upsert each ticker's quarters and drop its older ones; returns the rows changed."""
     rows = [
         {
             "ticker_id": ticker_id,
@@ -307,9 +311,10 @@ def _write(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Quarter]]
         for q in qs
     ]
     written = 0
-    if rows:
+    # In slices: one statement carries at most 65,535 parameters (the backfill writes ~45k rows).
+    for i in range(0, len(rows), WRITE_CHUNK):
         t = Fundamental
-        stmt = insert(t).values(rows)
+        stmt = insert(t).values(rows[i : i + WRITE_CHUNK])
         new = stmt.excluded
         stmt = stmt.on_conflict_do_update(
             index_elements=["ticker_id", "period_end", "filed_date"],
@@ -318,7 +323,7 @@ def _write(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Quarter]]
                 tuple_(*(getattr(new, c) for c in _VALUES))
             ),
         )
-        written = len(conn.execute(stmt.returning(t.id)).all())
+        written += len(conn.execute(stmt.returning(t.id)).all())
     # Keep only the latest quarters per refreshed ticker (Neon's 0.5 GB).
     for ticker_id, qs in quarters_by_ticker.items():
         if qs:

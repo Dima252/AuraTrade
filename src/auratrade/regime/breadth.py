@@ -13,7 +13,8 @@ from datetime import date
 from auratrade.config import BreadthConfig, UniverseConfig
 from auratrade.indicators.breadth import net_new_highs_average
 from auratrade.indicators.moving_averages import sma
-from auratrade.indicators.series import rolling_max, rolling_mean, rolling_min
+from auratrade.indicators.series import rolling_max, rolling_min
+from auratrade.indicators.universe import universe_flags
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,6 +41,19 @@ class SessionBreadth:
         return self.above / self.members if self.members else None
 
 
+def universe_members(history: TickerHistory, universe: UniverseConfig) -> list[bool]:
+    """Per bar of ``history``: whether the security is in the universe at that session."""
+    return universe_flags(
+        history.closes,
+        history.raw_closes,
+        history.volumes,
+        min_price=universe.min_price,
+        min_dollar_volume=universe.min_dollar_volume,
+        dollar_volume_sessions=universe.dollar_volume_sessions,
+        min_history_sessions=universe.min_history_sessions,
+    )
+
+
 def session_breadth(
     histories: Iterable[TickerHistory],
     sessions: Sequence[date],
@@ -53,20 +67,9 @@ def session_breadth(
         averages = sma(h.closes, cfg.sma)
         highest = rolling_max(h.highs, cfg.new_high_sessions)
         lowest = rolling_min(h.lows, cfg.new_high_sessions)
-        dollar_volume = rolling_mean(
-            [c * v for c, v in zip(h.closes, h.volumes, strict=True)],
-            universe.dollar_volume_sessions,
-        )
+        members = universe_members(h, universe)
         for i, day in enumerate(h.dates):
-            if day not in wanted:
-                continue
-            dv = dollar_volume[i]
-            if (
-                i + 1 < universe.min_history_sessions
-                or h.raw_closes[i] < universe.min_price
-                or dv is None
-                or dv < universe.min_dollar_volume
-            ):
+            if day not in wanted or not members[i]:
                 continue
             c = counts[day]
             c[0] += 1

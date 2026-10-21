@@ -3,22 +3,19 @@ are equal, so a second run of the same evening writes no rows (task 1.5 acceptan
 
 from __future__ import annotations
 
-import io
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import date, datetime
 
-import pyarrow as pa
-import pyarrow.parquet as pq
 from sqlalchemy import Connection, delete, func, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 
 from auratrade.db.models import BarCorrection, DailyBar, MarketSession, Ticker
+from auratrade.history.store import write_bar_session
 from auratrade.ingest.bars import Correction, IngestBar
 from auratrade.storage import ObjectStore
 
 WRITE_CHUNK = 2000
 _VALUES = ("open", "high", "low", "close", "volume", "raw_close")
-ARCHIVE_PREFIX = "parquet/daily_bars"
 
 
 def stored_tail(conn: Connection, ticker_ids: Iterable[int], n: int) -> dict[int, list[IngestBar]]:
@@ -129,8 +126,9 @@ def set_data_status(
 
 
 def archive_and_prune_bars(conn: Connection, storage: ObjectStore, before: date) -> int:
-    """Move bars older than `before` to Parquet (one object per session, keyed by symbol and
-    asset id, since ticker ids are per database), then delete them."""
+    """Move bars older than `before` into the Parquet history (one object per session, keyed by
+    asset id, since ticker ids are per database), then delete them. A session the backfill
+    already wrote is merged into, so its securities that Postgres never held stay."""
     rows = conn.execute(
         select(
             DailyBar.session_date,
@@ -146,18 +144,13 @@ def archive_and_prune_bars(conn: Connection, storage: ObjectStore, before: date)
         return 0
     by_session: dict[date, list[dict[str, object]]] = {}
     for r in rows:
-        by_session.setdefault(r.session_date, []).append(dict(r._mapping))
+        # A row without an asset id was made by hand; its symbol stands in.
+        record = dict(r._mapping) | {"security": r.alpaca_asset_id or r.symbol}
+        by_session.setdefault(r.session_date, []).append(record)
     for session, records in by_session.items():
-        key = f"{ARCHIVE_PREFIX}/year={session.year}/{session.isoformat()}.parquet"
-        storage.put(key, _parquet(records), content_type="application/vnd.apache.parquet")
+        write_bar_session(storage, session, records, merge=True)
     result = conn.execute(delete(DailyBar).where(DailyBar.session_date < before))
     return int(result.rowcount)
-
-
-def _parquet(records: Sequence[Mapping[str, object]]) -> bytes:
-    buffer = io.BytesIO()
-    pq.write_table(pa.Table.from_pylist(list(records)), buffer)
-    return buffer.getvalue()
 
 
 def database_size_mb(conn: Connection) -> float:

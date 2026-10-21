@@ -111,6 +111,14 @@ def test_company_facts_values_keep_the_filed_date() -> None:
     assert server.requests[0].url.path == "/api/xbrl/companyfacts/CIK0000320193.json"
 
 
+def test_company_facts_without_a_cik_keep_the_requested_one() -> None:
+    # As SEC serves JOHN HANCOCK INVESTORS TRUST (CIK 759828): no "cik" field.
+    server = Server(ok({"entityName": "JOHN HANCOCK INVESTORS TRUST", "facts": {}}))
+    facts = edgar(server).company_facts(759828)
+    assert facts is not None
+    assert (facts.cik, facts.name) == (759828, "JOHN HANCOCK INVESTORS TRUST")
+
+
 def finnhub(server: Server) -> FinnhubClient:
     return FinnhubClient(FINNHUB_KEY, client=server.client(), sleep=lambda _: None)
 

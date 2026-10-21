@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -345,8 +346,38 @@ class IngestConfig(_Strict):
     # Concurrent requests per vendor: the bar and EDGAR requests are bound by response time, and
     # the vendor's rate limiter still applies across the workers.
     http_workers: PositiveInt
+    # Each step's transaction stays open across its vendor calls (a first fill fetches for about
+    # 15 minutes), and Neon ends a transaction idle for 5. Raised for the ingest's own
+    # transactions only, and still bounded so a lost client's locks are freed.
+    transaction_idle_minutes: PositiveInt
     db_size_limit_mb: PositiveInt
     db_size_alert_fraction: Fraction
+
+
+class HistoryConfig(_Strict):
+    """The Parquet history and its backfill (README §5.1, §10; task 1.6)."""
+
+    # Alpaca's SIP daily bars start on 2016-01-04 (spike 0.3a).
+    start: date
+    # A ticker that didn't trade for more than this many sessions is a new security after the
+    # gap: tickers get reused (#111).
+    max_gap_sessions: PositiveInt
+    # A one-bar move of this factor or more in the split-adjusted close (up, or down to its
+    # inverse) is a new security too: a reorganization, an unadjusted reverse split, a spin-off.
+    max_jump: Annotated[float, Field(gt=1.0)]
+    # Two securities whose bars are identical on at least this share of the shorter one's
+    # sessions are one company under two tickers (the old ticker of a rename keeps serving the
+    # new one's bars): the shorter, or the one no active asset names, is dropped.
+    duplicate_share: Fraction
+    # Alpaca's asset list forgets most delistings, but the bars endpoint still serves them: every
+    # 1-4 letter ticker is tried over a few sessions at this spacing. A security in the universe
+    # has traded for at least `universe.min_history_sessions`, so a spacing below that sees it.
+    enumeration_every_sessions: PositiveInt
+    enumeration_window_sessions: PositiveInt
+    # Symbols per bars request: small requests spread over the workers finish sooner than the
+    # 1,000-symbol maximum, whose pages are fetched one after another.
+    bar_chunk_symbols: PositiveInt
+    workers: PositiveInt
 
 
 class JobsConfig(_Strict):
@@ -365,6 +396,7 @@ class RiskConfig(_Strict):
     data: DataConfig
     universe: UniverseConfig
     ingest: IngestConfig
+    history: HistoryConfig
     jobs: JobsConfig
     trend_template: TrendTemplateConfig
     bases: BasesConfig

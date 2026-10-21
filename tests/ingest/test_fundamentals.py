@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import Engine, insert, select
@@ -9,7 +9,7 @@ from sqlalchemy import Engine, insert, select
 from auratrade.calendar.sessions import MarketCalendar
 from auratrade.data.edgar import CompanyFacts, FactValue
 from auratrade.db.models import DailyBar, EarningsEvent, Fundamental
-from auratrade.ingest.fundamentals import ingest_fundamentals, quarters
+from auratrade.ingest.fundamentals import Quarter, ingest_fundamentals, quarters, write_quarters
 from tests.ingest.fakes import RISK, add_ticker, sync_calendar
 
 THU = date(2026, 10, 15)
@@ -151,12 +151,14 @@ class TestQuarters:
         out = quarters(facts([], e))
         assert out[1].eps_growth is None
 
-    def test_late_comparatives_and_annual_only_filers_are_skipped(self) -> None:
+    def test_late_early_and_annual_only_filings_are_skipped(self) -> None:
         late = fact(date(2015, 1, 1), date(2015, 3, 31), 10.0, date(2016, 5, 1), fy=2016)
         annual = fact(
             date(2024, 1, 1), date(2024, 12, 31), 400.0, date(2025, 3, 1), form="10-K", fp="FY"
         )
-        assert quarters(facts([late, annual], [])) == []
+        # Filed before the quarter even ended: a mis-tagged fact.
+        early = fact(date(2018, 7, 1), date(2018, 9, 30), 5.0, date(2018, 6, 28), fy=2018, fp="Q3")
+        assert quarters(facts([late, annual, early], [])) == []
 
 
 # --- the step ----------------------------------------------------------------------------
@@ -236,3 +238,18 @@ def test_step_refreshes_recent_reporters_first_and_caps(
     with pg_engine.begin() as conn:
         again = ingest_fundamentals(conn, source, calendar, risk, THU)
     assert again.rows_written == 0
+
+
+def test_write_quarters_over_the_parameter_limit(pg_engine: Engine) -> None:
+    # 5,100 rows x 13 columns is past Postgres's 65,535 parameters per statement (the backfill
+    # writes ~45k rows at once).
+    with pg_engine.begin() as conn:
+        ticker = add_ticker(conn, "BIG")
+    ends = [date(2000, 1, 1) + timedelta(days=i) for i in range(5100)]
+    rows = [Quarter(e, e.year, 1, e + timedelta(days=30), "10-Q", f"a{e}", 1.0, 100) for e in ends]
+    with pg_engine.begin() as conn:
+        assert write_quarters(conn, {ticker: rows}) == 5100
+    with pg_engine.begin() as conn:
+        assert write_quarters(conn, {ticker: rows}) == 0
+        count = conn.execute(select(Fundamental.id).where(Fundamental.ticker_id == ticker)).all()
+        assert len(count) == 5100

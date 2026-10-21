@@ -25,13 +25,14 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import Any, Protocol
 
 import structlog
-from sqlalchemy import Engine
+from sqlalchemy import Connection, Engine, text
 
 from auratrade.calendar.sessions import load_calendar
 from auratrade.calendar.sources import SessionTimes
@@ -155,8 +156,8 @@ def run_ingest(
         now=now,
     )
     details["calendar"] = {"inserted": synced.inserted, "updated": synced.updated}
-    if (text := alert_text(synced)) is not None:
-        alerts.append(text)
+    if (message := alert_text(synced)) is not None:
+        alerts.append(message)
     with engine.connect() as conn:
         calendar = load_calendar(conn)
     today = calendar.session_for(session)
@@ -191,7 +192,7 @@ def run_ingest(
     seconds["universe"] = round(time.monotonic() - clock - sum(seconds.values()), 1)
 
     # 3. Bars (critical).
-    with engine.begin() as conn:
+    with _transaction(engine, risk) as conn:
         bars = ingest_bars(conn, sources.alpaca, calendar, risk, session, now)
     details["bars"] = bars.details()
     seconds["bars"] = round(time.monotonic() - clock - sum(seconds.values()), 1)
@@ -219,7 +220,7 @@ def run_ingest(
 
     def in_transaction[T](call: Callable[[Any], T]) -> Callable[[], T]:
         def run() -> T:
-            with engine.begin() as conn:
+            with _transaction(engine, risk) as conn:
                 return call(conn)
 
         return run
@@ -289,6 +290,17 @@ def run_ingest(
     return IngestOutcome(details, alerts)
 
 
+@contextmanager
+def _transaction(engine: Engine, risk: RiskConfig) -> Iterator[Connection]:
+    """A step's transaction, allowed to sit idle while its vendor calls run."""
+    with engine.begin() as conn:
+        conn.execute(
+            text("SELECT set_config('idle_in_transaction_session_timeout', :limit, true)"),
+            {"limit": f"{risk.ingest.transaction_idle_minutes}min"},
+        )
+        yield conn
+
+
 def _alerter(settings: Settings) -> Alerter:
     from auratrade.jobs.wiring import make_alerter
 
@@ -317,8 +329,8 @@ def make_job(
         )
         if outcome.alerts:
             alerter = alerter_factory(ctx.settings)
-            for text in outcome.alerts:
-                alerter.alert(f"[AuraTrade {ctx.settings.environment}] {text}")
+            for message in outcome.alerts:
+                alerter.alert(f"[AuraTrade {ctx.settings.environment}] {message}")
         ctx.log.info("ingest_done", **{k: v for k, v in outcome.details.items() if k != "bars"})
         return outcome.details
 
@@ -356,8 +368,8 @@ def direct_main(argv: Sequence[str]) -> int:
     finally:
         engine.dispose()
     log.info("ingest_direct_done", session=args.session.isoformat(), **outcome.details)
-    for text in outcome.alerts:
-        log.warning("ingest_alert", alert=text)
+    for message in outcome.alerts:
+        log.warning("ingest_alert", alert=message)
     return 0
 
 

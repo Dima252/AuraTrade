@@ -41,22 +41,29 @@ class AlpacaNewsClient:
 
     def news(
         self,
-        symbols: Iterable[str],
+        symbols: Iterable[str] | None,
         start: datetime,
         end: datetime,
         *,
         include_content: bool = False,
     ) -> list[NewsItem]:
-        """Items created in [start, end] mentioning any of `symbols`, oldest first."""
-        wanted = sorted(set(symbols))
+        """Items created in [start, end] mentioning any of `symbols` (every item when None),
+        oldest first."""
+        if symbols is None:
+            batches: list[str | None] = [None]
+        else:
+            wanted = sorted(set(symbols))
+            batches = [
+                ",".join(wanted[i : i + MAX_SYMBOLS]) for i in range(0, len(wanted), MAX_SYMBOLS)
+            ]
         out: dict[int, NewsItem] = {}
-        for i in range(0, len(wanted), MAX_SYMBOLS):
+        for batch in batches:
             token: str | None = None
             while True:
                 body = self._http.get_json(
                     f"{DATA_URL}/v1beta1/news",
                     {
-                        "symbols": ",".join(wanted[i : i + MAX_SYMBOLS]),
+                        "symbols": batch,
                         "start": rfc3339(start),
                         "end": rfc3339(end),
                         "limit": PAGE_LIMIT,
@@ -71,7 +78,7 @@ class AlpacaNewsClient:
                     )
                 for raw in body.get("news") or []:
                     item = _item(raw, include_content)
-                    out[item.id] = item  # an item mentioning symbols in two chunks comes twice
+                    out[item.id] = item  # an item mentioning symbols in two batches comes twice
                 token = body.get("next_page_token")
                 if not token:
                     break
