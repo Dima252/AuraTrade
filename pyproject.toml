@@ -30,7 +30,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "boto3-stubs[lambda,s3]>=1.43.110",
+    "boto3-stubs[lambda,s3,scheduler,ssm]>=1.43.110",
     "hypothesis>=6.168.5",
     "mypy>=2.4.0",
     "pre-commit>=4.6.2",

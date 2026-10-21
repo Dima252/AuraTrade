@@ -9,6 +9,10 @@ position through the sell sequence. The average is taken over the stored closes 
 decision price standing in for today's (`plans.levels.trail_levels`). No decision price: the
 exit waits and the hard stop keeps resting (#120). A sale that doesn't fill stays owed, and the
 next morning's 09:31 check run retries it.
+
+It is scheduled at both 12:40 and 15:40 every weekday, since a scheduler can't follow the
+calendar, and runs only within `jobs.eod_review_window_minutes` of the session's close: the
+12:40 slot on half days, the 15:40 slot otherwise. The other slot records a skip.
 """
 
 from __future__ import annotations
@@ -20,10 +24,12 @@ from typing import Any
 
 from sqlalchemy import Connection, select
 
+from auratrade.calendar.sessions import load_calendar
 from auratrade.db.models import DailyBar
 from auratrade.execution.orders import SaleStatus
 from auratrade.execution.runtime import (
     DepsFactory,
+    ExecutionDeps,
     Section,
     enforce_invariant,
     enforce_kill_switch,
@@ -102,9 +108,27 @@ def trail_exits(section: Section) -> list[dict[str, Any]]:
     return out
 
 
-def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
+def minutes_to_close(deps: ExecutionDeps, day: date) -> float | None:
+    with deps.engine.connect() as conn:
+        session = load_calendar(conn).session_for(day)
+    if session is None:
+        return None
+    return (session.close_at - deps.clock()).total_seconds() / 60
+
+
+def make_job(
+    deps_factory: DepsFactory = production_deps, *, near_close_only: bool = False
+) -> JobSpec:
+    """`near_close_only` is the rule above (the module's `JOB`, also run by hand); tests leave
+    it off to run the review at any time."""
+
     def run(ctx: JobContext) -> JobOutput:
         deps = deps_factory(ctx)
+        if near_close_only:
+            window = ctx.risk.jobs.eod_review_window_minutes
+            minutes = minutes_to_close(deps, ctx.session_date)
+            if minutes is None or not 0 < minutes <= window:
+                return {"skipped": f"not within {window} min of the close"}
         with order_section(ctx, deps) as section:
             invariant = enforce_invariant(section)
             enforce_kill_switch(section)
@@ -127,7 +151,7 @@ def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
     return JobSpec(name="eod_review", policy=GuardPolicy.SESSION_TODAY, run=run)
 
 
-JOB = make_job()
+JOB = make_job(near_close_only=True)
 handler = lambda_handler(JOB)
 
 if __name__ == "__main__":

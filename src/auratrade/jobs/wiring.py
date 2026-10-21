@@ -16,6 +16,9 @@ from auratrade.storage import make_store
 
 
 def load_runtime_settings() -> Settings:
+    from auratrade.parameters import load_into_environment
+
+    load_into_environment()  # AWS: the secrets under SSM_PARAMETER_PATH; a no-op locally
     return load_settings()
 
 

@@ -161,6 +161,8 @@ jobs:  # README §2
   chain_wait_minutes: 30
   duration_alert_minutes: 10
   stale_running_minutes: 20
+  watchdog_grace_minutes: 15
+  eod_review_window_minutes: 30
 
 trend_template:  # README §5.3 (Minervini)
   short_sma: 50
