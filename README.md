@@ -415,7 +415,7 @@ The 8 rules:
    - Every section of code that changes orders holds one account-wide Postgres advisory lock. It is held only while orders are being changed, never during an LLM call, and other jobs wait for it.
    - EventBridge and async Lambda invocations are at-least-once, and the `stop_guard` runs alongside other jobs. Without the lock, one job's invariant repair could re-place a full-quantity stop in the middle of another job's sell sequence.
    - The lock is taken on a direct (unpooled) Neon connection, because session-level advisory locks don't work through a transaction-mode pooler. The job releases it in a `finally` block. A Lambda that times out or is frozen may not close its connection at once, so the lock connection also has a server-side idle timeout, set longer than any order section, as a backstop.
-   - A job that waits more than 2 minutes alerts. The `stop_guard` doesn't wait; it skips to its next run. If the lock stays taken for longer than the backstop idle timeout, `stop_guard` alerts.
+   - A job that waits more than 2 minutes alerts, and after 8 minutes it fails (so Lambda retries it). The `stop_guard` doesn't wait; it skips to its next run. The backstop idle timeout is 10 minutes; if the lock stays taken for longer, `stop_guard` alerts (#131).
 8. **Partial fills.**
    - The filled quantity is the position. The stop covers what actually filled, and the invariant always checks actual broker quantities.
    - **A partly filled buy counts as unprotected.** Its stop leg stays `held` (inactive) until the parent fills completely (spike 0.3b). The next order job or `stop_guard` (within about 5 minutes) cancels the unfilled rest, re-reads the orders, keeps the leg if it has become an active GTC stop for the filled shares, and otherwise places a standalone GTC stop for them (#115). The position is smaller than planned, which only lowers risk, and the rest's reserved exposure is released.
@@ -815,9 +815,9 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic.
 | `setups` | Analyst verdicts, `valid_until`, **watch note** |
 | `ep_candidates` | Morning gap list: gap %, catalyst, surprise, decision |
 | `llm_batches`, `prompt_versions`, `llm_decisions` | LLM bookkeeping; each decision stores its prompt version, requested model and answering model |
-| `signals` | **The queue**: idempotency_key, action, strategy, trigger type, tranche, prices, risk %, shares, status |
+| `signals` | **The queue**: idempotency_key, action, strategy, **source**, trigger type, tranche, prices, risk %, shares, client_order_id, status. `source = SKELETON` marks the walking skeleton's rule-only trades (task 1.7), which "your numbers" and the go-live statistics leave out (#131) |
 | `guardrail_events` | Rule, proposed vs enforced value |
-| `orders`, `positions` | Broker mirror; strategy tag; regime at entry |
+| `orders`, `positions` | Broker mirror; strategy tag and source; regime at entry; a sale still owed (`exit_pending`) |
 | `position_plans` | Versioned, tighten-only plan per position, with current levels and the 8-week-hold state |
 | `position_events` | Milestones, climax signals, faltering RS, time stops, cushion, flags |
 | `trade_journal` | One row per trade: R-multiple, sim R, default-plan R, MAE/MFE, tranches, exit reason, regimes, links |
@@ -893,7 +893,7 @@ AuraTrade/
 ├── config/risk.yaml              # regimes, strategies, entry rules, exit menus, guardrails, multiplier
 ├── src/auratrade/
 │   ├── config.py
-│   ├── cli.py                    # operator commands (§5.13)
+│   ├── cli.py                    # operator commands (§5.13): kill, mismatches, resolve so far
 │   ├── calendar/
 │   ├── db/
 │   ├── data/                     # alpaca_data, macro, edgar, finnhub, news, nasdaq (symbol directory)
@@ -909,14 +909,18 @@ AuraTrade/
 │   ├── plans/                    # plans, early-behaviour rules, soft rules, 8-week hold, cushion, events
 │   ├── llm/
 │   ├── guardrails/
-│   ├── execution/                # account, sizing, triggers (pivot / opening-range high), tranches, orders, reconciliation
+│   ├── execution/                # account, sizing, triggers (pivot / opening-range high), tranches, orders, reconciliation;
+│   │                             # from 1.7: broker interface + Alpaca adapter, the stop invariant, the order desk
+│   │                             # (sell sequence, sell at once), the single-writer lock, signals, the skeleton's rules
 │   ├── journal/                  # journal, your-numbers, baseline, verdict scorecard, multiplier, reports, lessons
 │   ├── sim/                      # the one fill simulator + fake broker: backtests, baseline, scorecard, replay tests
+│   │                             # (fake_broker.py from 1.7: the 0.3b behaviours + fault injection; 3.6 extends it)
 │   ├── storage/
 │   ├── notify/
 │   └── jobs/
 ├── backtest/                     # regime, baseline, entry and exit-policy comparisons
-├── scripts/                      # one-off operator tools: check_keys.py, backfill.py, smoke_real_data.py
+├── scripts/                      # one-off operator tools: check_keys.py, backfill.py, smoke_real_data.py,
+│                                 # local_session.py (the jobs on their schedule on this PC, until 1.8)
 ├── spikes/
 ├── infra/                        # CDK app: app.py, stacks/ (public_site; the trading stack from 1.8)
 └── tests/
@@ -1136,6 +1140,8 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 | | *Task 1.5 build, 2026-10-15 (recorded as built and approved by the user; live-checked on a scratch database)* | |
 | 129 | Ingest readings | Bars are stored for a tracked set (universe-type tickers passing ½ × the price and dollar-volume filters, plus the index ETFs; a newly passing ticker gets its whole window, one that stops passing is dropped an evening later); a split is detected by the re-fetched overlap bar's close moving > 2%, then the window is re-fetched; an outlier lies beyond the body and the neighbours by more than max(15%, 3 × the 20-session average daily range), keeps the body's edge and is logged in `bar_corrections`; coverage counts tickers that traded at T−1 plus the index ETFs, and a missing index alone is `INCOMPLETE`; T's bars are refused before the close + the SIP delay; the evening VIX quote is final 15 minutes after the session's close (13:15 on half days); EDGAR fund filings (N-CSR, N-PORT) make a closed-end fund named like a stock a fund, and EDGAR's SPAC/fund verdict stands over the name rules; the listing date is the first stored bar inside the window unless EDGAR shows earlier periodic reports; industry groups are SIC prefixes named "SIC nnn", the most specific wins; earnings: a closed-day release counts as before the next open, a tie in the usual timing as before the open; per run ≤ 150 surprise requests and ≤ 200 company-facts downloads, 12 quarters kept; up to 4 concurrent requests per vendor under its rate limit; calendar, universe and bars fail the job, the other steps degrade with an alert; more than 50 securities leaving the asset list in one evening is a vendor glitch (fail closed). *Why:* the 1.5 build needed each defined, and the live run (2,761 tickers, 2 years) showed the flat 15% outlier rule clipping real moves of volatile names (241 corrections; 64 at 3 × range), closed-end funds passing as stocks, and a 17-minute nightly run bound by vendor response times (219 s after the change); details in PR #27 |
 | 130 | Backfill readings | The Parquet history keys securities as ingest does and adds two splits of its own: a one-day close move of 4× or ¼× starts a new security, and two securities whose bars are identical on ≥ 90% of their sessions are one renamed company (the active one is kept, then the one with an asset id, then the longer history). CIKs come from SEC's current ticker map, so only securities still trading get EDGAR earnings and fundamentals, and backtests report the gap. Retention merges each session leaving Postgres into the backfill's session file rather than writing its own. The code lives in a new `history/` package beside `ingest/`, sharing its rules (bars, outliers, earnings timing, quarters). *Why:* the 1.6 smoke run over the real history (13,672 securities, 16.3M bars since 2016) found 860 old tickers repeating their successor's bars (PKI/RVTY, TASR/AXON), which double-counted stocks in the universe, and level jumps of up to 4× from reorganizations and unadjusted reverse splits, which broke the base count and RS; SEC's map has no historical tickers; a retention file of its own would have dropped the delisted securities Postgres never held |
+| | *Task 1.7 build, 2026-10-21 (approved by the user)* | |
+| 131 | Skeleton and order-layer readings | The decision price's "sane spread" (#120) is at most 2% of the quote midpoint (provisional); a marketable sell limit sits 0.5% below the decision price; selling at once waits 30 s per step (limit, one re-price, market); an order call with no answer (5xx, dropped connection) is retried up to 3 times with the same client_order_id, after looking the order up; the order lock alerts after 2 minutes of waiting and fails the job after 8, and Postgres ends an idle lock connection after 10 (`idle_session_timeout`). The walking skeleton's trades carry `source = SKELETON` (strategy label `VCP_BREAKOUT`), left out of "your numbers" and the go-live statistics; the skeleton ignores the regime, writes 10 ranked signals a night and enters the top 3 that size to at least one share, with at most 6 positions. `simulate` and `analyst_submit` are placeholder jobs until 3.7 and 4.4, so the evening chain runs whole. `stop_guard` takes the broker's clock as its calendar guard and is recorded in `job_runs` only when it repairs or fails. A split on a held symbol (from `corporate_actions`) scales the plan, places the stop for the broker's actual quantity and opens a `CORPORATE_ACTION` mismatch. A position with no plan is a mismatch and an alert, and its orders are left alone (code never invents a stop level). The invariant cancels a working sale and stops over-covering a position, under the lock: both mean a job died mid-sequence. `auratrade mismatches` and `resolve` exist from 1.7, since reconciliation opens mismatches that block entries. *Why:* the 1.7 build needed each of these defined; the chaos tests and the live paper runs exercise them; details in PR #30 |
 
 ---
 

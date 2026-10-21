@@ -1,0 +1,86 @@
+"""`post_market` (16:20, the head of the evening chain; README §3, §5.10, §10).
+
+    uv run python -m auratrade.jobs.post_market --session 2026-10-22 --dry-run
+
+1. Under the order lock: reconcile (positions the stops closed today get their journal rows),
+   enforce the stop invariant (the market is closed: a missing stop is placed to rest for the
+   morning, nothing is sold), and cancel any entry parent still resting (a backstop for the EOD
+   review, #113).
+2. Today's signals that never went in expire.
+3. The account snapshot, the Telegram daily report, and the nightly backup of the kept-forever
+   tables to storage.
+
+On success it starts `ingest` (the chain). Steps 2-3 run in dry_run too: they change no order.
+"""
+
+from __future__ import annotations
+
+import sys
+
+from auratrade.execution.runtime import (
+    DepsFactory,
+    enforce_invariant,
+    enforce_kill_switch,
+    order_section,
+    production_deps,
+)
+from auratrade.execution.signals import expire_signals
+from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
+from auratrade.journal.backup import export_tables
+from auratrade.journal.report import closed_today, daily_report, write_snapshot
+
+
+def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
+    def run(ctx: JobContext) -> JobOutput:
+        deps = deps_factory(ctx)
+        with order_section(ctx, deps) as section:
+            invariant = enforce_invariant(section)
+            enforce_kill_switch(section)
+            cancelled = 0
+            if not section.dry_run:
+                cancelled = section.desk.cancel_entries(why="post_market backstop")
+            rec, alerts, actions = section.rec, section.alerts, section.desk.actions
+        now = deps.clock()
+        account = deps.broker.account()
+        positions = deps.broker.positions()
+        with deps.engine.begin() as conn:
+            expired = expire_signals(conn, before_or_on=ctx.session_date, now=now)
+            snapshot = write_snapshot(conn, ctx.session_date, account, positions)
+            closed = closed_today(conn, ctx.session_date)
+        report = daily_report(
+            snapshot,
+            positions,
+            rec.levels,
+            closed,
+            invariant_ok=not invariant.still_unprotected and not rec.unknown,
+            alerts=alerts,
+            mode=ctx.trading_mode.value,
+        )
+        try:
+            deps.alerter.alert(f"[AuraTrade {ctx.settings.environment}] {report}")
+        except Exception as exc:
+            ctx.log.error("daily_report_not_sent", error=f"{type(exc).__name__}: {exc}")
+        with deps.engine.connect() as conn:
+            backup = export_tables(conn, ctx.storage, ctx.session_date)
+        return {
+            "dry_run": ctx.dry_run,
+            **rec.details(),
+            **invariant.details(),
+            "entries_cancelled": cancelled,
+            "signals_expired": expired,
+            "equity": snapshot.equity,
+            "drawdown": round(snapshot.drawdown, 4),
+            "closed_today": [t.symbol for t in closed],
+            "backup_rows": backup,
+            "actions": actions,
+            "alerts": alerts,
+        }
+
+    return JobSpec(name="post_market", policy=GuardPolicy.EVENING, run=run)
+
+
+JOB = make_job()
+handler = lambda_handler(JOB)
+
+if __name__ == "__main__":
+    sys.exit(run_cli(JOB))

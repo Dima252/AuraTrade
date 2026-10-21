@@ -15,6 +15,7 @@ from auratrade.db.models import (
     POSITION_EVENT_KINDS,
     STRATEGIES,
     TRAILS,
+    Position,
     PositionEventRow,
     PositionPlanRow,
     Ticker,
@@ -79,10 +80,26 @@ PLAN = new_plan(
 
 @pytest.fixture
 def ticker_id(pg_engine: Engine) -> int:
+    """A ticker, and position 1 in it (plans and events reference `positions`)."""
     with pg_engine.begin() as conn:
-        return int(
+        ticker = int(
             conn.execute(insert(Ticker).values(symbol="ANET").returning(Ticker.id)).scalar_one()
         )
+        conn.execute(
+            insert(Position).values(
+                id=1,
+                ticker_id=ticker,
+                symbol="ANET",
+                source="SKELETON",
+                strategy="EMERGING_LEADER",
+                shares=10,
+                max_shares=10,
+                entry_price=50.5,
+                initial_stop=46.5,
+                opened_session=date(2026, 10, 9),
+            )
+        )
+        return ticker
 
 
 Rejects = Callable[[dict[str, Any]], None]

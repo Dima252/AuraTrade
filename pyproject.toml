@@ -21,6 +21,9 @@ dependencies = [
     "tenacity>=9.2.1",
 ]
 
+[project.scripts]
+auratrade = "auratrade.cli:main"
+
 [build-system]
 requires = ["uv_build>=0.10,<0.11"]
 build-backend = "uv_build"

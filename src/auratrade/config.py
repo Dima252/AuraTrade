@@ -402,6 +402,8 @@ class RiskConfig(_Strict):
     bases: BasesConfig
     regime: RegimeConfig
     plans: PlansConfig
+    execution: ExecutionConfig
+    skeleton: SkeletonConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -867,6 +869,75 @@ class PlansConfig(_Strict):
 
     def menu_violations(self, plan: ExitPlan) -> list[str]:
         return [] if plan.partial is None else self.partial_menus.violations(plan.partial)
+
+
+# --- risk.yaml: the order layer and the walking skeleton (task 1.7) -------------------------
+
+
+class DecisionPriceConfig(_Strict):
+    """The decision price (README glossary, #120): the last IEX trade if at most
+    ``trade_max_age_seconds`` old, else the quote midpoint if at most ``quote_max_age_seconds``
+    old with a spread of at most ``max_spread`` of the midpoint."""
+
+    trade_max_age_seconds: PositiveInt
+    quote_max_age_seconds: PositiveInt
+    max_spread: Fraction
+
+
+class ExecutionConfig(_Strict):
+    """The order layer (README §5.7); see ``auratrade.execution``."""
+
+    decision_price: DecisionPriceConfig
+    # A marketable sell limit sits this far below the decision price.
+    marketable_limit_slippage: Fraction
+    # How long a sale may work before it is re-priced (then sent at market), and how long the
+    # market order gets before the run gives up and leaves it to the next one (README §5.7.2).
+    sell_wait_seconds: PositiveInt
+    market_order_wait_seconds: PositiveInt
+    fill_poll_seconds: Positive
+    # Attempts per order call that failed without an answer (a 5xx, a dropped connection),
+    # each with the same client_order_id.
+    call_attempts: PositiveInt
+    # The single-writer lock (README §5.7.7): an order job alerts after waiting this long and
+    # gives up (fails, so Lambda retries it) after the maximum.
+    lock_wait_alert_seconds: PositiveInt
+    lock_wait_max_seconds: PositiveInt
+    # Server-side backstop: Postgres ends the lock's connection when it is idle this long, so a
+    # frozen Lambda can't hold the lock for ever. Longer than any order section.
+    lock_idle_timeout_minutes: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.lock_wait_max_seconds < self.lock_wait_alert_seconds:
+            raise ValueError("lock_wait_max_seconds must be >= lock_wait_alert_seconds")
+        return self
+
+
+class SkeletonConfig(_Strict):
+    """The walking skeleton's rule-only scan and entries (execution plan task 1.7). Phase 5
+    replaces the scan and the pick; the order layer stays."""
+
+    trend_template_rules: frozenset[TrendTemplateRule] = Field(min_length=1)
+    pivot_sessions: PositiveInt
+    stop_sessions: PositiveInt
+    # The structural stop is at most this far below the limit price (README §7.1).
+    max_stop: Fraction
+    # limit = min(trigger x (1 + min(limit_max_above_trigger, limit_adr_fraction x ADR)),
+    #             pivot x (1 + guardrails.max_chase_above_pivot))  (README §7.1)
+    limit_max_above_trigger: Fraction
+    limit_adr_fraction: Positive
+    adr_sessions: PositiveInt
+    risk_per_trade: Fraction
+    picks: PositiveInt
+    candidates: PositiveInt
+    max_positions: PositiveInt
+    trail: TrailMA
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.candidates < self.picks:
+            raise ValueError("candidates must be >= picks")
+        return self
 
 
 RiskConfig.model_rebuild()

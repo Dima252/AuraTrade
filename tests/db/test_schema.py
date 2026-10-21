@@ -44,6 +44,11 @@ TABLES = {
     "position_plans",
     "position_events",
     "bar_corrections",
+    "signals",
+    "positions",
+    "orders",
+    "trade_journal",
+    "account_snapshots",
 }
 
 

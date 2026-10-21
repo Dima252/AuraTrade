@@ -513,8 +513,7 @@ class PositionPlanRow(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    # `positions` comes with the order layer; the foreign key is added with it.
-    position_id: Mapped[int] = mapped_column(BigInteger)
+    position_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("positions.id"))
     version: Mapped[int] = mapped_column(SmallInteger)
     ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
     strategy: Mapped[str] = mapped_column(Text)
@@ -549,12 +548,205 @@ class PositionEventRow(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
-    position_id: Mapped[int] = mapped_column(BigInteger)
+    position_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("positions.id"))
     ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
     session_date: Mapped[date] = mapped_column(Date)
     plan_version: Mapped[int | None] = mapped_column(SmallInteger)
     kind: Mapped[str] = mapped_column(Text)
     rule: Mapped[str | None] = mapped_column(Text)
     shares: Mapped[int | None] = mapped_column(Integer)
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    created_at: Mapped[datetime] = _created()
+
+
+# --- The order layer (task 1.7, README §5.7, §10) ----------------------------------------------
+
+# Who decided a signal: the walking skeleton's rule-only pick (task 1.7). Phase 5 adds the
+# Portfolio Manager. Kept apart so "your numbers" and the go-live statistics never count the
+# skeleton's trades.
+SOURCES = ("SKELETON",)
+SIGNAL_STATUSES = ("PENDING", "SUBMITTED", "FILLED", "CANCELED", "SKIPPED", "EXPIRED")
+POSITION_STATUSES = ("OPEN", "CLOSED")
+ORDER_PURPOSES = ("ENTRY", "STOP_LEG", "STOP", "EXIT", "OTHER")
+# The plan rules, plus a position closed outside the order layer (by hand at the broker).
+EXIT_REASONS = (*PLAN_RULES, "MANUAL")
+
+
+class Signal(Base):
+    """The queue (README §5.7): one entry order to place, decided the evening before."""
+
+    __tablename__ = "signals"
+    __table_args__ = (
+        CheckConstraint(_in("source", SOURCES), name="source"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(_in("status", SIGNAL_STATUSES), name="status"),
+        CheckConstraint("action IN ('ENTRY')", name="action"),
+        CheckConstraint("tranche IN (1, 2)", name="tranche"),
+        CheckConstraint(
+            "0 < stop_price AND stop_price < trigger_price AND trigger_price <= limit_price",
+            name="levels",
+        ),
+        CheckConstraint("shares IS NULL OR shares > 0", name="shares"),
+        Index("ix_signals_session", "session_date", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    idempotency_key: Mapped[str] = mapped_column(Text, unique=True)
+    # The session it trades on, and the one whose data it was decided from.
+    session_date: Mapped[date] = mapped_column(Date)
+    decided_session: Mapped[date] = mapped_column(Date)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    action: Mapped[str] = mapped_column(Text, server_default=text("'ENTRY'"))
+    tranche: Mapped[int] = mapped_column(SmallInteger, server_default=text("1"))
+    rank: Mapped[int] = mapped_column(SmallInteger)
+    pivot: Mapped[float] = mapped_column(Double)
+    trigger_price: Mapped[float] = mapped_column(Double)
+    limit_price: Mapped[float] = mapped_column(Double)
+    stop_price: Mapped[float] = mapped_column(Double)
+    risk_fraction: Mapped[float] = mapped_column(Double)
+    shares: Mapped[int | None] = mapped_column(Integer)
+    client_order_id: Mapped[str | None] = mapped_column(Text, unique=True)
+    status: Mapped[str] = mapped_column(Text, server_default=text("'PENDING'"))
+    status_reason: Mapped[str | None] = mapped_column(Text)
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class Position(Base):
+    """A position as the broker holds it; `shares` mirrors the broker's quantity."""
+
+    __tablename__ = "positions"
+    __table_args__ = (
+        CheckConstraint(_in("source", SOURCES), name="source"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(_in("status", POSITION_STATUSES), name="status"),
+        CheckConstraint(
+            f"exit_reason IS NULL OR {_in('exit_reason', EXIT_REASONS)}", name="exit_reason"
+        ),
+        CheckConstraint(
+            f"exit_pending IS NULL OR {_in('exit_pending', EXIT_REASONS)}", name="exit_pending"
+        ),
+        CheckConstraint("shares >= 0 AND max_shares > 0", name="shares"),
+        CheckConstraint("(status = 'CLOSED') = (closed_session IS NOT NULL)", name="closed"),
+        # One open position per symbol: reconciliation keys on it.
+        Index(
+            "uq_positions_open_symbol",
+            "symbol",
+            unique=True,
+            postgresql_where=text("status = 'OPEN'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ticker_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    signal_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("signals.id"))
+    status: Mapped[str] = mapped_column(Text, server_default=text("'OPEN'"))
+    shares: Mapped[int] = mapped_column(Integer)
+    max_shares: Mapped[int] = mapped_column(Integer)
+    entry_price: Mapped[float] = mapped_column(Double)
+    initial_stop: Mapped[float] = mapped_column(Double)
+    opened_session: Mapped[date] = mapped_column(Date)
+    closed_session: Mapped[date | None] = mapped_column(Date)
+    regime_at_entry: Mapped[str | None] = mapped_column(Text)
+    # A sale the plan decided that hasn't happened yet (no fill, a closed market): the next
+    # order job with the market open retries it (README §5.7.2, #124).
+    exit_pending: Mapped[str | None] = mapped_column(Text)
+    exit_pending_since: Mapped[datetime | None]
+    exit_reason: Mapped[str | None] = mapped_column(Text)
+    opened_at: Mapped[datetime] = _created()
+    closed_at: Mapped[datetime | None]
+    updated_at: Mapped[datetime] = _created()
+
+
+class OrderRow(Base):
+    """The broker's orders as last seen (README §10). Legs carry their parent's id."""
+
+    __tablename__ = "orders"
+    __table_args__ = (
+        CheckConstraint(_in("purpose", ORDER_PURPOSES), name="purpose"),
+        Index("ix_orders_symbol_created", "symbol", "created_at"),
+        Index("ix_orders_position", "position_id"),
+    )
+
+    broker_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    client_order_id: Mapped[str] = mapped_column(Text)
+    parent_broker_id: Mapped[str | None] = mapped_column(Text)
+    replaces: Mapped[str | None] = mapped_column(Text)
+    position_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("positions.id"))
+    signal_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("signals.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    purpose: Mapped[str] = mapped_column(Text)
+    side: Mapped[str] = mapped_column(Text)
+    order_type: Mapped[str] = mapped_column(Text)
+    order_class: Mapped[str] = mapped_column(Text)
+    time_in_force: Mapped[str] = mapped_column(Text)
+    qty: Mapped[int] = mapped_column(Integer)
+    filled_qty: Mapped[int] = mapped_column(Integer)
+    filled_avg_price: Mapped[float | None] = mapped_column(Double)
+    limit_price: Mapped[float | None] = mapped_column(Double)
+    stop_price: Mapped[float | None] = mapped_column(Double)
+    status: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime | None]
+    filled_at: Mapped[datetime | None]
+    synced_at: Mapped[datetime] = _created()
+
+
+class TradeJournalRow(Base):
+    """One row per closed trade (README §5.10). The skeleton fills the basics; the sim R,
+    default-plan R and MAE/MFE come with the simulator (3.6) and the full journal (5.5)."""
+
+    __tablename__ = "trade_journal"
+    __table_args__ = (
+        CheckConstraint(_in("source", SOURCES), name="source"),
+        CheckConstraint(_in("exit_reason", EXIT_REASONS), name="exit_reason"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    position_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("positions.id"), unique=True)
+    ticker_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    entry_session: Mapped[date] = mapped_column(Date)
+    exit_session: Mapped[date] = mapped_column(Date)
+    holding_sessions: Mapped[int] = mapped_column(SmallInteger)
+    shares: Mapped[int] = mapped_column(Integer)
+    entry_price: Mapped[float] = mapped_column(Double)
+    exit_price: Mapped[float | None] = mapped_column(Double)
+    initial_stop: Mapped[float] = mapped_column(Double)
+    pnl: Mapped[float | None] = mapped_column(Double)
+    r_multiple: Mapped[float | None] = mapped_column(Double)
+    exit_reason: Mapped[str] = mapped_column(Text)
+    regime_at_entry: Mapped[str | None] = mapped_column(Text)
+    regime_at_exit: Mapped[str | None] = mapped_column(Text)
+    mae_r: Mapped[float | None] = mapped_column(Double)
+    mfe_r: Mapped[float | None] = mapped_column(Double)
+    sim_r: Mapped[float | None] = mapped_column(Double)
+    default_plan_r: Mapped[float | None] = mapped_column(Double)
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    created_at: Mapped[datetime] = _created()
+
+
+class AccountSnapshot(Base):
+    """Equity at each session's `post_market` (README §5.10); the risk multiplier comes in
+    Phase 5."""
+
+    __tablename__ = "account_snapshots"
+
+    session_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    equity: Mapped[float] = mapped_column(Double)
+    cash: Mapped[float] = mapped_column(Double)
+    long_market_value: Mapped[float] = mapped_column(Double)
+    peak_equity: Mapped[float] = mapped_column(Double)
+    drawdown: Mapped[float] = mapped_column(Double)
+    open_positions: Mapped[int] = mapped_column(SmallInteger)
+    risk_multiplier: Mapped[float | None] = mapped_column(Double)
     details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
     created_at: Mapped[datetime] = _created()

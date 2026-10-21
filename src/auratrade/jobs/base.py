@@ -16,6 +16,10 @@ predecessor's success will start it. The scheduler fires it again until its dead
 predecessor fails closed (`BLOCKED_PREDECESSOR`) and alerts. A chained job never runs
 twice for a session: a run that finds it succeeded, or running, records
 `SKIPPED_ALREADY_RAN`.
+
+**Quiet jobs** (`stop_guard`, every 5 minutes) open the database only when they act (README
+§5.7, §12): the runner skips the calendar and the RUNNING heartbeat, and records the run only
+when it fails or its output says `acted`. The job checks the broker's clock instead.
 """
 
 from __future__ import annotations
@@ -24,7 +28,7 @@ import argparse
 import importlib
 import uuid
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from enum import StrEnum
 from typing import Any, Protocol
@@ -56,6 +60,7 @@ class GuardPolicy(StrEnum):
     ANY_DAY = "any_day"  # analyst_collect
     SATURDAY = "saturday"  # weekly_review, regardless of sessions
     WATCHDOG = "watchdog"  # always runs; the job checks only heartbeats expected that day
+    MARKET_HOURS = "market_hours"  # stop_guard: the job asks the broker's clock itself
 
 
 class SessionCalendar(Protocol):
@@ -89,10 +94,13 @@ class JobSpec:
     name: str
     policy: GuardPolicy
     run: Callable[[JobContext], JobOutput]
+    quiet: bool = False
 
     def __post_init__(self) -> None:
         if schedule.chain_link(self.name) is not None and self.policy is not GuardPolicy.EVENING:
             raise ValueError(f"{self.name} is in the evening chain; its policy must be EVENING")
+        if self.quiet and self.policy is not GuardPolicy.MARKET_HOURS:
+            raise ValueError("only a MARKET_HOURS job can be quiet")
 
     @property
     def chain(self) -> schedule.ChainLink | None:
@@ -204,6 +212,8 @@ class JobRunner:
         )
         state.bound, state.run = bound, new_run
         bound.info("job_start")
+        if spec.quiet:
+            return self._run_quiet(spec, new_run, mode, bound, state)
         skip = self._guard(spec, session_date)
         if skip is not None:
             d.store.record(self._finished(new_run, skip))
@@ -262,9 +272,50 @@ class JobRunner:
             case GuardPolicy.SATURDAY:
                 if session_date.weekday() != SATURDAY:
                     return JobStatus.SKIPPED_NOT_SATURDAY
-            case GuardPolicy.ANY_DAY | GuardPolicy.WATCHDOG:
+            case GuardPolicy.ANY_DAY | GuardPolicy.WATCHDOG | GuardPolicy.MARKET_HOURS:
                 pass
         return None
+
+    def _context(self, run: JobRun, mode: TradingMode, bound: FilteringBoundLogger) -> JobContext:
+        d = self.deps
+        return JobContext(
+            job=run.job,
+            session_date=run.session_date,
+            run_id=run.run_id,
+            trading_mode=mode,
+            settings=d.settings,
+            risk=d.risk,
+            storage=d.storage,
+            started_at=run.started_at,
+            log=bound,
+        )
+
+    def _run_quiet(
+        self,
+        spec: JobSpec,
+        run: JobRun,
+        mode: TradingMode,
+        bound: FilteringBoundLogger,
+        state: _RunState,
+    ) -> RunOutcome:
+        d = self.deps
+        try:
+            output = spec.run(self._context(run, mode, bound))
+        except Exception as exc:
+            error = self._error(exc)
+            bound.error("job_failed", error=error)
+            self._alert(bound, f"{spec.name} {run.session_date} FAILED: {error}")
+            state.job_failed = True
+            try:
+                d.store.record(self._finished(run, JobStatus.FAILED, error=error))
+            except Exception as store_exc:
+                bound.error("job_run_not_recorded", error=self._error(store_exc))
+            raise
+        details = dict(output) if output is not None else {}
+        bound.info("job_succeeded", duration_s=_seconds(run.started_at, d.clock()), **details)
+        if details.get("acted"):
+            d.store.record(replace(self._finished(run, JobStatus.SUCCEEDED), details=details))
+        return RunOutcome(spec.name, run.session_date, JobStatus.SUCCEEDED, run.run_id, details)
 
     def _check_predecessor(
         self, spec: JobSpec, session_date: date, bound: FilteringBoundLogger
