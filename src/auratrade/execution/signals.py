@@ -187,10 +187,13 @@ def write_signals(
     ]
     if not rows:
         return 0
-    result = conn.execute(
-        insert(Signal).values(rows).on_conflict_do_nothing(index_elements=[Signal.idempotency_key])
-    )
-    return int(result.rowcount or 0)
+    written = conn.execute(
+        insert(Signal)
+        .values(rows)
+        .on_conflict_do_nothing(index_elements=[Signal.idempotency_key])
+        .returning(Signal.id)
+    ).all()
+    return len(written)
 
 
 def expire_signals(conn: Connection, *, before_or_on: date, now: datetime) -> int:

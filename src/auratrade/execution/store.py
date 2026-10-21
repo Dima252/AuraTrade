@@ -85,7 +85,7 @@ def ticker_ids(conn: Connection, symbols: Iterable[str]) -> dict[str, int]:
     if not wanted:
         return {}
     query = select(Ticker.symbol, Ticker.id).where(Ticker.symbol.in_(wanted), Ticker.active)
-    return dict(conn.execute(query).tuples().all())
+    return dict(conn.execute(query).all())
 
 
 def _position(row: Position) -> OpenPosition:

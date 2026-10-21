@@ -192,7 +192,7 @@ def _sessions(first: date, last: date) -> list[dict[str, Any]]:
 def world(pg_engine: Engine, migrated_url: str, tmp_path: Path) -> World:
     risk = load_risk_config()
     with pg_engine.begin() as conn:
-        conn.execute(insert(MarketSession).values(_sessions(date(2026, 1, 1), date(2026, 12, 31))))
+        conn.execute(insert(MarketSession).values(_sessions(date(2025, 1, 1), date(2026, 12, 31))))
         ids = {
             s: int(
                 conn.execute(
