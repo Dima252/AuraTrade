@@ -893,7 +893,7 @@ AuraTrade/
 ├── config/risk.yaml              # regimes, strategies, entry rules, exit menus, guardrails, multiplier
 ├── src/auratrade/
 │   ├── config.py
-│   ├── cli.py                    # operator commands (§5.13)
+│   ├── cli.py                    # operator commands (§5.13): kill, mismatches, resolve so far
 │   ├── calendar/
 │   ├── db/
 │   ├── data/                     # alpaca_data, macro, edgar, finnhub, news, nasdaq (symbol directory)
@@ -909,14 +909,18 @@ AuraTrade/
 │   ├── plans/                    # plans, early-behaviour rules, soft rules, 8-week hold, cushion, events
 │   ├── llm/
 │   ├── guardrails/
-│   ├── execution/                # account, sizing, triggers (pivot / opening-range high), tranches, orders, reconciliation
+│   ├── execution/                # account, sizing, triggers (pivot / opening-range high), tranches, orders, reconciliation;
+│   │                             # from 1.7: broker interface + Alpaca adapter, the stop invariant, the order desk
+│   │                             # (sell sequence, sell at once), the single-writer lock, signals, the skeleton's rules
 │   ├── journal/                  # journal, your-numbers, baseline, verdict scorecard, multiplier, reports, lessons
 │   ├── sim/                      # the one fill simulator + fake broker: backtests, baseline, scorecard, replay tests
+│   │                             # (fake_broker.py from 1.7: the 0.3b behaviours + fault injection; 3.6 extends it)
 │   ├── storage/
 │   ├── notify/
 │   └── jobs/
 ├── backtest/                     # regime, baseline, entry and exit-policy comparisons
-├── scripts/                      # one-off operator tools: check_keys.py, backfill.py, smoke_real_data.py
+├── scripts/                      # one-off operator tools: check_keys.py, backfill.py, smoke_real_data.py,
+│                                 # local_session.py (the jobs on their schedule on this PC, until 1.8)
 ├── spikes/
 ├── infra/                        # CDK app: app.py, stacks/ (public_site; the trading stack from 1.8)
 └── tests/

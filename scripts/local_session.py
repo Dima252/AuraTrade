@@ -1,0 +1,100 @@
+"""Run the walking skeleton's jobs on this PC at their scheduled times (task 1.7).
+
+    TRADING_MODE=paper uv run python scripts/local_session.py --until 2026-10-26
+
+A stand-in for EventBridge (task 1.8) during the local acceptance sessions. Each weekday it runs,
+in America/New_York time (README §3):
+
+    09:20, 09:31  execute_open
+    09:36         execute_entries
+    09:35-16:00   stop_guard every 5 minutes
+    15:40         eod_review
+    16:20         post_market --chain   (ingest, simulate, regime, scan, analyst_submit)
+
+Each job is its own process, run one after another, so a slow job delays the next rather than
+overlapping it; the jobs' own calendar guards skip holidays. Runs already past when the script
+starts are skipped. The trading mode comes from the environment, as for any job.
+"""
+
+from __future__ import annotations
+
+import argparse
+import subprocess
+import sys
+import time
+from collections.abc import Sequence
+from datetime import date, datetime, timedelta
+from datetime import time as clock_time
+from pathlib import Path
+from zoneinfo import ZoneInfo
+
+NY = ZoneInfo("America/New_York")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+FIXED: tuple[tuple[clock_time, str, tuple[str, ...]], ...] = (
+    (clock_time(9, 20), "execute_open", ()),
+    (clock_time(9, 31), "execute_open", ()),
+    (clock_time(9, 36), "execute_entries", ()),
+    (clock_time(15, 40), "eod_review", ()),
+    (clock_time(16, 20), "post_market", ("--chain",)),
+)
+GUARD_FIRST, GUARD_LAST, GUARD_EVERY = clock_time(9, 35), clock_time(16, 0), timedelta(minutes=5)
+
+Run = tuple[datetime, str, tuple[str, ...]]
+
+
+def day_plan(day: date) -> list[Run]:
+    if day.weekday() >= 5:
+        return []
+    runs: list[Run] = [(datetime.combine(day, t, tzinfo=NY), job, args) for t, job, args in FIXED]
+    at = datetime.combine(day, GUARD_FIRST, tzinfo=NY)
+    last = datetime.combine(day, GUARD_LAST, tzinfo=NY)
+    fixed_times = {r[0] for r in runs}
+    while at <= last:
+        if at not in fixed_times:
+            runs.append((at, "stop_guard", ()))
+        at += GUARD_EVERY
+    return sorted(runs, key=lambda r: r[0])
+
+
+def plan(first: date, until: date) -> list[Run]:
+    out: list[Run] = []
+    day = first
+    while day <= until:
+        out += day_plan(day)
+        day += timedelta(days=1)
+    return out
+
+
+def log(text: str) -> None:
+    stamp = datetime.now(NY).strftime("%Y-%m-%d %H:%M:%S")
+    sys.stdout.write(f"{stamp} ET  {text}\n")
+    sys.stdout.flush()
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--until", type=date.fromisoformat, required=True, help="last day (ET)")
+    args = parser.parse_args(argv)
+    runs = [r for r in plan(datetime.now(NY).date(), args.until) if r[0] > datetime.now(NY)]
+    log(f"{len(runs)} runs planned through {args.until}")
+    failures = 0
+    for at, job, extra in runs:
+        wait = (at - datetime.now(NY)).total_seconds()
+        if wait > 0:
+            time.sleep(wait)
+        started = time.monotonic()
+        command = [sys.executable, "-m", f"auratrade.jobs.{job}", *extra]
+        result = subprocess.run(  # noqa: S603 - our own module, fixed arguments
+            command, cwd=REPO_ROOT, capture_output=True, text=True, check=False
+        )
+        failures += result.returncode != 0
+        seconds = time.monotonic() - started
+        log(f"{job} {' '.join(extra)} exit {result.returncode} in {seconds:.0f} s")
+        if result.returncode != 0:
+            log((result.stdout + result.stderr)[-2000:])
+    log(f"done: {failures} failed runs")
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
