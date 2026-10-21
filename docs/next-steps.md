@@ -34,8 +34,7 @@ Branch `phase-1/walking-skeleton` (pushed; draft PR). Everything is built and te
 **Left:**
 1. Accept: 3 full sessions (10-22, 10-23, 10-26) on paper: check `var/local-session.log`, `job_runs`, the Telegram reports, and at the broker that no position lacks a full GTC stop and no order is duplicated.
 2. Hand check still to do once a position exists: reduce or cancel its stop by hand (as a job dying mid-sequence would leave it) and see `stop_guard` restore it within 5 minutes.
-3. Readings for your approval (then README §5.7 / §10 / §14 + decision #131): see the PR description.
-4. Tick 1.7, merge the PR.
+3. Tick 1.7, mark PR #30 ready, merge on green CI. (The readings were approved on 2026-10-21 and are decision #131.)
 
 ## 1. Things only you can do (before task 1.8, not urgent)
 
