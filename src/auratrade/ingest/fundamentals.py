@@ -31,6 +31,7 @@ from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import RiskConfig
 from auratrade.data.edgar import CompanyFacts, FactValue
 from auratrade.db.models import DailyBar, EarningsEvent, Fundamental, Ticker
+from auratrade.ingest.bar_store import WRITE_CHUNK
 from auratrade.ingest.companies import session_index
 
 REVENUE_TAGS = (
@@ -308,9 +309,10 @@ def write_quarters(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Q
         for q in qs
     ]
     written = 0
-    if rows:
+    # In slices: one statement carries at most 65,535 parameters (the backfill writes ~45k rows).
+    for i in range(0, len(rows), WRITE_CHUNK):
         t = Fundamental
-        stmt = insert(t).values(rows)
+        stmt = insert(t).values(rows[i : i + WRITE_CHUNK])
         new = stmt.excluded
         stmt = stmt.on_conflict_do_update(
             index_elements=["ticker_id", "period_end", "filed_date"],
@@ -319,7 +321,7 @@ def write_quarters(conn: Connection, quarters_by_ticker: Mapping[int, Sequence[Q
                 tuple_(*(getattr(new, c) for c in _VALUES))
             ),
         )
-        written = len(conn.execute(stmt.returning(t.id)).all())
+        written += len(conn.execute(stmt.returning(t.id)).all())
     # Keep only the latest quarters per refreshed ticker (Neon's 0.5 GB).
     for ticker_id, qs in quarters_by_ticker.items():
         if qs:
