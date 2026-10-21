@@ -247,11 +247,6 @@ def signals_for(
     return [_signal(r) for r in entities(conn, query.order_by(Signal.rank))]
 
 
-def signal_by_client_id(conn: Connection, client_order_id: str) -> SignalRecord | None:
-    rows = entities(conn, select(Signal).where(Signal.client_order_id == client_order_id))
-    return _signal(rows[0]) if rows else None
-
-
 def update_signal(conn: Connection, signal_id: int, now: datetime, **values: Any) -> None:
     conn.execute(update(Signal).where(Signal.id == signal_id).values(updated_at=now, **values))
 
