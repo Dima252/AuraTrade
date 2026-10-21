@@ -330,3 +330,31 @@ plans:  # README §7.1-7.4; see auratrade.plans. Defaults change only on backtes
     VCP_BREAKOUT: {exit_set: MINERVINI}
     LEADER_PULLBACK: {exit_set: MINERVINI}
     EMERGING_LEADER: {exit_set: ONEIL}
+
+execution:  # README §5.7; see auratrade.execution
+  decision_price:                    # #120
+    trade_max_age_seconds: 120       # the last IEX trade if <= 2 minutes old ...
+    quote_max_age_seconds: 60        # ... else the quote midpoint if <= 1 minute old ...
+    max_spread: 0.02                 # ... with a spread <= 2% of the midpoint (provisional)
+  marketable_limit_slippage: 0.005   # a marketable sell limit 0.5% below the decision price
+  sell_wait_seconds: 30              # README §5.7.2: re-price once after ~30 s, then market
+  market_order_wait_seconds: 30
+  fill_poll_seconds: 2
+  call_attempts: 3                   # an unanswered order call is retried with the same id
+  lock_wait_alert_seconds: 120       # README §5.7.7: a job waiting > 2 minutes alerts
+  lock_wait_max_seconds: 480         # then fails (Lambda retries it), inside Lambda's 15 min
+  lock_idle_timeout_minutes: 10      # backstop for a frozen holder; longer than any order section
+
+skeleton:  # execution plan task 1.7: rule-only, no LLM; Phase 5 replaces the scan and the pick
+  trend_template_rules: [1, 2, 3, 4, 5, 8]
+  pivot_sessions: 20                 # pivot = the 20-session high
+  stop_sessions: 10                  # structural stop = the 10-session low ...
+  max_stop: 0.08                     # ... at most 8% below the limit price
+  limit_max_above_trigger: 0.02      # limit = trigger x (1 + min(2%, ½ ADR)), README §7.1
+  limit_adr_fraction: 0.5
+  adr_sessions: 20
+  risk_per_trade: 0.0025             # fixed 0.25% of equity, sized on the worst fill
+  picks: 3                           # top 3 by RS that size to at least one share
+  candidates: 10                     # ranked signals written per evening
+  max_positions: 6
+  trail: EMA_21                      # the one soft rule: a decision price below the 21 EMA
