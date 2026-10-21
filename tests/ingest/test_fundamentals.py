@@ -151,12 +151,14 @@ class TestQuarters:
         out = quarters(facts([], e))
         assert out[1].eps_growth is None
 
-    def test_late_comparatives_and_annual_only_filers_are_skipped(self) -> None:
+    def test_late_early_and_annual_only_filings_are_skipped(self) -> None:
         late = fact(date(2015, 1, 1), date(2015, 3, 31), 10.0, date(2016, 5, 1), fy=2016)
         annual = fact(
             date(2024, 1, 1), date(2024, 12, 31), 400.0, date(2025, 3, 1), form="10-K", fp="FY"
         )
-        assert quarters(facts([late, annual], [])) == []
+        # Filed before the quarter even ended: a mis-tagged fact.
+        early = fact(date(2018, 7, 1), date(2018, 9, 30), 5.0, date(2018, 6, 28), fy=2018, fp="Q3")
+        assert quarters(facts([late, annual, early], [])) == []
 
 
 # --- the step ----------------------------------------------------------------------------
