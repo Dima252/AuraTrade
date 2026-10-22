@@ -39,8 +39,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 1.4 Market calendar *(daily re-sync wired into `ingest` at 1.5; run `python -m auratrade.calendar.sync` once against the Neon `dev` branch)*
 - [x] 1.5 Ingest job *(`src/auratrade/ingest/` + `jobs/ingest.py`; live run 2026-10-15 on a scratch database: 2,761 tracked tickers, coverage 100%, industry coverage 99.96%, 140 MB for 2 years of bars, a nightly run 219 s and a no-op when repeated. Build readings recorded as decision #129. Since 1.7 it runs in the `post_market --chain`; `--direct` runs it alone)*
 - [x] 1.6 Historical backfill + real-data smoke run of the modules built early *(`src/auratrade/history/` + `scripts/backfill.py`: 13,672 securities and 16.3M bars since 2016, 1.2M headlines, 131,839 EDGAR earnings events; the last 2 years in Neon `dev`, 151 MB. Smoke run in `docs/backtests/smoke.md`: no exceptions or NaN; the 2017 `CORRECTION` miss goes to 2.4. Readings recorded as decision #130)*
-- [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local) + minimal fake broker and automated chaos tests *(built and merged, PR #30; readings are decision #131; the lock check and all 7 automated chaos scenarios pass. Left: the 3 live paper sessions 10-22, 10-23, 10-26 and the stop hand check, see `docs/next-steps.md`)*
-- [ ] 1.8 👤 Early AWS deploy of the skeleton
+- [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local) + minimal fake broker and automated chaos tests *(built and merged, PR #30; readings are decision #131; the lock check and all 7 automated chaos scenarios pass. Left: the 3 live paper sessions and the stop hand check, which run on AWS within 1.8 (#132))*
+- [ ] 1.8 👤 Early AWS deploy of the skeleton *(in progress on `phase-1/aws-deploy`: schedule, watchdog, SSM secrets, image and `AuraTradePaper` stack built and tested offline; next the user's AWS setup, then the deploy, see `docs/next-steps.md`)*
 
 **Phase 2: Indicators and regime**
 - [x] 2.1 Indicators *(built out of plan order with the user's approval: pure functions, no config dependency)*
@@ -278,7 +278,7 @@ One thin pass through the **whole daily loop**, built from the real modules in m
 - `TRADING_MODE` stays `dry_run` by default; paper orders need the explicit `paper` flag.
 - Runs against the **`dev`** Alpaca paper account.
 
-**Accept:** 3 sessions run locally against Alpaca paper (by hand at the right times is fine), with:
+**Accept:** 3 sessions run locally against Alpaca paper (by hand at the right times is fine), with *(moved to the AWS deploy in 1.8, on the `paper` account, decision #132)*:
 - no position ever without a full-quantity GTC stop
 - no duplicate orders
 - every job correctly run or skipped on the calendar
@@ -307,6 +307,7 @@ What was 6.1, plus the core of the CDK stack, moved forward so deployment proble
 - Deploy the public site stack from 0.5 (`AuraTradePublicSite`), on the custom domain if one was bought.
 
 **Accept:**
+- 1.7's live checks (#132): 3 sessions meeting 1.7's criteria, and a job killed right after reducing a stop repaired by `stop_guard` within one run, on the `paper` account. They count toward the 10 below; 1.7 is ticked when they pass.
 - 10 unattended sessions on Alpaca paper.
 - The watchdog fires when a job is disabled on purpose. The external dead-man's switch alerts when the watchdog is disabled on purpose.
 - AWS cost under $5/month. Neon compute hours are within the free allowance, projected to the full schedule (README §12).
