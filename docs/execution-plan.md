@@ -40,7 +40,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 1.5 Ingest job *(`src/auratrade/ingest/` + `jobs/ingest.py`; live run 2026-10-15 on a scratch database: 2,761 tracked tickers, coverage 100%, industry coverage 99.96%, 140 MB for 2 years of bars, a nightly run 219 s and a no-op when repeated. Build readings recorded as decision #129. Since 1.7 it runs in the `post_market --chain`; `--direct` runs it alone)*
 - [x] 1.6 Historical backfill + real-data smoke run of the modules built early *(`src/auratrade/history/` + `scripts/backfill.py`: 13,672 securities and 16.3M bars since 2016, 1.2M headlines, 131,839 EDGAR earnings events; the last 2 years in Neon `dev`, 151 MB. Smoke run in `docs/backtests/smoke.md`: no exceptions or NaN; the 2017 `CORRECTION` miss goes to 2.4. Readings recorded as decision #130)*
 - [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local) + minimal fake broker and automated chaos tests *(built and merged, PR #30; readings are decision #131; the lock check and all 7 automated chaos scenarios pass. Left: the 3 live paper sessions and the stop hand check, which run on AWS within 1.8 (#132))*
-- [ ] 1.8 👤 Early AWS deploy of the skeleton *(in progress on `phase-1/aws-deploy`: schedule, watchdog, SSM secrets, image and `AuraTradePaper` stack built and tested offline; next the user's AWS setup, then the deploy, see `docs/next-steps.md`)*
+- [ ] 1.8 👤 Early AWS deploy of the skeleton *(in progress on `phase-1/aws-deploy`: schedule, watchdog, SSM secrets, image and `AuraTradePaper` stack built and tested offline; the AWS account, Neon `paper` branch, healthchecks.io check and `.env.paper` are ready and checked (2026-10-22); next the budgets, then the deploy with the user's OK, see `docs/next-steps.md`)*
 
 **Phase 2: Indicators and regime**
 - [x] 2.1 Indicators *(built out of plan order with the user's approval: pure functions, no config dependency)*
@@ -122,8 +122,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 | Telegram bot token + your chat ID | Phase 0 | Create the bot with @BotFather |
 | External dead-man's-switch check (e.g. healthchecks.io, free) | Phase 1 (task 1.8) | Alerts you if the AWS watchdog itself stops pinging (README §5.13) |
 | GitHub remote repository | Phase 0 | Private repo |
-| AWS account | Phase 1 (task 1.8) | Root MFA, an admin user via IAM Identity Center, budget alarms |
-| Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | GitHub CLI installed; AWS CLI not yet (needed for 1.8) |
+| AWS account | Phase 1 (task 1.8) | Root MFA, an admin user (IAM Identity Center, or an IAM user signed in with `aws login`), budget alarms |
+| Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | Both installed; AWS CLI profile `auratrade` (us-east-1) |
 | Domain name (optional) | Task 1.8 | For the public site (0.5). Buying it through Route 53 (about $13/year for a `.com`) creates the hosted zone the stack needs. Without one, the site lives on its `*.cloudfront.net` address |
 
 ---
@@ -301,7 +301,7 @@ The long unattended record comes from 1.8 rather than from running this machine 
 ### 1.8 Early AWS deploy of the skeleton (M, with you)
 
 What was 6.1, plus the core of the CDK stack, moved forward so deployment problems surface early:
-- **Account:** root MFA, Identity Center admin, AWS CLI, budget alarms at $10 / $25, `cdk bootstrap`.
+- **Account:** root MFA, an admin user, AWS CLI profile `auratrade`, budget alarms at $10 / $25, `cdk bootstrap`.
 - **Minimal stack:** ECR image, one Lambda per skeleton job (order jobs with async retries on), EventBridge Scheduler (`America/New_York`), the `stop_guard` schedule, SSM parameters, the `watchdog` with its external dead-man's-switch ping, and a Neon `paper` branch.
 - Runs against the **`paper`** Alpaca account, never the `dev` one.
 - Deploy the public site stack from 0.5 (`AuraTradePublicSite`), on the custom domain if one was bought.

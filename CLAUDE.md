@@ -75,7 +75,7 @@ uv run pytest                             # tests (add --cov for branch coverage
 uv run ruff check . && uv run ruff format --check .
 uv run mypy                               # src/, scripts/ and infra/ (strict)
 uv run pre-commit run --all-files         # every hook, as on commit
-uv run python scripts/check_keys.py       # confirm every key in .env works (free calls only)
+uv run python scripts/check_keys.py       # confirm every key in .env works (free calls only; --env-file .env.paper for paper)
 uv run alembic upgrade head               # apply migrations (from task 1.2)
 uv run python -m auratrade.calendar.sync  # sync market_sessions from Alpaca + cross-check (from task 1.4)
 uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
@@ -85,6 +85,7 @@ uv run python scripts/backfill.py all     # the Parquet history since 2016 (hour
 uv run python scripts/backfill.py postgres   # the 2-year window's earnings, fundamentals, VIX into Postgres (after an ingest run)
 uv run python scripts/smoke_real_data.py  # the early modules over the whole history -> docs/backtests/smoke.md
 uv run auratrade kill on|off|status       # the kill switch (entries only); also: auratrade mismatches / resolve <id> --note
+uv run --env-file .env.paper auratrade kill status   # any command against `paper` (its file's values override .env)
 TRADING_MODE=paper uv run python scripts/local_session.py --until YYYY-MM-DD   # the skeleton's jobs on schedule (dev paper)
 cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 uv run python scripts/put_parameters.py --env paper --env-file .env.paper   # plan the SSM secrets (--apply --profile auratrade writes)

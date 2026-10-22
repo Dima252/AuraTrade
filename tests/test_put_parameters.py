@@ -22,10 +22,14 @@ SHARED = {
     "FINNHUB_API_KEY": "finnhubkey012",
     "EDGAR_USER_AGENT": "AuraTrade research owner@realmail.net",
     "TELEGRAM_BOT_TOKEN": "123456:telegramtoken",
-    "TELEGRAM_CHAT_ID": "42",
+    "TELEGRAM_CHAT_ID": "4242424242",
 }
 VALUES = {**ACCOUNT, **SHARED}
-DEV = {"ALPACA_API_KEY": "PKDEV", "ANTHROPIC_API_KEY": "sk-ant-dev", "TELEGRAM_CHAT_ID": "7"}
+DEV = {
+    "ALPACA_API_KEY": "PKDEV",
+    "ANTHROPIC_API_KEY": "sk-ant-dev",
+    "TELEGRAM_CHAT_ID": "7777777777",
+}
 
 
 class FakeSSM:
@@ -52,7 +56,7 @@ def test_empty_shared_keys_fall_back_to_dev() -> None:
     plan = pp.make_plan({**VALUES, "ANTHROPIC_API_KEY": "", "TELEGRAM_CHAT_ID": ""}, DEV)
     assert plan.shared_from_dev == ["ANTHROPIC_API_KEY", "TELEGRAM_CHAT_ID"]
     assert plan.values["ANTHROPIC_API_KEY"] == "sk-ant-dev"
-    assert plan.values["TELEGRAM_CHAT_ID"] == "7"
+    assert plan.values["TELEGRAM_CHAT_ID"] == DEV["TELEGRAM_CHAT_ID"]
     assert plan.values["FRED_API_KEY"] == SHARED["FRED_API_KEY"]
 
 
