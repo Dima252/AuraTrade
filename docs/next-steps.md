@@ -1,4 +1,4 @@
-# What's left: status at 2026-10-22 midday (task 1.8 built and tested offline; your AWS setup next)
+# What's left: status at 2026-10-22 14:00 ET (task 1.8 built, tested offline, CI green on draft PR #31; waiting on your AWS setup)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
@@ -13,7 +13,7 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 
 The PC is on a phone hotspot, so it can't be relied on to stay connected for the sessions. **The rest of 1.7's live acceptance (3 sessions + the stop hand check) moves to AWS**: it runs as part of task 1.8, on the separate `paper` Alpaca account. It is recorded as decision **#132** and in the plan (1.7 and 1.8 acceptance).
 
-Until AWS is live, the local scheduler keeps running as a bonus (nothing depends on it). It stopped when the 10-21 chat ended (no runs on the morning of 10-22, nothing was open) and was restarted 10-22 at 11:17 ET from this chat, so it stops again when this chat ends. It runs from a separate copy of `main` at `C:\Users\dimat\Documents\GitHub\AuraTrade-live` (a git worktree, so work on a branch can't change the code it runs), log `AuraTrade-live\var\local-session.log`, through 10-26 on the `dev` account. If the PC drops off, nothing is at risk: every position's stop rests at Alpaca. When AWS takes over: stop it, then `git worktree remove ..\AuraTrade-live`, and flatten or keep the `dev` account (your call).
+Until AWS is live, the local scheduler keeps running as a bonus (nothing depends on it). It stopped when the 10-21 chat ended (no runs on the morning of 10-22, nothing was open) and was restarted 10-22 at 11:17 ET from the 10-22 chat; its log shows `stop_guard` running cleanly every 5 minutes through 14:00 ET. **It stops when that chat ends.** A new session may restart it (optional) from Git Bash: `cd ../AuraTrade-live && TRADING_MODE=paper uv run python scripts/local_session.py --until 2026-10-26 >> var/local-session.log 2>&1` (run in the background); first check the log's last line to see whether it is still running. It runs from a separate copy of `main` at `C:\Users\dimat\Documents\GitHub\AuraTrade-live` (a git worktree, so work on a branch can't change the code it runs), log `AuraTrade-live\var\local-session.log`, through 10-26 on the `dev` account. If the PC drops off, nothing is at risk: every position's stop rests at Alpaca. When AWS takes over: stop it, then `git worktree remove ..\AuraTrade-live`, and flatten or keep the `dev` account (your call).
 
 ## Your part before the deploy (about 30-45 minutes)
 
@@ -26,13 +26,17 @@ Until AWS is live, the local scheduler keeps running as a bonus (nothing depends
 
 Expected AWS cost: about $0-1/month (Lambda, Scheduler, SSM and logs in the free tiers; about $0.10 for the image). **Nothing is created in AWS until you confirm.** Data note: the first deploy downloads the Lambda base image and uploads the built image, about 600 MB in all, so it is better done on Wi-Fi.
 
-## Task 1.8: in progress (branch `phase-1/aws-deploy`, pushed, work in progress)
+## Task 1.8: in progress (branch `phase-1/aws-deploy`, draft PR #31, CI green at `5e43424`)
+
+PR #31 stays a **draft** until the AWS acceptance passes; then tick 1.7 and 1.8 in the tracker, mark it ready and merge.
 
 **Done on the branch (tested; ruff and mypy clean):**
 - `jobs/schedule.py`: the whole weekday schedule as `Slot`s, the single source for the AWS stack, the watchdog and `scripts/local_session.py`; the evening chain's fallbacks fire every 10 minutes up to their deadline.
 - `jobs/watchdog.py`: missing heartbeats, stuck RUNNING rows, disabled schedules; each finding alerted once per session; pings `HEALTHCHECKS_PING_URL`.
 - `eod_review` at 12:40 and 15:40, running only within 30 minutes of that day's close (half days work).
 - `parameters.py`: secrets from SSM at function start. `scripts/put_parameters.py`: plans by default, `--apply` writes.
+- `scripts/reset_trading_state.py`: clears the trading tables a Neon branch copied from `dev` carries, resets the flags (kill switch on); plans by default, refuses the `dev` database and localhost.
+- README §3, §5.13, §12, §13 and decisions #132, #133 written; CLAUDE.md commands and decision count updated.
 - `Dockerfile` + `.dockerignore` (allow-list; checked: the staged context holds only `Dockerfile`, `pyproject.toml`, `uv.lock`, `config/`, `src/`).
 - `infra/stacks/trading.py` (`TradingStack`), wired into `infra/app.py` as `AuraTradePaper`; `npx aws-cdk synth` passes for both stacks.
 - Tests: schedule, watchdog (against the test Postgres), the `eod_review` window, SSM loading, `put_parameters`, the stack synthesized offline (handlers, `dry_run` default, `live` refused, retries, grants, schedules = slots).
@@ -56,4 +60,11 @@ Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → **
 ## How to resume in a new chat
 
 - "continue" resumes task 1.8 at "Left to do" above (branch `phase-1/aws-deploy`).
-- The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432); stop it with `docker stop auratrade-test-pg` when not testing.
+- **Where the 10-22 session stopped:** all code, tests and docs for 1.8 are done and pushed; nothing is uncommitted. It was waiting for you to finish "Your part" and fill in `.env.paper`. Nothing has been created in AWS, and neither `--apply` has been run.
+- **The next session's first steps,** once you say the AWS setup is done:
+  1. `uv run python scripts/put_parameters.py --env paper --env-file .env.paper` (plan only): it should list every key and refuse nothing.
+  2. `uv run python scripts/reset_trading_state.py --env-file .env.paper` (plan only): row counts from the Neon `paper` branch, never the URL.
+  3. `aws sts get-caller-identity --profile auratrade` to confirm the CLI profile (after `aws sso login --profile auratrade`).
+  4. Ask you for an explicit OK, with the cost estimate above, before any of: `reset_trading_state --apply`, `cd infra && npx aws-cdk bootstrap --profile auratrade`, `put_parameters --apply --profile auratrade`, `npx aws-cdk deploy AuraTradePaper -c trading_mode=paper --profile auratrade`.
+  5. After the deploy: invoke each function once in `dry_run`, check `job_runs` and the logs, then `auratrade kill off` against `paper` and start the acceptance.
+- The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432). If it is gone: `docker run -d --name auratrade-test-pg -e POSTGRES_USER=auratrade -e POSTGRES_PASSWORD=auratrade -e POSTGRES_DB=auratrade -p 5434:5432 postgres:16`. Run the tests with `TEST_DATABASE_URL=postgresql+psycopg://auratrade:auratrade@localhost:5434/auratrade AURATRADE_REQUIRE_DB=1 uv run pytest`. Stop it with `docker stop auratrade-test-pg` when not testing.
