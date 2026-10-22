@@ -75,7 +75,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 5.4 Reconciliation and invariants
 - [ ] 5.5 Jobs (execute, monitor, EOD, post-market, weekly)
 - [ ] 5.6 Live `EpisodicPivot` path (EP candidates, EP review, EP entries)
-- [ ] 5.7 Public site data (nightly snapshot: equity, regime, closed trades)
+- [ ] 5.7 Public site data and showcase design (nightly snapshot: equity, regime, closed trades; #134)
 
 **Phase 6: AWS** (the account and a minimal stack already exist from 1.8)
 - [ ] 6.1 Complete the CDK stack (all jobs)
@@ -751,9 +751,9 @@ EP has more special cases than any other strategy, and its live rule can't be ba
 
 **Accept:** on a replayed earnings morning, an EP candidate is detected at 08:40, reviewed by the Portfolio Manager, and entered at 09:36 on its opening-range high with a low-of-day stop, on the `dev` paper account (or replayed through `sim/` if no live EP comes up); the baseline book receives the same candidate; an EP whose opening range is wider than 1.5 × its pre-gap ADR is rejected and logged.
 
-### 5.7 Public site data (S)
+### 5.7 Public site data and showcase design (M)
 
-The public site (0.5) gets its numbers from one file, so the internet never reaches the trading system (decision #108):
+A designed showcase site, not just data panels (#134): the results below presented so the site does the project justice, still static and same-origin. The public site (0.5) gets its numbers from one file, so the internet never reaches the trading system (decision #108):
 - `post_market` writes `data/snapshot.json` to the site bucket every night, with `Cache-Control: max-age=300`. Its IAM role may only put objects under `data/`.
 - The snapshot is a Pydantic model and an **allow-list**: equity curve vs SPY and the baseline book (sim R, README §5.12), the effective regime and pillar scores, **closed** trades (R, holding sessions, exit reason, the Analyst's stated thesis), and the verdict-scorecard summary once it has data.
 - Never in it: open positions, pending entries, stop levels, order or account IDs, raw prompts or LLM payloads.
@@ -818,6 +818,7 @@ Before day 1, write `docs/backtests/power.md` from the 4.6 scorecard data (READM
 ## Phase 8: Live, small
 
 - Separate `live` stack (Neon `live` branch, live keys, `TRADING_MODE=live` set explicitly).
+- **Harden the AWS account first** (#134): MFA on every human user, no long-lived admin access keys (Identity Center or short `aws login` sessions), least-privilege deploy permissions; consider a separate AWS account for `live`.
 - Start at the 0.5 progressive-exposure multiplier ("prove it first") with reduced capital; optional Telegram one-tap approval for entries.
 - The "unproven regime" multiplier row (README §8) switches on: regimes with fewer than 5 closed trades stay at 0.5.
 - Step up to the full envelope after one clean month, **and** only once the BUY-vs-SKIP interval excludes zero if it was inconclusive at go-live (README §15); keep comparing with the baseline.
