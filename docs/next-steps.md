@@ -5,7 +5,7 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 ## Where things stand
 
 - **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Task 1.7 is **built and merged** (PR #30); only its live acceptance is left, now on AWS (below). On the 1.8 branch 1,258 tests pass, coverage 97%, ruff and mypy clean.
-- **Decisions:** README §16 runs to **#132** (1.7's live acceptance moved to AWS, approved 2026-10-21). The 1.8 build readings wait for your approval (below). The design is frozen (#105).
+- **Decisions:** README §16 runs to **#133** (#132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22). The design is frozen (#105).
 - **Accounts:** both Alpaca paper accounts are active (`dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`). Neon `dev` is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off** (entries allowed on `dev`).
 - **Known data notes:** Alpaca's TEVA history starts on 2026-09-14 (a vendor gap, not ingest). On 2026-10-21 FRED answered with invalid JSON for VIX, VIX3M and the credit spread in the evening run; ingest carried on (non-critical step) and the regime still ran. Check that it is back on 10-22 (`job_runs` → `ingest` → `details.macro.errors`).
 
@@ -40,10 +40,9 @@ Expected AWS cost: about $0-1/month (Lambda, Scheduler, SSM and logs in the free
 **Not yet verified:** the Docker image has never been built (it builds during `cdk deploy`, about 600 MB of download and upload, better on Wi-Fi), and nothing has run in AWS.
 
 **Left to do, in order:**
-1. **Your approval of the 1.8 build readings** (listed in the chat on 10-22; they become decision #133 with README §3, §5.13, §12, §13).
-2. **Your part** above (AWS account, Identity Center, budgets, CLI profile `auratrade`, healthchecks.io, Neon `paper` branch). A dry run of `put_parameters` on today's `.env.paper` refuses only on the two things still missing there: `HEALTHCHECKS_PING_URL` and a Neon `DATABASE_URL` (now `localhost`). The shared keys (Anthropic, FRED, Finnhub, EDGAR, Telegram) are taken from `.env` when `.env.paper` leaves them empty.
-3. With your OK: prepare the Neon `paper` branch (migrate to head, clear the trading tables copied from `dev`, regime seed, kill switch on until ready), `cdk bootstrap`, `put_parameters --apply`, `cdk deploy AuraTradePaper -c trading_mode=paper`; then a first `dry_run` invoke of each job, `auratrade kill off` on `paper`.
-4. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks, and the public site deploy. Then stop the local scheduler and remove the `AuraTrade-live` worktree.
+1. **Your part** above (AWS account, Identity Center, budgets, CLI profile `auratrade`, healthchecks.io, Neon `paper` branch). A dry run of `put_parameters` on today's `.env.paper` refuses only on the two things still missing there: `HEALTHCHECKS_PING_URL` and a Neon `DATABASE_URL` (now `localhost`). The shared keys (Anthropic, FRED, Finnhub, EDGAR, Telegram) are taken from `.env` when `.env.paper` leaves them empty.
+2. With your OK: prepare the Neon `paper` branch (migrate to head, clear the trading tables copied from `dev`, regime seed, kill switch on until ready), `cdk bootstrap`, `put_parameters --apply`, `cdk deploy AuraTradePaper -c trading_mode=paper`; then a first `dry_run` invoke of each job, `auratrade kill off` on `paper`.
+3. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks, and the public site deploy. Then stop the local scheduler and remove the `AuraTrade-live` worktree.
 
 ## 1. Other things only you can do (not urgent)
 
