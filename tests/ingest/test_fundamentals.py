@@ -240,6 +240,46 @@ def test_step_refreshes_recent_reporters_first_and_caps(
     assert again.rows_written == 0
 
 
+def test_step_holds_only_a_few_company_facts_at_once(
+    pg_engine: Engine, calendar: MarketCalendar, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Company facts are megabytes each; holding a whole batch ran out of Lambda's memory.
+    # At most one group (2 x http_workers) may be fetched and not yet reduced to quarters.
+    company = facts(quarter_facts(dict.fromkeys(Q_ENDS, 100.0)), [])
+    with pg_engine.begin() as conn:
+        for i in range(20):
+            bar_tonight(conn, add_ticker(conn, f"F{i}", cik=200 + i))
+    risk = RISK.model_copy(
+        update={
+            "ingest": RISK.ingest.model_copy(
+                update={"fundamentals_refresh_sessions": 1, "fundamentals_max_requests": 50}
+            )
+        }
+    )
+    held = {"fetched": 0, "reduced": 0, "max": 0}
+
+    class Counting(FakeFacts):
+        def company_facts(self, cik: int) -> CompanyFacts | None:
+            held["fetched"] += 1
+            held["max"] = max(held["max"], held["fetched"] - held["reduced"])
+            return super().company_facts(cik)
+
+    real = quarters
+
+    def counting_quarters(f: CompanyFacts) -> list[Quarter]:
+        held["reduced"] += 1
+        return real(f)
+
+    monkeypatch.setattr("auratrade.ingest.fundamentals.quarters", counting_quarters)
+    with pg_engine.begin() as conn:
+        report = ingest_fundamentals(
+            conn, Counting({200 + i: company for i in range(20)}), calendar, risk, THU
+        )
+    assert report.fetched == 20
+    assert held["reduced"] == 20
+    assert held["max"] <= 2 * risk.ingest.http_workers
+
+
 def test_write_quarters_over_the_parameter_limit(pg_engine: Engine) -> None:
     # 5,100 rows x 13 columns is past Postgres's 65,535 parameters per statement (the backfill
     # writes ~45k rows at once).

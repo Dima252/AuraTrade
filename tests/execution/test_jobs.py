@@ -21,8 +21,10 @@ from auratrade.db.models import (
     TradeJournalRow,
 )
 from auratrade.execution.broker import OrderStatus, OrderType, Side
+from auratrade.execution.runtime import DepsFactory
 from auratrade.execution.store import entities
 from auratrade.jobs import eod_review, execute_entries, execute_open, post_market, stop_guard
+from auratrade.jobs.base import JobSpec
 from auratrade.plans.model import PositionPlan
 from tests.execution.conftest import TODAY, World, ny
 from tests.execution.helpers import protected
@@ -330,6 +332,40 @@ def test_eod_holds_above_the_trail_and_waits_without_a_price(world: World) -> No
     out = world.run(eod_review.make_job)
     decisions = {e["symbol"]: e["decision"] for e in out["exits"]}
     assert decisions == {"NVDA": "hold", "AMD": "wait: no decision price"}
+
+
+def near_close_eod(deps_factory: DepsFactory) -> JobSpec:
+    return eod_review.make_job(deps_factory, near_close_only=True)
+
+
+@pytest.mark.parametrize(
+    ("hour", "minute", "early", "runs"),
+    [
+        (15, 40, False, True),
+        (12, 40, False, False),  # the half-day slot on a regular day
+        (12, 40, True, True),
+        (15, 40, True, False),  # the regular slot after a half day's close
+        (16, 0, False, False),  # at the close is too late
+        (15, 29, False, False),  # 31 minutes out
+    ],
+)
+def test_the_scheduled_eod_review_runs_only_near_the_close(
+    world: World, hour: int, minute: int, early: bool, runs: bool
+) -> None:
+    if early:
+        world.set_session(TODAY, close_at=ny(TODAY, 13), is_early_close=True, minutes=210)
+    world.clock.now = ny(TODAY, hour, minute)
+    out = world.run(near_close_eod)
+    assert ("skipped" not in out) is runs
+    if not runs:
+        assert out == {"skipped": "not within 30 min of the close"}
+
+
+def test_the_scheduled_eod_review_skips_a_day_without_a_session(world: World) -> None:
+    saturday = date(2026, 10, 24)
+    world.clock.now = ny(saturday, 15, 40)
+    assert "skipped" in world.run(near_close_eod, session=saturday)
+    assert eod_review.JOB.name == "eod_review"
 
 
 def test_an_unfilled_trail_exit_is_owed_and_retried_at_the_check_run(world: World) -> None:

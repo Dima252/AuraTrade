@@ -39,8 +39,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 1.4 Market calendar *(daily re-sync wired into `ingest` at 1.5; run `python -m auratrade.calendar.sync` once against the Neon `dev` branch)*
 - [x] 1.5 Ingest job *(`src/auratrade/ingest/` + `jobs/ingest.py`; live run 2026-10-15 on a scratch database: 2,761 tracked tickers, coverage 100%, industry coverage 99.96%, 140 MB for 2 years of bars, a nightly run 219 s and a no-op when repeated. Build readings recorded as decision #129. Since 1.7 it runs in the `post_market --chain`; `--direct` runs it alone)*
 - [x] 1.6 Historical backfill + real-data smoke run of the modules built early *(`src/auratrade/history/` + `scripts/backfill.py`: 13,672 securities and 16.3M bars since 2016, 1.2M headlines, 131,839 EDGAR earnings events; the last 2 years in Neon `dev`, 151 MB. Smoke run in `docs/backtests/smoke.md`: no exceptions or NaN; the 2017 `CORRECTION` miss goes to 2.4. Readings recorded as decision #130)*
-- [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local) + minimal fake broker and automated chaos tests *(built and merged, PR #30; readings are decision #131; the lock check and all 7 automated chaos scenarios pass. Left: the 3 live paper sessions 10-22, 10-23, 10-26 and the stop hand check, see `docs/next-steps.md`)*
-- [ ] 1.8 👤 Early AWS deploy of the skeleton
+- [ ] 1.7 Walking skeleton (rule-only, Alpaca paper, local) + minimal fake broker and automated chaos tests *(built and merged, PR #30; readings are decision #131; the lock check and all 7 automated chaos scenarios pass. Left: the 3 live paper sessions and the stop hand check, which run on AWS within 1.8 (#132))*
+- [ ] 1.8 👤 Early AWS deploy of the skeleton *(in progress on `phase-1/aws-deploy`: schedule, watchdog, SSM secrets, image and `AuraTradePaper` stack built and tested offline; the AWS account, Neon `paper` branch, healthchecks.io check and `.env.paper` are ready and checked (2026-10-22); next the budgets, then the deploy with the user's OK, see `docs/next-steps.md`)*
 
 **Phase 2: Indicators and regime**
 - [x] 2.1 Indicators *(built out of plan order with the user's approval: pure functions, no config dependency)*
@@ -75,7 +75,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 5.4 Reconciliation and invariants
 - [ ] 5.5 Jobs (execute, monitor, EOD, post-market, weekly)
 - [ ] 5.6 Live `EpisodicPivot` path (EP candidates, EP review, EP entries)
-- [ ] 5.7 Public site data (nightly snapshot: equity, regime, closed trades)
+- [ ] 5.7 Public site data and showcase design (nightly snapshot: equity, regime, closed trades; #134)
 
 **Phase 6: AWS** (the account and a minimal stack already exist from 1.8)
 - [ ] 6.1 Complete the CDK stack (all jobs)
@@ -122,8 +122,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 | Telegram bot token + your chat ID | Phase 0 | Create the bot with @BotFather |
 | External dead-man's-switch check (e.g. healthchecks.io, free) | Phase 1 (task 1.8) | Alerts you if the AWS watchdog itself stops pinging (README §5.13) |
 | GitHub remote repository | Phase 0 | Private repo |
-| AWS account | Phase 1 (task 1.8) | Root MFA, an admin user via IAM Identity Center, budget alarms |
-| Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | GitHub CLI installed; AWS CLI not yet (needed for 1.8) |
+| AWS account | Phase 1 (task 1.8) | Root MFA, an admin user (IAM Identity Center, or an IAM user signed in with `aws login`), budget alarms |
+| Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | Both installed; AWS CLI profile `auratrade` (us-east-1) |
 | Domain name (optional) | Task 1.8 | For the public site (0.5). Buying it through Route 53 (about $13/year for a `.com`) creates the hosted zone the stack needs. Without one, the site lives on its `*.cloudfront.net` address |
 
 ---
@@ -278,7 +278,7 @@ One thin pass through the **whole daily loop**, built from the real modules in m
 - `TRADING_MODE` stays `dry_run` by default; paper orders need the explicit `paper` flag.
 - Runs against the **`dev`** Alpaca paper account.
 
-**Accept:** 3 sessions run locally against Alpaca paper (by hand at the right times is fine), with:
+**Accept:** 3 sessions run locally against Alpaca paper (by hand at the right times is fine), with *(moved to the AWS deploy in 1.8, on the `paper` account, decision #132)*:
 - no position ever without a full-quantity GTC stop
 - no duplicate orders
 - every job correctly run or skipped on the calendar
@@ -301,12 +301,13 @@ The long unattended record comes from 1.8 rather than from running this machine 
 ### 1.8 Early AWS deploy of the skeleton (M, with you)
 
 What was 6.1, plus the core of the CDK stack, moved forward so deployment problems surface early:
-- **Account:** root MFA, Identity Center admin, AWS CLI, budget alarms at $10 / $25, `cdk bootstrap`.
+- **Account:** root MFA, an admin user, AWS CLI profile `auratrade`, budget alarms at $10 / $25, `cdk bootstrap`.
 - **Minimal stack:** ECR image, one Lambda per skeleton job (order jobs with async retries on), EventBridge Scheduler (`America/New_York`), the `stop_guard` schedule, SSM parameters, the `watchdog` with its external dead-man's-switch ping, and a Neon `paper` branch.
 - Runs against the **`paper`** Alpaca account, never the `dev` one.
 - Deploy the public site stack from 0.5 (`AuraTradePublicSite`), on the custom domain if one was bought.
 
 **Accept:**
+- 1.7's live checks (#132): 3 sessions meeting 1.7's criteria, and a job killed right after reducing a stop repaired by `stop_guard` within one run, on the `paper` account. They count toward the 10 below; 1.7 is ticked when they pass.
 - 10 unattended sessions on Alpaca paper.
 - The watchdog fires when a job is disabled on purpose. The external dead-man's switch alerts when the watchdog is disabled on purpose.
 - AWS cost under $5/month. Neon compute hours are within the free allowance, projected to the full schedule (README §12).
@@ -750,9 +751,9 @@ EP has more special cases than any other strategy, and its live rule can't be ba
 
 **Accept:** on a replayed earnings morning, an EP candidate is detected at 08:40, reviewed by the Portfolio Manager, and entered at 09:36 on its opening-range high with a low-of-day stop, on the `dev` paper account (or replayed through `sim/` if no live EP comes up); the baseline book receives the same candidate; an EP whose opening range is wider than 1.5 × its pre-gap ADR is rejected and logged.
 
-### 5.7 Public site data (S)
+### 5.7 Public site data and showcase design (M)
 
-The public site (0.5) gets its numbers from one file, so the internet never reaches the trading system (decision #108):
+A designed showcase site, not just data panels (#134): the results below presented so the site does the project justice, still static and same-origin. The public site (0.5) gets its numbers from one file, so the internet never reaches the trading system (decision #108):
 - `post_market` writes `data/snapshot.json` to the site bucket every night, with `Cache-Control: max-age=300`. Its IAM role may only put objects under `data/`.
 - The snapshot is a Pydantic model and an **allow-list**: equity curve vs SPY and the baseline book (sim R, README §5.12), the effective regime and pillar scores, **closed** trades (R, holding sessions, exit reason, the Analyst's stated thesis), and the verdict-scorecard summary once it has data.
 - Never in it: open positions, pending entries, stop levels, order or account IDs, raw prompts or LLM payloads.
@@ -817,6 +818,7 @@ Before day 1, write `docs/backtests/power.md` from the 4.6 scorecard data (READM
 ## Phase 8: Live, small
 
 - Separate `live` stack (Neon `live` branch, live keys, `TRADING_MODE=live` set explicitly).
+- **Harden the AWS account first** (#134): MFA on every human user, no long-lived admin access keys (Identity Center or short `aws login` sessions), least-privilege deploy permissions; consider a separate AWS account for `live`.
 - Start at the 0.5 progressive-exposure multiplier ("prove it first") with reduced capital; optional Telegram one-tap approval for entries.
 - The "unproven regime" multiplier row (README §8) switches on: regimes with fewer than 5 closed trades stay at 0.5.
 - Step up to the full envelope after one clean month, **and** only once the BUY-vs-SKIP interval excludes zero if it was inconclusive at go-live (README §15); keep comparing with the baseline.

@@ -1,57 +1,65 @@
-# What's left: status at 2026-10-21 (task 1.7: live acceptance running)
+# What's left: status at 2026-10-22 16:00 ET (task 1.8: `AuraTradePaper` deployed at 15:48 ET; first evening chain tonight)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
 ## Where things stand
 
-- **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Task 1.7 is **built and merged** (PR #30); only its live acceptance is left (below). 1,177 tests pass, coverage 97%, ruff and mypy clean.
-- **Decisions:** README §16 runs to **#131** (the 1.7 build readings, approved 2026-10-21). The design is frozen (#105).
-- **Accounts:** both Alpaca paper accounts are active (`dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper`). Neon `dev` is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off** (entries allowed on `dev`).
-- **Known data notes:** Alpaca's TEVA history starts on 2026-09-14 (a vendor gap, not ingest). On 2026-10-21 FRED answered with invalid JSON for VIX, VIX3M and the credit spread in the evening run; ingest carried on (non-critical step) and the regime still ran. Check that it is back on 10-22 (`job_runs` → `ingest` → `details.macro.errors`).
+- **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Task 1.7 is **built and merged** (PR #30); only its live acceptance is left, now on AWS (below). On the 1.8 branch 1,258 tests pass, coverage 97%, ruff and mypy clean.
+- **Decisions:** README §16 runs to **#134** (#132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
+- **Accounts:** both Alpaca paper accounts are active and flat (no positions, no open orders, checked 2026-10-22 14:40 ET): `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper` ($5,000). Neon `dev` (endpoint `ep-autumn-sea-…`) is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off**. Neon `paper` (endpoint `ep-summer-math-…`) is a full copy of `dev` made 2026-10-22, also at 0006.
+- **Env files (2026-10-22):** `.env` and `.env.paper` have the same keys in the layout of `.env.example` (including `ENVIRONMENT`); every key in both passes `scripts/check_keys.py` (`--env-file .env.paper` for `paper`). Any local command runs against `paper` with `uv run --env-file .env.paper ...` (checked: it resolves to the `paper` database).
+- **AWS:** account 391732005061; CLI profile `auratrade` (us-east-1) is an IAM user with `AdministratorAccess`, signed in with `aws login` (not Identity Center; equivalent for this). Budgets `auratrade-monthly-10` and `-25`. `cdk bootstrap` done; the 10 secrets are SecureStrings under `/auratrade/paper/`; **`AuraTradePaper` deployed 2026-10-22 15:48 ET** with `trading_mode=paper` (11 functions, 18 schedules in the group `auratrade-paper`). The `paper` branch was reset just before: no trading rows, **kill switch on**.
+- **Network note (2026-10-22):** the Wi-Fi the PC moved to cuts the Postgres protocol to Neon (port 5432 opens, then the handshake is dropped; direct TLS too). Neon itself is fine and answers on its HTTPS SQL endpoint (`POST https://<host>/sql` with a `Neon-Connection-String` header): the reset ran that way (the script's own statements, one transaction), and `job_runs` is read that way from this network. The Lambdas are unaffected. Local commands that need the database (`auratrade ...`, `reset_trading_state`, `alembic`, the tests' Neon use) work only from another network (the hotspot) while on this one.
+- **Time zones in Git Bash:** `TZ=America/New_York date` prints UTC (Git Bash ignores `TZ`); get ET from PowerShell: `[TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow,'Eastern Standard Time')`.
+- **healthchecks.io:** check `auratrade-watchdog`, cron `*/15 7-21 * * 1-5`, `America/New_York`, grace 30 minutes; its ping URL is in `.env.paper`.
+- **Known data notes:** Alpaca's TEVA history starts on 2026-09-14 (a vendor gap, not ingest). FRED answered with invalid JSON on the evening of 2026-10-21; on 2026-10-22 it answers again (`VIXCLS` 2026-10-21 = 16.68).
 
-## Task 1.7: live acceptance (2026-10-22 to 10-26)
+## Change of plan (2026-10-21, approved by the user)
 
-**What is running:** `TRADING_MODE=paper uv run python scripts/local_session.py --until 2026-10-26`, in the background on this PC, log `var/local-session.log`. It runs every skeleton job at its time on the `dev` paper account. **The PC must stay on and awake through Monday 10-26 evening.** If it stopped, restart it with the same command (runs already past are skipped).
+The PC is on a phone hotspot, so it can't be relied on to stay connected for the sessions. **The rest of 1.7's live acceptance (3 sessions + the stop hand check) moves to AWS**: it runs as part of task 1.8, on the separate `paper` Alpaca account. It is recorded as decision **#132** and in the plan (1.7 and 1.8 acceptance).
 
-10-21 was a shakedown session (entries placed late, at 12:55 ET); none filled, and the 15:40 review cancelled all three as designed. The evening chain wrote 10 signals for 10-22.
+**The local scheduler is stopped.** It ran from the `AuraTrade-live` worktree (a separate copy of `main` at `C:\Users\dimat\Documents\GitHub\AuraTrade-live`, log `AuraTrade-live\var\local-session.log`) and was healthy: its last run, `stop_guard` at 14:30 ET, was on time. It was stopped at about 14:45 ET on a misreading of the clock (the Git Bash note above). Nothing was exposed: the `dev` account was flat; `dev` simply has no close or evening run on 10-22. AWS has taken over, so it stays stopped; `git worktree remove ..\AuraTrade-live` when convenient.
 
-### The checks still to do
+## Task 1.8: in progress (branch `phase-1/aws-deploy`, draft PR #31)
 
-Times in ET, and in Tel Aviv time (ET+7 until Israel's clocks change on Sun 10-25, ET+6 on Mon 10-26).
+PR #31 stays a **draft** until the AWS acceptance passes; then tick 1.7 and 1.8 in the tracker, mark it ready and merge.
 
-| When (ET) | Tel Aviv | Session | What runs | What to check |
-|---|---|---|---|---|
-| Thu 10-22 09:20–16:20 | 16:20–23:20 | counted session 1 | `execute_open` 09:20 + 09:31, `execute_entries` 09:36, `stop_guard` every 5 min, `eod_review` 15:40, `post_market --chain` 16:20 | see "Each session" below |
-| Fri 10-23 09:20–16:20 | 16:20–23:20 | counted session 2 | the same | the same |
-| Mon 10-26 09:20–16:20 | 15:20–22:20 | counted session 3 | the same; the scheduler ends after it | the same, then the final review |
-| The first session where an entry has filled | after 09:40 ET, before 15:35 ET | any | the stop hand check | see "Stop hand check" below |
+**Done on the branch (tested; ruff and mypy clean):**
+- `jobs/schedule.py`: the whole weekday schedule as `Slot`s, the single source for the AWS stack, the watchdog and `scripts/local_session.py`; the evening chain's fallbacks fire every 10 minutes up to their deadline.
+- `jobs/watchdog.py`: missing heartbeats, stuck RUNNING rows, disabled schedules; each finding alerted once per session; pings `HEALTHCHECKS_PING_URL`.
+- `eod_review` at 12:40 and 15:40, running only within 30 minutes of that day's close (half days work).
+- `parameters.py`: secrets from SSM at function start. `scripts/put_parameters.py`: plans by default, `--apply` writes.
+- `scripts/reset_trading_state.py`: clears the trading tables a Neon branch copied from `dev` carries, resets the flags (kill switch on); plans by default, refuses the `dev` database and localhost.
+- README §3, §5.13, §12, §13, §14 and decisions #132, #133 written; CLAUDE.md commands and decision count updated.
+- `Dockerfile` + `.dockerignore` (allow-list; checked: the staged context holds only `Dockerfile`, `pyproject.toml`, `uv.lock`, `config/`, `src/`).
+- `infra/stacks/trading.py` (`TradingStack`), wired into `infra/app.py` as `AuraTradePaper`; `npx aws-cdk synth` passes for both stacks.
+- Tests: schedule, watchdog (against the test Postgres), the `eod_review` window, SSM loading, `put_parameters`, the stack synthesized offline (handlers, `dry_run` default, `live` refused, retries, grants, schedules = slots).
 
-**Each session** (after its 16:20 run, about 16:30 ET):
-1. `var/local-session.log`: every run `exit 0`; on a holiday each job would log a calendar skip instead (none fall in this window).
-2. `job_runs` for the session: `execute_open` ×2, `execute_entries`, `eod_review`, `post_market`, the chain (`ingest`, `simulate`, `regime`, `scan`, `analyst_submit`) all `SUCCEEDED`; `stop_guard` rows appear only if it repaired something.
-3. At the broker (Alpaca `dev`): every position's GTC sell stops cover its full quantity, each at or above its plan level; no partly filled entry left unprotected; no client order id used twice; no entry order resting after 15:40.
-4. The Telegram daily report arrived and matches the broker (equity, positions, today's closes).
+**Checked 2026-10-22 (plans only, nothing written):**
+- `put_parameters --env paper --env-file .env.paper`: all 10 keys planned, nothing refused, nothing taken from `.env`.
+- `reset_trading_state --env-file .env.paper`: would clear 6 orders, 20 signals, 16 job runs, 2 account snapshots and 4 flags (no positions, plans, mismatches or journal rows); kill switch on afterwards.
 
-**Stop hand check** (accept item "a job killed right after reducing a stop is repaired by `stop_guard` within one run"): needs an open position. During market hours, shrink or cancel that position's stop by hand in the Alpaca `dev` dashboard (what a job dying between "reduce the stop" and "sell" leaves behind), note the time, and confirm the next `stop_guard` run (≤ 5 minutes) restores a full-quantity GTC stop at the plan level, with a `stop_guard` row in `job_runs` and a Telegram alert. If no entry has filled by Monday, keep the scheduler running past 10-26 until one does, rather than forcing a trade.
+**Not yet verified:** the Docker image has never been built (it builds during `cdk deploy`, about 600 MB of download and upload, better on Wi-Fi), and nothing has run in AWS.
 
-**Already accepted:** the concurrent-run lock check (two `execute_open` at once on 10-21: the second waited for the first), all 7 automated chaos scenarios (in CI), and the calendar guards (in tests; the live check is item 1 above).
+**Left to do, in order:**
+1. ~~Budgets, reset, bootstrap, SSM secrets, deploy~~: all done 2026-10-22 (the image was first built and checked locally: every handler imports, settings and `risk.yaml` load, read-only filesystem with `/tmp` writable). `cdk deploy` is blocked for the agent by Claude Code's auto-mode classifier, so the user runs deploys.
+2. ~~First runs on AWS~~: the 15:55 `stop_guard` and 16:00 `watchdog` were denied `ssm:GetParametersByPath` (the grant lacked the path's trailing slash) and failed closed; fixed in `f20d501` (the test now checks the exact ARN), redeployed 16:22 ET. Since then: the 16:30 watchdog succeeded, pinged healthchecks.io and alerted the morning slots that passed before the stack existed (a first-day effect); `stop_guard` and `watchdog` invoked in `dry_run` succeeded; `post_market` was started by hand at 16:33 ET (its 16:20 slot had failed on the grant) and runs the chain.
+3. Then, with the user: `kill off` on `paper` (a flag update: `auratrade kill off` from a network that passes Postgres, or the same update over the HTTPS endpoint).
+4. ~~Public site~~: `AuraTradePublicSite` deployed 2026-10-22 16:13 ET at **https://dk5a9tokky27z.cloudfront.net** (status strip updated, #134); checked: CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, HTTP → HTTPS, 404 page.
+5. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks, and the public site deploy. Then remove the `AuraTrade-live` worktree.
 
-**Final review (after Mon 10-26, about 16:30 ET / 22:30 Tel Aviv):** if every check passed, tick 1.7 in the tracker with a one-line summary, update this page, and commit on a short `docs/` branch. Then decide what happens to the `dev` positions still open: either keep the scheduler running (their stops rest at the broker either way, but the 21-EMA exit and `stop_guard` only run while it does), or flatten the `dev` account. 1.8 trades on the separate `paper` account.
+## 1. Other things only you can do (not urgent)
 
-## 1. Things only you can do (before task 1.8, not urgent)
-
-- **AWS account:** root MFA, an admin user via IAM Identity Center, budget alarms at $10 / $25.
-- **AWS CLI** installed on this PC (Node and the GitHub CLI are already there).
-- **healthchecks.io** free account, for the external dead-man's switch.
 - **Anthropic Console:** confirm a monthly spend limit is set (about $20 now, about $40 from 4.6).
 - **Domain** for the public site: optional.
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (needs your OK and the account steps above: it creates AWS resources; a cost estimate comes first) → **2.4** regime backtest (the regime has read `CORRECTION` since September, the same kind of miss as 2017 in the smoke run) → **3.2a** onward.
+Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → **2.4** regime backtest (the regime has read `CORRECTION` since September, the same kind of miss as 2017 in the smoke run) → **3.2a** onward.
 
 ## How to resume in a new chat
 
-- "check the session" runs the per-session checks above for the latest session.
-- "continue" after 10-26: the final review above, then task 1.8.
-- The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432); stop it with `docker stop auratrade-test-pg` when not testing.
+- "continue" resumes task 1.8 at "Left to do" above (branch `phase-1/aws-deploy`).
+- **Where the 10-22 session stopped:** `AuraTradePaper` is deployed and running on schedule (kill switch on); see "Left to do" from step 2.
+- **First steps:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then read `job_runs` on `paper` and the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
+- The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432). If it is gone: `docker run -d --name auratrade-test-pg -e POSTGRES_USER=auratrade -e POSTGRES_PASSWORD=auratrade -e POSTGRES_DB=auratrade -p 5434:5432 postgres:16`. Run the tests with `TEST_DATABASE_URL=postgresql+psycopg://auratrade:auratrade@localhost:5434/auratrade AURATRADE_REQUIRE_DB=1 uv run pytest`. Stop it with `docker stop auratrade-test-pg` when not testing.

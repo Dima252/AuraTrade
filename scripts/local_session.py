@@ -2,18 +2,16 @@
 
     TRADING_MODE=paper uv run python scripts/local_session.py --until 2026-10-26
 
-A stand-in for EventBridge (task 1.8) during the local acceptance sessions. Each weekday it runs,
-in America/New_York time (README §3):
-
-    09:20, 09:31  execute_open
-    09:36         execute_entries
-    09:35-16:00   stop_guard every 5 minutes
-    15:40         eod_review
-    16:20         post_market --chain   (ingest, simulate, regime, scan, analyst_submit)
+A stand-in for EventBridge, from the same schedule as the AWS stack (`jobs.schedule`), all
+America/New_York on weekdays: `execute_open` 09:20 and 09:31, `execute_entries` 09:36,
+`stop_guard` every 5 minutes 09:35-16:00, `eod_review` 12:40 and 15:40 (it runs only near the
+day's close), and `post_market --chain` at 16:20, which runs the rest of the evening chain in
+this process, so the chain's fallback slots and the watchdog are left out.
 
 Each job is its own process, run one after another, so a slow job delays the next rather than
-overlapping it; the jobs' own calendar guards skip holidays. Runs already past when the script
-starts are skipped. The trading mode comes from the environment, as for any job.
+overlapping it, and a `stop_guard` slot at the same minute as another job is dropped; the jobs'
+own calendar guards skip holidays. Runs already past when the script starts are skipped. The
+trading mode comes from the environment, as for any job.
 """
 
 from __future__ import annotations
@@ -24,20 +22,15 @@ import sys
 import time
 from collections.abc import Sequence
 from datetime import date, datetime, timedelta
-from datetime import time as clock_time
 from pathlib import Path
-from zoneinfo import ZoneInfo
 
-NY = ZoneInfo("America/New_York")
+from auratrade.config import load_risk_config
+from auratrade.jobs import schedule
+from auratrade.jobs.schedule import NY
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
-FIXED: tuple[tuple[clock_time, str, tuple[str, ...]], ...] = (
-    (clock_time(9, 20), "execute_open", ()),
-    (clock_time(9, 31), "execute_open", ()),
-    (clock_time(9, 36), "execute_entries", ()),
-    (clock_time(15, 40), "eod_review", ()),
-    (clock_time(16, 20), "post_market", ("--chain",)),
-)
-GUARD_FIRST, GUARD_LAST, GUARD_EVERY = clock_time(9, 35), clock_time(16, 0), timedelta(minutes=5)
+# Locally post_market runs the evening chain in-process, and there's no dead-man's switch.
+LEFT_OUT = frozenset({"watchdog"})
 
 Run = tuple[datetime, str, tuple[str, ...]]
 
@@ -45,14 +38,16 @@ Run = tuple[datetime, str, tuple[str, ...]]
 def day_plan(day: date) -> list[Run]:
     if day.weekday() >= 5:
         return []
-    runs: list[Run] = [(datetime.combine(day, t, tzinfo=NY), job, args) for t, job, args in FIXED]
-    at = datetime.combine(day, GUARD_FIRST, tzinfo=NY)
-    last = datetime.combine(day, GUARD_LAST, tzinfo=NY)
-    fixed_times = {r[0] for r in runs}
-    while at <= last:
-        if at not in fixed_times:
-            runs.append((at, "stop_guard", ()))
-        at += GUARD_EVERY
+    head = schedule.EVENING_CHAIN[0].job
+    chain_wait = load_risk_config().jobs.chain_wait_minutes
+    runs: list[Run] = []
+    for slot in schedule.skeleton_slots(chain_wait):
+        if slot.job in LEFT_OUT or schedule.predecessor(slot.job) is not None:
+            continue
+        extra = ("--chain",) if slot.job == head else ()
+        runs += [(datetime.combine(day, t, tzinfo=NY), slot.job, extra) for t in slot.times()]
+    taken = {at for at, job, _ in runs if job != "stop_guard"}
+    runs = [r for r in runs if r[1] != "stop_guard" or r[0] not in taken]
     return sorted(runs, key=lambda r: r[0])
 
 

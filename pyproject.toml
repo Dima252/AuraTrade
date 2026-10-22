@@ -16,6 +16,7 @@ dependencies = [
     "pydantic>=2.14.0",
     "pydantic-settings>=2.15.0",
     "pyyaml>=6.0.3",
+    "requests>=2.34.2",
     "sqlalchemy>=2.1.4",
     "structlog>=26.1.0",
     "tenacity>=9.2.1",
@@ -30,7 +31,8 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "boto3-stubs[lambda,s3]>=1.43.110",
+    "boto3-stubs[lambda,s3,scheduler,ssm]>=1.43.110",
+    "botocore[crt]>=1.43.110",
     "hypothesis>=6.168.5",
     "mypy>=2.4.0",
     "pre-commit>=4.6.2",
@@ -103,6 +105,8 @@ python_version = "3.13"
 strict = true
 warn_unreachable = true
 files = ["src", "scripts", "infra"]
+# cdk synth stages a copy of src/ there for the image.
+exclude = ['infra/cdk.out/']
 
 [[tool.mypy.overrides]]
 # No type information shipped; only sources.exchange_calendar_sessions touches it.

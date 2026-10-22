@@ -158,6 +158,8 @@ h2.sub { margin-top: 56px; }
 }
 .phases li.active { border-color: var(--accent); color: var(--text); }
 .phases li.active span { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+.phases li.done { color: var(--text); }
+.phases li.done span { border-color: var(--accent); color: var(--accent); }
 
 /* Footer */
 .foot { border-top: 1px solid var(--line); padding: 40px 0 56px; font-size: 14px; }

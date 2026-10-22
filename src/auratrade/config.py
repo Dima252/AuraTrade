@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
     database_url: SecretStr | None = None
+    # The external dead-man's switch the watchdog pings (README §5.13). The URL is the
+    # credential: anyone holding it can ping.
+    healthchecks_ping_url: SecretStr | None = None
 
     analyst_model: str = DEFAULT_MODEL
     pm_model: str = DEFAULT_MODEL
@@ -85,6 +88,8 @@ class Settings(BaseSettings):
     storage_s3_bucket: str | None = None
     # Lambda function name for a chained job; `{env}` and `{job}` are substituted.
     job_function_template: str = "auratrade-{env}-{job}"
+    # The EventBridge Scheduler group whose schedules the watchdog checks (AWS only).
+    schedule_group: str | None = None
 
     risk_config_path: Path = DEFAULT_RISK_CONFIG
 
@@ -113,6 +118,7 @@ class Settings(BaseSettings):
             self.finnhub_api_key,
             self.telegram_bot_token,
             self.database_url,
+            self.healthchecks_ping_url,
         )
         return [s.get_secret_value() for s in secrets if s is not None and s.get_secret_value()]
 
@@ -385,6 +391,10 @@ class JobsConfig(_Strict):
     duration_alert_minutes: PositiveInt
     # A RUNNING heartbeat older than this is a dead run (Lambda's limit is 15 minutes).
     stale_running_minutes: PositiveInt
+    # How late a scheduled run's heartbeat may be before the watchdog alerts.
+    watchdog_grace_minutes: PositiveInt
+    # eod_review runs only this close to the session's close (its 12:40 and 15:40 slots).
+    eod_review_window_minutes: PositiveInt
 
 
 class RiskConfig(_Strict):
