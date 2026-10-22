@@ -135,7 +135,9 @@ def test_every_function_reads_only_its_parameter_path(template: Any) -> None:
     for spec in FUNCTIONS:
         text = policy_text(template, spec.job)
         assert "ssm:GetParametersByPath" in text
-        assert ":parameter/auratrade/paper" in text
+        # The path's own ARN, trailing slash included: AWS authorizes the call against it
+        # (without the slash every call was denied on the first deploy).
+        assert ':parameter/auratrade/paper/"' in text
         assert 'ssm:GetParameters"' not in text
 
 

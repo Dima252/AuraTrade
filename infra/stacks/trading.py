@@ -134,11 +134,13 @@ class TradingStack(Stack):
             "STORAGE_S3_BUCKET": bucket.bucket_name,
             "SCHEDULE_GROUP": group.name or "",
         }
+        # GetParametersByPath is authorized against the path itself, trailing slash included
+        # (`parameter/auratrade/paper/`); without it every call is denied.
         read_parameters = iam.PolicyStatement(
             actions=["ssm:GetParametersByPath"],
             resources=[
                 self.format_arn(
-                    service="ssm", resource="parameter", resource_name=parameter_path.strip("/")
+                    service="ssm", resource="parameter", resource_name=parameter_path.lstrip("/")
                 )
             ],
         )
