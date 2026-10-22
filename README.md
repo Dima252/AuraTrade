@@ -934,7 +934,8 @@ AuraTrade/
 ├── backtest/                     # regime, baseline, entry and exit-policy comparisons
 ├── scripts/                      # one-off operator tools: check_keys.py, backfill.py, smoke_real_data.py,
 │                                 # local_session.py (the jobs on their schedule on this PC),
-│                                 # put_parameters.py (an environment's secrets into SSM)
+│                                 # put_parameters.py (an environment's secrets into SSM),
+│                                 # reset_trading_state.py (clear trading state copied from another branch)
 ├── spikes/
 ├── infra/                        # CDK app: app.py, stacks/ (public_site, trading: AuraTradePaper from 1.8)
 └── tests/

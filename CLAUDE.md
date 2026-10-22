@@ -88,6 +88,7 @@ uv run auratrade kill on|off|status       # the kill switch (entries only); also
 TRADING_MODE=paper uv run python scripts/local_session.py --until YYYY-MM-DD   # the skeleton's jobs on schedule (dev paper)
 cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 uv run python scripts/put_parameters.py --env paper --env-file .env.paper   # plan the SSM secrets (--apply --profile auratrade writes)
+uv run python scripts/reset_trading_state.py --env-file .env.paper   # plan clearing dev's trading state from a copied branch (--apply: kill switch on)
 cd infra && npx aws-cdk deploy AuraTradePaper -c trading_mode=paper --profile auratrade   # the skeleton on AWS (user's OK first; 1.8)
 ```
 

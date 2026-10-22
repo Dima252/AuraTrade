@@ -41,7 +41,7 @@ Expected AWS cost: about $0-1/month (Lambda, Scheduler, SSM and logs in the free
 
 **Left to do, in order:**
 1. **Your part** above (AWS account, Identity Center, budgets, CLI profile `auratrade`, healthchecks.io, Neon `paper` branch). A dry run of `put_parameters` on today's `.env.paper` refuses only on the two things still missing there: `HEALTHCHECKS_PING_URL` and a Neon `DATABASE_URL` (now `localhost`). The shared keys (Anthropic, FRED, Finnhub, EDGAR, Telegram) are taken from `.env` when `.env.paper` leaves them empty.
-2. With your OK: prepare the Neon `paper` branch (migrate to head, clear the trading tables copied from `dev`, regime seed, kill switch on until ready), `cdk bootstrap`, `put_parameters --apply`, `cdk deploy AuraTradePaper -c trading_mode=paper`; then a first `dry_run` invoke of each job, `auratrade kill off` on `paper`.
+2. With your OK: prepare the Neon `paper` branch with `scripts/reset_trading_state.py --env-file .env.paper --apply` (clears `dev`'s orders, positions, signals, mismatches and job runs; keeps the market data and the seeded regime; kill switch on until ready), `cdk bootstrap`, `put_parameters --apply`, `cdk deploy AuraTradePaper -c trading_mode=paper`; then a first `dry_run` invoke of each job, `auratrade kill off` on `paper`.
 3. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks, and the public site deploy. Then stop the local scheduler and remove the `AuraTrade-live` worktree.
 
 ## 1. Other things only you can do (not urgent)
