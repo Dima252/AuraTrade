@@ -43,9 +43,9 @@ PR #31 stays a **draft** until the AWS acceptance passes; then tick 1.7 and 1.8 
 
 **Left to do, in order:**
 1. ~~Budgets, reset, bootstrap, SSM secrets, deploy~~: all done 2026-10-22 (the image was first built and checked locally: every handler imports, settings and `risk.yaml` load, read-only filesystem with `/tmp` writable). `cdk deploy` is blocked for the agent by Claude Code's auto-mode classifier, so the user runs deploys.
-2. Check the first runs on AWS: `stop_guard` and `watchdog` from 15:55 ET, then tonight's evening chain from 16:20 ET (`post_market` → `ingest` → `simulate` → `regime` → `scan` → `analyst_submit`) in `job_runs` and the CloudWatch logs; the healthchecks.io check turns green on the first ping.
+2. ~~First runs on AWS~~: the 15:55 `stop_guard` and 16:00 `watchdog` were denied `ssm:GetParametersByPath` (the grant lacked the path's trailing slash) and failed closed; fixed in `f20d501` (the test now checks the exact ARN), redeployed 16:22 ET. Since then: the 16:30 watchdog succeeded, pinged healthchecks.io and alerted the morning slots that passed before the stack existed (a first-day effect); `stop_guard` and `watchdog` invoked in `dry_run` succeeded; `post_market` was started by hand at 16:33 ET (its 16:20 slot had failed on the grant) and runs the chain.
 3. Then, with the user: `kill off` on `paper` (a flag update: `auratrade kill off` from a network that passes Postgres, or the same update over the HTTPS endpoint).
-4. Update the site's build-status strip and deploy `AuraTradePublicSite` (decision #134).
+4. ~~Public site~~: `AuraTradePublicSite` deployed 2026-10-22 16:13 ET at **https://dk5a9tokky27z.cloudfront.net** (status strip updated, #134); checked: CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, HTTP → HTTPS, 404 page.
 5. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks, and the public site deploy. Then remove the `AuraTrade-live` worktree.
 
 ## 1. Other things only you can do (not urgent)

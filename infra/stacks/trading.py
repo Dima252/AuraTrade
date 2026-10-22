@@ -60,7 +60,7 @@ FUNCTIONS: tuple[Function, ...] = (
     Function("eod_review", 1024, 900, retries=2),
     Function("post_market", 1024, 900, retries=2, storage=True),
     Function("stop_guard", 1024, 300),
-    Function("ingest", 2048, 900, storage=True),
+    Function("ingest", 3008, 900, storage=True),
     Function("simulate", 512, 60),
     Function("regime", 1024, 300),
     # The scan holds about two years of bars for the whole universe in memory.
