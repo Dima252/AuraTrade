@@ -258,19 +258,23 @@ def ingest_fundamentals(
         except Exception as exc:
             return exc
 
-    # Company facts are megabytes each: fetched concurrently, EDGAR's limiter still applies.
-    with ThreadPoolExecutor(max_workers=cfg.http_workers) as pool:
-        fetched = list(pool.map(load, [row.cik for row in batch]))
+    # Company facts are megabytes each, so they are fetched a few at a time and each is reduced
+    # to its quarters before the next group: holding the whole batch ran out of Lambda's memory
+    # (2026-10-22). Fetched concurrently; EDGAR's limiter still applies.
     written: dict[int, list[Quarter]] = {}
-    for row, facts in zip(batch, fetched, strict=True):
-        if isinstance(facts, Exception):
-            report.errors.append(f"facts {row.symbol}: {type(facts).__name__}: {facts}")
-            continue
-        report.fetched += 1
-        if facts is None:
-            report.no_facts.append(row.symbol)
-            continue
-        written[row.id] = quarters(facts)[-cfg.fundamentals_quarters :]
+    group = cfg.http_workers * 2
+    with ThreadPoolExecutor(max_workers=cfg.http_workers) as pool:
+        for start in range(0, len(batch), group):
+            rows = batch[start : start + group]
+            for row, facts in zip(rows, pool.map(load, [r.cik for r in rows]), strict=True):
+                if isinstance(facts, Exception):
+                    report.errors.append(f"facts {row.symbol}: {type(facts).__name__}: {facts}")
+                    continue
+                report.fetched += 1
+                if facts is None:
+                    report.no_facts.append(row.symbol)
+                    continue
+                written[row.id] = quarters(facts)[-cfg.fundamentals_quarters :]
     report.rows_written = write_quarters(conn, written)
     return report
 
