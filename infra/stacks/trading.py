@@ -225,7 +225,7 @@ class TradingStack(Stack):
                     ),
                     state="ENABLED",
                 )
-                cfn.add_dependency(group)
+                cfn.add_resource_dependency(group)
 
         CfnOutput(self, "StorageBucket", value=bucket.bucket_name)
         CfnOutput(self, "ScheduleGroup", value=group.name or "")
