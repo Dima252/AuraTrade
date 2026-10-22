@@ -1,10 +1,10 @@
-# What's left: status at 2026-10-22 16:00 ET (task 1.8: `AuraTradePaper` deployed at 15:48 ET; first evening chain tonight)
+# What's left: status at 2026-10-22 17:20 ET (task 1.8: `AuraTradePaper` live on AWS; the first evening chain succeeded; kill switch off; Friday 10-23 is the first paper session)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
 ## Where things stand
 
-- **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Task 1.7 is **built and merged** (PR #30); only its live acceptance is left, now on AWS (below). On the 1.8 branch 1,258 tests pass, coverage 97%, ruff and mypy clean.
+- **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Tasks 1.7 and 1.8 are **built, merged and deployed** (PRs #30, #31); their acceptance runs on AWS (below). On `main` 1,267 tests pass, coverage 97%, ruff and mypy clean.
 - **Decisions:** README §16 runs to **#134** (#132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
 - **Accounts:** both Alpaca paper accounts are active and flat (no positions, no open orders, checked 2026-10-22 14:40 ET): `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper` ($5,000). Neon `dev` (endpoint `ep-autumn-sea-…`) is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off**. Neon `paper` (endpoint `ep-summer-math-…`) is a full copy of `dev` made 2026-10-22, also at 0006.
 - **Env files (2026-10-22):** `.env` and `.env.paper` have the same keys in the layout of `.env.example` (including `ENVIRONMENT`); every key in both passes `scripts/check_keys.py` (`--env-file .env.paper` for `paper`). Any local command runs against `paper` with `uv run --env-file .env.paper ...` (checked: it resolves to the `paper` database).
@@ -18,11 +18,11 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 
 The PC is on a phone hotspot, so it can't be relied on to stay connected for the sessions. **The rest of 1.7's live acceptance (3 sessions + the stop hand check) moves to AWS**: it runs as part of task 1.8, on the separate `paper` Alpaca account. It is recorded as decision **#132** and in the plan (1.7 and 1.8 acceptance).
 
-**The local scheduler is stopped.** It ran from the `AuraTrade-live` worktree (a separate copy of `main` at `C:\Users\dimat\Documents\GitHub\AuraTrade-live`, log `AuraTrade-live\var\local-session.log`) and was healthy: its last run, `stop_guard` at 14:30 ET, was on time. It was stopped at about 14:45 ET on a misreading of the clock (the Git Bash note above). Nothing was exposed: the `dev` account was flat; `dev` simply has no close or evening run on 10-22. AWS has taken over, so it stays stopped; `git worktree remove ..\AuraTrade-live` when convenient.
+**The local scheduler is stopped.** It ran from the `AuraTrade-live` worktree (a separate copy of `main` at `C:\Users\dimat\Documents\GitHub\AuraTrade-live`, log `AuraTrade-live\var\local-session.log`) and was healthy: its last run, `stop_guard` at 14:30 ET, was on time. It was stopped at about 14:45 ET on a misreading of the clock (the Git Bash note above). Nothing was exposed: the `dev` account was flat; `dev` simply has no close or evening run on 10-22. AWS has taken over; the worktree is removed.
 
-## Task 1.8: in progress (branch `phase-1/aws-deploy`, draft PR #31)
+## Task 1.8: acceptance in progress (code merged: PR #31, `main` = what is deployed)
 
-PR #31 stays a **draft** until the AWS acceptance passes; then tick 1.7 and 1.8 in the tracker, mark it ready and merge.
+The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until the acceptance passes. Fixes found during it go in as small PRs from `main`, then the user redeploys.
 
 **Done on the branch (tested; ruff and mypy clean):**
 - `jobs/schedule.py`: the whole weekday schedule as `Slot`s, the single source for the AWS stack, the watchdog and `scripts/local_session.py`; the evening chain's fallbacks fire every 10 minutes up to their deadline.
@@ -43,10 +43,10 @@ PR #31 stays a **draft** until the AWS acceptance passes; then tick 1.7 and 1.8 
 
 **Left to do, in order:**
 1. ~~Budgets, reset, bootstrap, SSM secrets, deploy~~: all done 2026-10-22 (the image was first built and checked locally: every handler imports, settings and `risk.yaml` load, read-only filesystem with `/tmp` writable). `cdk deploy` is blocked for the agent by Claude Code's auto-mode classifier, so the user runs deploys.
-2. ~~First runs on AWS~~: the 15:55 `stop_guard` and 16:00 `watchdog` were denied `ssm:GetParametersByPath` (the grant lacked the path's trailing slash) and failed closed; fixed in `f20d501` (the test now checks the exact ARN), redeployed 16:22 ET. Since then: the 16:30 watchdog succeeded, pinged healthchecks.io and alerted the morning slots that passed before the stack existed (a first-day effect); `stop_guard` and `watchdog` invoked in `dry_run` succeeded; `post_market` was started by hand at 16:33 ET (its 16:20 slot had failed on the grant) and runs the chain.
-3. Then, with the user: `kill off` on `paper` (a flag update: `auratrade kill off` from a network that passes Postgres, or the same update over the HTTPS endpoint).
+2. ~~First runs on AWS~~: the 15:55 `stop_guard` and 16:00 `watchdog` were denied `ssm:GetParametersByPath` (the grant lacked the path's trailing slash) and failed closed; fixed (`f20d501`, the test checks the exact ARN), redeployed 16:22 ET. The first `ingest` (started by hand at 16:33, its 16:20 slot having hit the grant) ran out of memory at 2,048 MB in the fundamentals step, which held its whole batch of EDGAR company facts; fixed (`552388f`, at most 8 held, a test proves it) and `ingest` given 3,008 MB (this new account's Lambda maximum), redeployed 16:53. The 17:00 fallback then ran the chain end to end: `ingest` 267 s, peak **759 MB**, no failed steps, bar coverage 99.96%; `simulate`, `regime` (`CORRECTION`, 37 sessions), `scan` (10 signals for 10-23: MRNA, IOVA, CDNA, KOD, AGL, PLSE, SLN, PAYS, TEAM, RNG), `analyst_submit` all succeeded by 17:05. The watchdog pinged healthchecks.io on every run and alerted the morning slots that passed before the stack existed (first-day effect) and the crashed `ingest` row as stuck (that row was then marked FAILED by hand).
+3. ~~Kill switch~~: turned **off** on `paper` 2026-10-22 ~17:20 ET with the user's OK (the CLI's update, sent over the HTTPS endpoint); no halts set. Friday 10-23 is the first paper session with entries.
 4. ~~Public site~~: `AuraTradePublicSite` deployed 2026-10-22 16:13 ET at **https://dk5a9tokky27z.cloudfront.net** (status strip updated, #134); checked: CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, HTTP → HTTPS, 404 page.
-5. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks, and the public site deploy. Then remove the `AuraTrade-live` worktree.
+5. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks (the public site is already deployed).
 
 ## 1. Other things only you can do (not urgent)
 
@@ -59,7 +59,7 @@ Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → **
 
 ## How to resume in a new chat
 
-- "continue" resumes task 1.8 at "Left to do" above (branch `phase-1/aws-deploy`).
-- **Where the 10-22 session stopped:** `AuraTradePaper` is deployed and running on schedule (kill switch on); see "Left to do" from step 2.
+- "continue" resumes task 1.8's acceptance (step 5 of "Left to do") on `main`; check Friday's session first: `job_runs` on `paper` (Neon SQL Editor or the HTTPS endpoint), Alpaca orders and stops, Telegram.
+- **Where the 10-22 session stopped:** everything deployed, merged (`main` = `67cd79f` + this note) and running; kill switch off; nothing pending locally. The `AuraTrade-live` worktree is removed (its logs are in `var/local-scheduler-logs/`).
 - **First steps:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then read `job_runs` on `paper` and the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
 - The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432). If it is gone: `docker run -d --name auratrade-test-pg -e POSTGRES_USER=auratrade -e POSTGRES_PASSWORD=auratrade -e POSTGRES_DB=auratrade -p 5434:5432 postgres:16`. Run the tests with `TEST_DATABASE_URL=postgresql+psycopg://auratrade:auratrade@localhost:5434/auratrade AURATRADE_REQUIRE_DB=1 uv run pytest`. Stop it with `docker stop auratrade-test-pg` when not testing.
