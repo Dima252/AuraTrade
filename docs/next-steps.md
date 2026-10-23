@@ -1,4 +1,4 @@
-# What's left: status at 2026-10-22 17:20 ET (task 1.8: `AuraTradePaper` live on AWS; the first evening chain succeeded; kill switch off; Friday 10-23 is the first paper session)
+# What's left: status at 2026-10-23 10:00 ET (task 1.8: `AuraTradePaper` live on AWS; Friday 10-23 is the first paper session, two entries resting, no fills yet)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
@@ -47,6 +47,15 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 3. ~~Kill switch~~: turned **off** on `paper` 2026-10-22 ~17:20 ET with the user's OK (the CLI's update, sent over the HTTPS endpoint); no halts set. Friday 10-23 is the first paper session with entries.
 4. ~~Public site~~: `AuraTradePublicSite` deployed 2026-10-22 16:13 ET at **https://dk5a9tokky27z.cloudfront.net** (status strip updated, #134); checked: CSP, HSTS, `X-Frame-Options: DENY`, `nosniff`, HTTP → HTTPS, 404 page.
 5. The acceptance: the 3 sessions and the stop hand check (1.7, #132), 10 unattended sessions, the watchdog test (disable a schedule) and the dead-man's-switch test (disable the watchdog's), the cost and Neon compute checks (the public site is already deployed).
+   - **The stop hand check, live:** once a position has filled, cancel its stop leg on the `paper` account (what a job killed right after reducing the stop leaves; the chaos test does the same against the fake broker) and confirm the next `stop_guard` run (every 5 minutes, 09:35–16:00) places a full-quantity GTC stop at the plan level. Needs the user's OK at the time.
+
+### Session log
+
+| Session | Morning | Close and evening |
+|---|---|---|
+| Fri 10-23 | Overnight: every `watchdog` run succeeded (every 15 minutes to 22:00 ET, again from 07:00). `execute_open` 09:20 (market closed: nothing to do) and 09:31, `execute_entries` 09:36: 10 signals → **2 OTO entries** (IOVA 10 sh, trigger 15.37, stop 14.42; SLN 7 sh, trigger 19.69, stop 18.48), each stop leg covering the full quantity. Skipped: MRNA and TEAM sized to 0 shares (0.25% of $5,000 is $12.50, less than one share's risk), RNG gapped above its limit (90.70 > 85.39), and **5 with "no decision price"** (CDNA, KOD, AGL, PLSE, PAYS; below). No fills by 10:00. | |
+
+**Finding (10-23): the IEX spread cap skips half the scan.** #120's premise holds: IEX quotes are fresh (ages 0–90 s at 09:57). But for small and mid caps the IEX quote itself is wide, since IEX is not the NBBO: at 09:57 CDNA 12.5%, PLSE 14.0%, PAYS 12.4%, AGL 29.2%, RNG 8.6%, against IOVA 0.14% and SLN 0.05%. Their last IEX trades were 1–8 minutes old (AGL's from the previous day). So the provisional `max_spread` of 2% (#131) leaves them without a decision price, and the entry is skipped: failing closed, as designed. Nothing changed; to decide with the user (it sets which names can be entered at all, so it matters from 3.x, not for the skeleton).
 
 ## 1. Other things only you can do (not urgent)
 
@@ -64,6 +73,6 @@ Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~
 ## How to resume in a new chat
 
 - "continue" resumes task 1.8's acceptance (step 5 of "Left to do") on `main`; check Friday's session first: `job_runs` on `paper` (Neon SQL Editor or the HTTPS endpoint), Alpaca orders and stops, Telegram.
-- **Where the 10-22 session stopped:** everything deployed, merged (`main` = `67cd79f` + this note) and running; kill switch off; nothing pending locally. The `AuraTrade-live` worktree is removed (its logs are in `var/local-scheduler-logs/`).
+- **Where the 10-22 session stopped:** everything deployed, merged (`main` = `67cd79f` + this note) and running; kill switch off; nothing pending locally. The `AuraTrade-live` worktree is removed (its logs are in `var/local-scheduler-logs/`). From 10-23 the "Session log" table above records each session.
 - **First steps:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then read `job_runs` on `paper` and the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
 - The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432). If it is gone: `docker run -d --name auratrade-test-pg -e POSTGRES_USER=auratrade -e POSTGRES_PASSWORD=auratrade -e POSTGRES_DB=auratrade -p 5434:5432 postgres:16`. Run the tests with `TEST_DATABASE_URL=postgresql+psycopg://auratrade:auratrade@localhost:5434/auratrade AURATRADE_REQUIRE_DB=1 uv run pytest`. Stop it with `docker stop auratrade-test-pg` when not testing.
