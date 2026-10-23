@@ -415,6 +415,7 @@ class RiskConfig(_Strict):
     execution: ExecutionConfig
     skeleton: SkeletonConfig
     strategies: StrategiesConfig
+    ranking: RankingConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1056,6 +1057,35 @@ class EmergingLeaderConfig(_Strict):
     max_drawdown_vs_index: Positive
     max_sessions_since_correction: PositiveInt
     stop_sessions: PositiveInt
+
+
+class RsLineConfig(_Strict):
+    high_window: PositiveInt
+    near_tolerance: Annotated[float, Field(ge=0.0, lt=1.0)]
+    low_window: PositiveInt
+
+
+class CatalystConfig(_Strict):
+    """The quality score's catalyst, without the surprise (README §5.3)."""
+
+    gap_lookback_sessions: PositiveInt
+    min_gap: Positive
+    min_volume_ratio: Positive
+    volume_sessions: PositiveInt
+    min_eps_growth: float
+
+
+class RankingConfig(_Strict):
+    """The quality score, the cap and the verdict cache (README §5.3; task 3.3, #138)."""
+
+    rs_line: RsLineConfig
+    up_down_sessions: PositiveInt
+    adr_sessions: PositiveInt
+    extension_sma: PositiveInt
+    catalyst: CatalystConfig
+    missing_component: Fraction
+    """The score of a component without data: neutral, neither rewarded nor punished."""
+    verdict_max_age_sessions: PositiveInt
 
 
 class StrategiesConfig(_Strict):

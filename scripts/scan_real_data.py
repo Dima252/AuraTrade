@@ -13,8 +13,13 @@ human to judge, and the samples are for a visual check against charts. The scans
 on trades in the 3.8 baseline backtest. Every setup goes to var/scans/setups.csv (git-ignored).
 A `## Reading` section written by hand at the end of the report is kept when it is regenerated.
 
-Not wired here: the EP proxy's earnings flag (it is a fact for the ranking, not a filter) and
-half-day volume normalization (a handful of sessions a year).
+Each session's setups are then scored and capped as the evening scan does (3.3): the quality
+score, the regime's fundable strategies, one slot per ticker, the top 40, and the verdict cache
+replayed over the selections. Two of the eight components score neutral here: the industry
+group's RS (the history has no point-in-time group map yet) and the base count (it needs the
+count as of each session). The catalyst and the EP proxy's earnings flag use the history's EDGAR
+earnings dates and point-in-time fundamentals (by `filed` date). Not wired: half-day volume
+normalization (a handful of sessions a year).
 """
 
 from __future__ import annotations
@@ -33,6 +38,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 from auratrade.config import REPO_ROOT, Regime, RiskConfig, Strategy, load_risk_config
+from auratrade.history.edgar import EARNINGS, FUNDAMENTALS
 from auratrade.history.read import (
     SecuritySeries,
     index_securities,
@@ -41,6 +47,8 @@ from auratrade.history.read import (
     load_securities,
     load_series,
 )
+from auratrade.history.store import get_table, table_key
+from auratrade.indicators.earnings import EarningsTiming, reaction_session
 from auratrade.indicators.relative_strength import percentile_ranks
 from auratrade.regime.classifier import classify
 from auratrade.regime.inputs import LoadedData, MacroSeries, build_inputs
@@ -51,9 +59,18 @@ from auratrade.strategies.emerging_leader import EmergingDetail
 from auratrade.strategies.episodic_pivot import EpisodicPivotDetail
 from auratrade.strategies.leader_pullback import PullbackDetail
 from auratrade.strategies.momentum_breakout import MomentumDetail
+from auratrade.strategies.ranking import (
+    COMPONENTS,
+    Features,
+    Fundamentals,
+    candidate_features,
+    score_pool,
+    select,
+)
 from auratrade.strategies.registry import build_strategies
 from auratrade.strategies.trend_template import rs_scores
 from auratrade.strategies.vcp_breakout import VcpDetail
+from auratrade.strategies.verdict_cache import CachedVerdict, needs_review, structure
 
 REPORT = REPO_ROOT / "docs" / "backtests" / "scans.md"
 DETAIL = REPO_ROOT / "var" / "scans"
@@ -73,6 +90,20 @@ class Found:
     close: float
     next_high: float | None
     """The next session's high, to see how often the pivot is reached the next day."""
+    features: Features
+
+
+@dataclass(slots=True)
+class Ranked:
+    """One session's selection: the pool, the top 40 and how many the cache re-reviews."""
+
+    day: date
+    regime: Regime
+    pool: int
+    eligible: int
+    chosen: list[Strategy]
+    reviews: int
+    scores: list[float]
 
 
 @dataclass(slots=True)
@@ -81,6 +112,10 @@ class ScanRun:
     members: list[int] = field(default_factory=list)
     found: list[Found] = field(default_factory=list)
     regimes: dict[date, Regime] = field(default_factory=dict)
+    ranked: list[Ranked] = field(default_factory=list)
+    components: dict[Strategy, Counter[str]] = field(default_factory=dict)
+    """Sums of each component over the eligible setups in a funding regime, by strategy."""
+    eligible: Counter[Strategy] = field(default_factory=Counter)
     exceptions: list[str] = field(default_factory=list)
     seconds: dict[str, float] = field(default_factory=dict)
 
@@ -180,12 +215,107 @@ def corrections_for(
     return tuple(out)
 
 
+def earnings_by_security(store: ObjectStore) -> dict[str, list[tuple[date, EarningsTiming]]]:
+    table = get_table(store, table_key(EARNINGS))
+    rows = [] if table is None else table.select(["security", "report_date", "timing"]).to_pylist()
+    out: dict[str, list[tuple[date, EarningsTiming]]] = defaultdict(list)
+    for row in rows:
+        if row["timing"]:
+            out[row["security"]].append((row["report_date"], EarningsTiming(row["timing"].lower())))
+    return out
+
+
+def reaction_sessions(
+    dates: Sequence[date], reports: Sequence[tuple[date, EarningsTiming]]
+) -> frozenset[int]:
+    """Bar positions of the sessions that react to each report; a report on a day without a
+    bar reacts on the next session, like one after the close."""
+    out = set()
+    for day, timing in reports:
+        i = bisect.bisect_left(dates, day)
+        on_session = i < len(dates) and dates[i] == day
+        j = reaction_session(i, timing) if on_session else i
+        if j < len(dates):
+            out.add(j)
+    return frozenset(out)
+
+
+def fundamentals_by_security(store: ObjectStore) -> dict[str, list[tuple[date, Fundamentals]]]:
+    """Each security's quarters by `filed` date, oldest first."""
+    table = get_table(store, table_key(FUNDAMENTALS))
+    columns = ["security", "filed_date", "eps_growth", "eps_acceleration"]
+    rows = [] if table is None else table.select(columns).to_pylist()
+    out: dict[str, list[tuple[date, Fundamentals]]] = defaultdict(list)
+    for row in rows:
+        out[row["security"]].append(
+            (row["filed_date"], Fundamentals(row["eps_growth"], row["eps_acceleration"]))
+        )
+    for quarters in out.values():
+        quarters.sort(key=lambda q: q[0])
+    return out
+
+
+def known_on(quarters: Sequence[tuple[date, Fundamentals]], day: date) -> Fundamentals | None:
+    """The latest quarter filed before ``day`` (README §15: readable from the next session)."""
+    i = bisect.bisect_left([q[0] for q in quarters], day)
+    return quarters[i - 1][1] if i > 0 else None
+
+
+def rank_sessions(run: ScanRun, risk: RiskConfig, cap: int) -> None:
+    """Score and cap each session's pool, and replay the verdict cache over the selections:
+    every selected setup that needs a review gets a verdict that session."""
+    by_day: dict[date, list[Found]] = defaultdict(list)
+    for f in run.found:
+        by_day[f.day].append(f)
+    position = {d: i for i, d in enumerate(run.sessions)}
+    cache: dict[str, tuple[CachedVerdict, int]] = {}
+    max_age = risk.ranking.verdict_max_age_sessions
+    for day in run.sessions:
+        regime = run.regimes.get(day)
+        if regime is None:
+            continue
+        found = by_day.get(day, [])
+        scored = score_pool([(f.setup, f.features) for f in found], risk)
+        eligible = select(scored, regime, risk, cap=len(scored))
+        chosen = eligible[:cap]
+        for s in eligible:
+            run.components.setdefault(s.setup.strategy, Counter()).update(s.components)
+            run.eligible[s.setup.strategy] += 1
+        reviews = 0
+        for s in chosen:
+            held = cache.get(s.setup.symbol)
+            cached = None
+            if held is not None:
+                verdict, given = held
+                cached = CachedVerdict(
+                    verdict.symbol, verdict.strategy, verdict.structure, position[day] - given
+                )
+            if needs_review(s.setup, cached, max_age):
+                reviews += 1
+                cache[s.setup.symbol] = (
+                    CachedVerdict(s.setup.symbol, s.setup.strategy, structure(s.setup), 0),
+                    position[day],
+                )
+        run.ranked.append(
+            Ranked(
+                day,
+                regime,
+                len(found),
+                len(eligible),
+                [s.setup.strategy for s in chosen],
+                reviews,
+                [s.score for s in chosen],
+            )
+        )
+
+
 def run_scans(
     store: ObjectStore,
     sessions: Sequence[date],
     minutes: Mapping[date, int],
     risk: RiskConfig,
     *,
+    cap: int = 40,
     log: Callable[[str], None] = lambda _: None,
 ) -> ScanRun:
     clock = time.monotonic()
@@ -213,6 +343,8 @@ def run_scans(
     lap("load")
     run.regimes = replay_regime(series, indexes, sorted(ever), macro, sessions, minutes, risk)
     spells = correction_spells(run.regimes)
+    earnings = earnings_by_security(store)
+    quarters = fundamentals_by_security(store)
     spy = series[indexes["SPY"]]
     spy_close = dict(zip(spy.dates, spy.close, strict=True))
     lap("regime")
@@ -234,7 +366,9 @@ def run_scans(
                 risk=risk,
                 benchmark_closes=None if None in benchmark else [c or 0.0 for c in benchmark],
                 corrections=corrections_for(s.dates, spells),
+                earnings_sessions=reaction_sessions(s.dates, earnings.get(key, [])),
             )
+            own = quarters.get(key, [])
             for i, d in enumerate(s.dates):
                 if d < FIRST_REPORTED or key not in members.get(d, ()):
                     continue
@@ -242,10 +376,13 @@ def run_scans(
                     setup = strategy.scan(data, i)
                     if setup is not None:
                         nxt = bars[i + 1].high if i + 1 < len(bars) else None
-                        run.found.append(Found(key, symbol, d, setup, bars[i].close, nxt))
+                        features = candidate_features(data, i, risk, fundamentals=known_on(own, d))
+                        run.found.append(Found(key, symbol, d, setup, bars[i].close, nxt, features))
         except Exception as exc:
             run.exceptions.append(f"{key} ({symbol}): {type(exc).__name__}: {exc}")
     lap("scans")
+    rank_sessions(run, risk, cap)
+    lap("ranking")
     return run
 
 
@@ -437,6 +574,7 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
         "sessions since the correction "
         f"{_q([float(d.sessions_since_correction) for d in emerging], 0, pct=False)}.",
         "",
+        *render_ranking(run, order, regimes),
         "## Samples for a visual check",
         "",
         f"{SAMPLES} random setups per strategy (seed {SEED}); check each against a daily chart.",
@@ -466,6 +604,67 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
         lines += ["## Exceptions", "", *(f"- {e}" for e in run.exceptions[:20]), ""]
     lines.append(reading or f"{READING}\n\n(to be written)\n")
     return "\n".join(lines)
+
+
+def render_ranking(run: ScanRun, order: Sequence[Strategy], regimes: Sequence[Regime]) -> list[str]:
+    """The 3.3 selection: how full the cap is, who fills it, and what the cache saves."""
+    lines = [
+        "## Ranking and the cap (3.3)",
+        "",
+        "Per session, medians. *Pool*: every setup scanned. *Eligible*: fundable in the "
+        "session's regime, not too extended, one per ticker. *Chosen*: the top 40 by quality "
+        "score. *Reviews*: the chosen setups the verdict cache sends to the Analyst (new, "
+        "changed structure, or a verdict over 3 sessions old). `CORRECTION` funds nothing.",
+        "",
+        "| Regime | Sessions | Pool | Eligible | Chosen | Reviews | "
+        + " | ".join(f"`{s.value}`" for s in order)
+        + " |",
+        "|---|---|---|---|---|---|" + "---|" * len(order),
+    ]
+    for regime in regimes:
+        rows = [r for r in run.ranked if r.regime is regime]
+        if not rows:
+            continue
+        chosen = sum(len(r.chosen) for r in rows)
+        mix = Counter(s for r in rows for s in r.chosen)
+        lines.append(
+            f"| `{regime.value}` | {len(rows)} | "
+            f"{statistics.median(r.pool for r in rows):.0f} | "
+            f"{statistics.median(r.eligible for r in rows):.0f} | "
+            f"{statistics.median(len(r.chosen) for r in rows):.0f} | "
+            f"{statistics.median(r.reviews for r in rows):.0f} | "
+            + " | ".join(f"{mix.get(s, 0) / max(1, chosen):.0%}" for s in order)
+            + " |"
+        )
+    lines += [
+        "",
+        "Average component scores of the eligible setups, by strategy (all funding regimes):",
+        "",
+        "| Strategy | Eligible | " + " | ".join(COMPONENTS) + " | Score |",
+        "|---|---|" + "---|" * (len(COMPONENTS) + 1),
+    ]
+    for strategy in order:
+        n = run.eligible.get(strategy, 0)
+        if not n:
+            continue
+        sums = run.components[strategy]
+        means = [sums[c] / n for c in COMPONENTS]
+        lines.append(
+            f"| `{strategy.value}` | {n:,} | "
+            + " | ".join(f"{m:.2f}" for m in means)
+            + f" | {sum(means) / len(means):.2f} |"
+        )
+    chosen_all = sum(len(r.chosen) for r in run.ranked)
+    reviews_all = sum(r.reviews for r in run.ranked)
+    scores = [x for r in run.ranked for x in r.scores]
+    lines += [
+        "",
+        f"The cache re-reviews {reviews_all:,} of {chosen_all:,} chosen setups "
+        f"({reviews_all / max(1, chosen_all):.0%}); the rest keep their verdict. Quality score "
+        f"of the chosen: {_q(scores, 2, pct=False)}.",
+        "",
+    ]
+    return lines
 
 
 _SAMPLE_FACTS = {
