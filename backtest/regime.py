@@ -126,6 +126,8 @@ def _distribution(cfg: RegimeConfig, **changes: Any) -> RegimeConfig:
     return cfg.model_copy(update={"distribution": cfg.distribution.model_copy(update=changes)})
 
 
+CONFIRMED_AT_2 = {"confirmed_min_score": 2, "debounce_score": 1, "no_ftd_min_score": 2}
+
 VARIANTS: dict[str, tuple[str, Callable[[RegimeConfig], RegimeConfig]]] = {
     "baseline": ("risk.yaml as committed (IBD's published rules)", lambda c: c),
     "exclude_expirations": (
@@ -151,6 +153,34 @@ VARIANTS: dict[str, tuple[str, Callable[[RegimeConfig], RegimeConfig]]] = {
     "correction_2": (
         "`CORRECTION` after 2 sessions at <= -1 (index trend at -1 still immediate)",
         lambda c: _transitions(c, correction_sessions=2),
+    ),
+    # Diagnostics added after the first run, once the baseline failed (see the Reading): what
+    # makes CORRECTION so common. They are not pre-registered and nothing is adopted from them
+    # without the user.
+    "diag_correction_-2": (
+        "diagnostic: `CORRECTION` at a score <= -2",
+        lambda c: _transitions(c, correction_max_score=-2),
+    ),
+    "diag_distribution_8": (
+        "diagnostic: the distribution pillar at -1 from 8 days (not 6)",
+        lambda c: _distribution(c, down_min_days=8),
+    ),
+    "diag_vix_ratio_1.1": (
+        "diagnostic: the volatility pillar at -1 from VIX/VIX3M > 1.1 (not 1.0)",
+        lambda c: c.model_copy(
+            update={"volatility": c.volatility.model_copy(update={"down_min_ratio": 1.1})}
+        ),
+    ),
+    "diag_confirmed_+2": (
+        "diagnostic: `CONFIRMED_UPTREND` (and the `no_ftd` fallback) from +2 of the 4 pillars",
+        lambda c: _transitions(c, **CONFIRMED_AT_2),
+    ),
+    "diag_combined": (
+        "diagnostic: the three that helped together: `CORRECTION` <= -2, distribution -1 from 8 "
+        "days, `CONFIRMED_UPTREND` from +2",
+        lambda c: _distribution(
+            _transitions(c, correction_max_score=-2, **CONFIRMED_AT_2), down_min_days=8
+        ),
     ),
 }
 
@@ -214,6 +244,14 @@ def per_year(results: Sequence[RegimeResult]) -> dict[int, Counter[Regime]]:
     for r in results:
         out.setdefault(r.session.year, Counter())[r.regime] += 1
     return out
+
+
+def transitions(results: Sequence[RegimeResult]) -> Counter[tuple[Regime, Regime]]:
+    return Counter(
+        (prev.regime, r.regime)
+        for prev, r in itertools.pairwise(results)
+        if r.regime is not prev.regime
+    )
 
 
 def switches_per_year(results: Sequence[RegimeResult]) -> dict[int, int]:
@@ -602,6 +640,11 @@ def render_detail(
         cells = [str(counts.get(g, 0)) for g in ORDER] + [str(summary.switches.get(year, 0))]
         lines.append(f"| {year} | " + " | ".join(cells) + " |")
 
+    moves = ", ".join(
+        f"{SHORT[a]} → {SHORT[b]} {k}" for (a, b), k in transitions(shown).most_common()
+    )
+    lines += ["", f"**Switches by kind:** {moves}."]
+
     lines += [
         "",
         "**SPY after each label** (price return from the label's close: mean / median / share "
@@ -831,7 +874,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             calendar = load_calendar(conn)
     finally:
         engine.dispose()
-    days = calendar.sessions_between(TUNING_START, TUNING_END)
+    days = calendar.sessions_between(max(TUNING_START, calendar.first or TUNING_START), TUNING_END)
     loaded = load(make_store(settings), days, risk)
     print(f"loaded: {time.monotonic() - clock:.0f} s", file=sys.stderr)
     inputs = build_inputs(loaded.data, loaded.data.sessions[1:], risk.regime, risk.universe)

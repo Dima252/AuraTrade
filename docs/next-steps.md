@@ -55,7 +55,18 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → **2.4** regime backtest (the regime has read `CORRECTION` since September, the same kind of miss as 2017 in the smoke run) → **3.2a** onward.
+Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → **2.4** regime backtest (in progress, below) → **3.2a** onward.
+
+### Task 2.4: the baseline failed; waiting on the user (2026-10-23)
+
+On branch `phase-2/regime-backtest` (pushed, no PR): `backtest/regime.py`, `transitions.correction_sessions` (default 1, live behaviour unchanged), tests; report `docs/backtests/regime.md` with its Reading. The acceptance targets were committed before the first real run (`e405953`).
+
+The 4-pillar baseline turns defensive early in every decline but fails the other 4 checks: `CONFIRMED_UPTREND` holds 34% / 36% / 17% of 2017 / 2019 / H2 2020-21 (target 60%), 7 false `CORRECTION` spells in 6 years, 82 sessions to `CONFIRMED_UPTREND` after the 2020 low, 17 switches a year. None of the plan's comparisons fixes it. Cause: one pillar at -1 makes `CORRECTION` and only an FTD ends it; leadership health (absent until 3.7) scores 0; the distribution pillar is at -1 on 36% of sessions (ETF volume). The switch target (≤ 12 a year) and the FTD cycle don't fit: 45 of 101 switches are failed-FTD round trips.
+
+Options put to the user (CLAUDE.md §5):
+- **A.** Adopt the diagnosed set as the provisional 4-pillar thresholds (`CORRECTION` at <= -2, distribution -1 from 8 days, `CONFIRMED_UPTREND` from +2), relax the switch criterion to count failed-FTD round trips separately, tick 2.4 with the remaining misses written down, and settle the 5-pillar thresholds in the 3.8 re-run.
+- **B.** Keep IBD's thresholds, leave 2.4 open, and decide in 3.8 once leadership health exists (the skeleton ignores the regime, so nothing live depends on it before Phase 4).
+- **C.** Pull a spike-grade leadership proxy (bases + Trend Template on the history, as in the smoke run) into 2.4 so the thresholds are judged on 5 pillars now.
 
 ## How to resume in a new chat
 

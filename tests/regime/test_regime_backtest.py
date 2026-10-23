@@ -68,6 +68,9 @@ class TestSpells:
 
 
 class TestCounts:
+    def test_transitions_by_kind(self) -> None:
+        assert bt.transitions(timeline(DAYS[:5], "CEECE")) == {(CORR, EU): 2, (EU, CORR): 1}
+
     def test_switches_per_year_count_changes_in_the_year_they_happen(self) -> None:
         days = [date(2018, 12, 27), date(2018, 12, 28), date(2019, 1, 2), date(2019, 1, 3)]
         assert bt.switches_per_year(timeline(days, "CEEU")) == {2018: 1, 2019: 1}
@@ -250,6 +253,14 @@ def test_variants_change_only_what_they_name() -> None:
     assert excluded.distribution.exclude_expiration_sessions
     assert bt.VARIANTS["no_eu_minimum"][1](cfg).transitions.early_uptrend_min_sessions == 1
     assert bt.VARIANTS["no_ftd_20"][1](cfg).transitions.no_ftd_sessions == 20
+    combined = bt.VARIANTS["diag_combined"][1](cfg)
+    assert combined.transitions.correction_max_score == -2
+    assert combined.transitions.confirmed_min_score == 2
+    assert combined.distribution.down_min_days == 8
+    assert bt.VARIANTS["diag_vix_ratio_1.1"][1](cfg).volatility.down_min_ratio == 1.1
+    # Every variant is still a valid config.
+    for _, change in bt.VARIANTS.values():
+        type(cfg).model_validate(change(cfg).model_dump())
 
 
 def test_reading_is_kept_across_runs(tmp_path: Path) -> None:
@@ -306,3 +317,62 @@ def test_detail_csv(tmp_path: Path) -> None:
     rows = (tmp_path / "x.csv").read_text(encoding="utf-8").splitlines()
     assert rows[0].startswith("session,regime,score,index_trend")
     assert rows[2].startswith(f"{DAYS[1]},CONFIRMED_UPTREND,0")
+
+
+def test_load_reads_nothing_after_the_tuning_period(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The holdout stays closed: bars, sessions and macro observations stop at TUNING_END."""
+    from datetime import UTC, datetime
+
+    import pyarrow as pa
+
+    from auratrade.calendar.sessions import Session
+    from auratrade.history.build import build_history, fetch_bars
+    from auratrade.history.macro import MACRO, MACRO_SCHEMA
+    from auratrade.history.securities import KnownAsset
+    from auratrade.history.store import put_table, table_key
+    from auratrade.ingest.classify import SecurityType
+    from auratrade.storage import LocalStore
+    from tests.ingest.fakes import RISK, FakeBars
+    from tests.test_smoke_real_data import SESSIONS, wave
+
+    fake = FakeBars()
+    for k, symbol in enumerate(("S0", "S1", "SPY", "QQQ")):
+        wave(fake, symbol, 0.001 * k, 9 + 4 * k)  # distinct, or the build merges them
+    assets = [
+        KnownAsset(
+            f"a-{s}",
+            s,
+            s,
+            "NYSE",
+            True,
+            SecurityType.ETF if s in ("SPY", "QQQ") else SecurityType.COMMON,
+        )
+        for s in sorted(fake.raw)
+    ]
+    risk = RISK.model_copy(
+        update={"history": RISK.history.model_copy(update={"start": SESSIONS[0], "workers": 2})}
+    )
+    work, store = tmp_path / "work", LocalStore(tmp_path / "store")
+    fetch_bars(fake, sorted(fake.raw), SESSIONS[0], SESSIONS[-1], risk, work)
+    build_history(store, work, assets, SESSIONS, risk)
+    macro = [
+        {"series": name, "observation_date": d, "value": 15.0, "source": "CBOE_HISTORY"}
+        for d in SESSIONS
+        for name in ("VIX", "VIX3M")
+    ]
+    put_table(store, table_key(MACRO), pa.Table.from_pylist(macro, MACRO_SCHEMA))
+
+    end = SESSIONS[400]
+    monkeypatch.setattr(bt, "TUNING_START", SESSIONS[0])
+    monkeypatch.setattr(bt, "TUNING_END", end)
+    at = datetime(2016, 1, 4, 14, 30, tzinfo=UTC)
+    days = [Session(d, at, at, False, 390) for d in SESSIONS]
+    loaded = bt.load(store, days, risk)
+    assert loaded.data.sessions == SESSIONS[:401]
+    assert loaded.spy.dates[-1] == end
+    assert all(h.dates[-1] <= end for h in loaded.data.universe)
+    assert all(m.dates[-1] == end for m in loaded.data.macro.values())
+    assert set(loaded.data.indexes) == {"SPY", "QQQ"}
+    assert (loaded.members, loaded.delisted_members) == (2, 0)
