@@ -19,6 +19,8 @@ COPY config/ ${LAMBDA_TASK_ROOT}/config/
 COPY src/auratrade/ ${LAMBDA_TASK_ROOT}/auratrade/
 # The code's own layout puts risk.yaml two levels above the package; here it sits beside it.
 ENV RISK_CONFIG_PATH=${LAMBDA_TASK_ROOT}/config/risk.yaml
+# matplotlib (the Analyst's charts) writes its cache here; the rest of the filesystem is read-only.
+ENV MPLCONFIGDIR=/tmp/matplotlib
 RUN /var/lang/bin/python3 -m compileall -q ${LAMBDA_TASK_ROOT}/auratrade
 
 CMD ["auratrade.jobs.watchdog.handler"]

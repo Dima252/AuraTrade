@@ -416,6 +416,7 @@ class RiskConfig(_Strict):
     skeleton: SkeletonConfig
     strategies: StrategiesConfig
     ranking: RankingConfig
+    charts: ChartsConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1086,6 +1087,20 @@ class RankingConfig(_Strict):
     missing_component: Fraction
     """The score of a component without data: neutral, neither rewarded nor punished."""
     verdict_max_age_sessions: PositiveInt
+
+
+class ChartsConfig(_Strict):
+    """The Analyst's charts (README §5.3 "Charts"; task 3.4); see ``auratrade.charts``."""
+
+    daily_sessions: PositiveInt
+    daily_width: PositiveInt
+    daily_height: PositiveInt
+    daily_averages: dict[str, TrailSpec] = Field(min_length=1)
+    weekly_weeks: PositiveInt
+    weekly_width: PositiveInt
+    weekly_height: PositiveInt
+    weekly_averages: dict[str, TrailSpec] = Field(min_length=1)
+    dpi: PositiveInt
 
 
 class StrategiesConfig(_Strict):
