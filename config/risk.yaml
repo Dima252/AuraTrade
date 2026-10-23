@@ -192,7 +192,7 @@ bases:  # README §5.3 base count (IBD); see indicators/bases.py
   pivot_min_position: 0.5            # the final contraction's high is the pivot only in the upper half
   new_stage_advance: 0.20            # a new stage needs >= 20% from the prior base's pivot
 
-regime:  # README §5.2; provisional until the 2.4 regime backtest (final after the 3.8 re-run)
+regime:  # README §5.2; provisional 4-pillar thresholds from the 2.4 backtest (#135), final after the 3.8 re-run
   indexes: [SPY, QQQ]                # both for +1, either for -1; distribution counted per index
   index_trend:
     short_sma: 50
@@ -213,7 +213,7 @@ regime:  # README §5.2; provisional until the 2.4 regime backtest (final after 
     min_decline: 0.002               # down >= 0.2% on volume above the prior session's
     window_sessions: 25
     up_max_days: 3                   # +1: <= 3 (higher index count)
-    down_min_days: 6                 # -1: >= 6
+    down_min_days: 8                 # -1: >= 8 (IBD: 6; ETF volume overcounts, 2.4 / #135)
     exclude_expiration_sessions: false   # flagged either way; the 2.4 backtest compares
   leadership:
     result_sessions: 5               # a breakout's result is complete 5 sessions after it
@@ -226,15 +226,17 @@ regime:  # README §5.2; provisional until the 2.4 regime backtest (final after 
     first_day: 4
     last_strong_day: 7               # later FTDs are flagged weaker
   transitions:
-    confirmed_min_score: 3           # +3..+5 CONFIRMED_UPTREND
-    correction_max_score: -1         # <= -1 CORRECTION (immediate from CU / UP)
-    debounce_score: 2                # CU -> UP at +2 only after debounce_sessions in a row
+    confirmed_min_score: 2           # >= +2 CONFIRMED_UPTREND (4 pillars until 3.8; #135)
+    correction_max_score: -2         # <= -2 CORRECTION from CU / UP ...
+    correction_sessions: 1           # ... after this many sessions in a row (1: immediate);
+                                     # the index-trend pillar at -1 is always immediate
+    debounce_score: 1                # CU -> UP at +1 only after debounce_sessions in a row
     debounce_sessions: 2
-    upgrade_sessions: 3              # UP / EU -> CU after 3 sessions >= +3 in the state
+    upgrade_sessions: 3              # UP / EU -> CU after 3 sessions >= confirmed_min_score in the state
     early_uptrend_min_sessions: 10   # labels in EARLY_UPTREND before CONFIRMED_UPTREND
-    no_ftd_sessions: 10              # CORRECTION -> EARLY_UPTREND (no_ftd) after 10 sessions >= +3
-    no_ftd_min_score: 3
-    early_uptrend_max_distribution: 6    # since entering EARLY_UPTREND, higher index count
+    no_ftd_sessions: 10              # CORRECTION -> EARLY_UPTREND (no_ftd) after 10 sessions >= +2
+    no_ftd_min_score: 2
+    early_uptrend_max_distribution: 6    # since entering EARLY_UPTREND, higher index count (kept at 6, #135)
   crisis:  # no new entries (README §5.2)
     vix_ratio_above: 1.0             # VIX/VIX3M > 1.0 ...
     vix_ratio_sessions: 2            # ... for >= 2 sessions

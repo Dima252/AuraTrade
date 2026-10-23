@@ -112,7 +112,14 @@ def classify(
         distribution=distribution_pillar(max(counts.values(), default=0), cfg.distribution),
         leadership=leadership.score,
     )
-    new_state = advance(state, tracking, inputs.index_bars, pillars.score, cfg)
+    new_state = advance(
+        state,
+        tracking,
+        inputs.index_bars,
+        pillars.score,
+        cfg,
+        index_trend_down=pillars.index_trend == -1,
+    )
 
     crisis_prev, crisis_bar = inputs.index_bars[cfg.crisis.index]
     crisis = crisis_override(

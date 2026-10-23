@@ -86,7 +86,9 @@ class TestVolatility:
         assert volatility_pillar(None, 30, stale=False, cfg=CFG.volatility) == 0
 
 
-@pytest.mark.parametrize(("days", "score"), [(0, 1), (3, 1), (4, 0), (5, 0), (6, -1), (9, -1)])
+@pytest.mark.parametrize(
+    ("days", "score"), [(0, 1), (3, 1), (4, 0), (6, 0), (7, 0), (8, -1), (9, -1)]
+)
 def test_distribution_pillar(days: int, score: int) -> None:
     assert distribution_pillar(days, CFG.distribution) == score
 

@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta
 
-from auratrade.config import DEFAULT_RISK_CONFIG, RiskConfig, load_risk_config
+from auratrade.config import DEFAULT_RISK_CONFIG, RegimeConfig, RiskConfig, load_risk_config
 from auratrade.regime.breadth import TickerHistory
 
 RISK = load_risk_config(DEFAULT_RISK_CONFIG)
@@ -56,4 +56,23 @@ def history(
         closes=closes,
         raw_closes=[c * raw_scale for c in closes],
         volumes=[volume] * len(closes),
+    )
+
+
+def ibd_regime(cfg: RegimeConfig) -> RegimeConfig:
+    """``cfg`` at IBD's published thresholds (README §5.2 before #135): a CORRECTION score
+    <= -1, CONFIRMED_UPTREND from +3, distribution -1 from 6 days. The state machine's tests
+    use these, so they test the mechanism rather than the values the backtest tunes."""
+    return cfg.model_copy(
+        update={
+            "transitions": cfg.transitions.model_copy(
+                update={
+                    "confirmed_min_score": 3,
+                    "correction_max_score": -1,
+                    "debounce_score": 2,
+                    "no_ftd_min_score": 3,
+                }
+            ),
+            "distribution": cfg.distribution.model_copy(update={"down_min_days": 6}),
+        }
     )
