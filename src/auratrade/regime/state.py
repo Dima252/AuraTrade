@@ -4,7 +4,8 @@ One step per session, at the close. The label computed at session ``t`` governs 
 ``t + 1``. Sessions are numbered by ``seq`` (0 = the first session stepped), so the state is
 self-contained and can be stored as JSON with each ``market_regime`` row.
 
-- **Hysteresis:** downgrades to ``CORRECTION`` are immediate; ``CONFIRMED_UPTREND`` ->
+- **Hysteresis:** downgrades to ``CORRECTION`` take ``correction_sessions`` in a row at <= -1
+  (1: immediate; the index-trend pillar at -1 is always immediate); ``CONFIRMED_UPTREND`` ->
   ``UNDER_PRESSURE`` is immediate at a score <= +1, or after 2 sessions in a row at +2. Upgrades
   need 3 sessions in a row at >= +3, counted only while in the current state.
 - **New uptrends need a follow-through day** on either index, or the ``no_ftd`` fallback: 10
@@ -41,6 +42,9 @@ class RegimeState:
     no_ftd: bool = False
     upgrade_streak: int = 0
     debounce_streak: int = 0
+    downgrade_streak: int = 0
+    """Sessions in a row at <= ``correction_max_score`` in ``CONFIRMED_UPTREND`` /
+    ``UNDER_PRESSURE``, carried from the one into the other."""
     fallback_streak: int = 0
     fallback_lows: Mapping[str, float] = field(default_factory=dict)
     """Per index, the lowest low over the current ``no_ftd`` streak."""
@@ -66,6 +70,7 @@ class RegimeState:
             "no_ftd": self.no_ftd,
             "upgrade_streak": self.upgrade_streak,
             "debounce_streak": self.debounce_streak,
+            "downgrade_streak": self.downgrade_streak,
             "fallback_streak": self.fallback_streak,
             "fallback_lows": dict(self.fallback_lows),
             "rally": {
@@ -86,6 +91,8 @@ class RegimeState:
             no_ftd=bool(data["no_ftd"]),
             upgrade_streak=int(data["upgrade_streak"]),
             debounce_streak=int(data["debounce_streak"]),
+            # Absent from rows written before ``correction_sessions`` existed.
+            downgrade_streak=int(data.get("downgrade_streak", 0)),
             fallback_streak=int(data["fallback_streak"]),
             fallback_lows={i: float(v) for i, v in data["fallback_lows"].items()},
             rally={
@@ -216,9 +223,12 @@ def advance(
     bars: IndexBars,
     score: int,
     cfg: RegimeConfig,
+    *,
+    index_trend_down: bool = False,
 ) -> RegimeState:
     """The state after this session. ``state=None`` starts the machine in ``CORRECTION`` (fail
-    closed); a real FTD is needed to leave it."""
+    closed); a real FTD is needed to leave it. ``index_trend_down``: the index-trend pillar is
+    at -1, which makes a downgrade to ``CORRECTION`` immediate."""
     if state is None:
         return _enter(Regime.CORRECTION, 0, tracking, bars)
     seq = state.seq + 1
@@ -231,13 +241,16 @@ def advance(
         last_ftd_seq=tracking.last_ftd_seq,
     )
     lows = {i: bar.low for i, (_, bar) in bars.items()}
+    down = state.downgrade_streak + 1 if score <= t.correction_max_score else 0
+    to_correction = down >= t.correction_sessions or (down > 0 and index_trend_down)
 
     match state.regime:
         case Regime.CONFIRMED_UPTREND:
-            if score <= t.correction_max_score:
+            if to_correction:
                 return _enter(Regime.CORRECTION, seq, tracking, bars)
             if score < t.debounce_score:
-                return _enter(Regime.UNDER_PRESSURE, seq, tracking, bars)
+                pressure = _enter(Regime.UNDER_PRESSURE, seq, tracking, bars)
+                return replace(pressure, downgrade_streak=down)
             if score < t.confirmed_min_score:
                 streak = state.debounce_streak + 1
                 if streak >= t.debounce_sessions:
@@ -246,14 +259,14 @@ def advance(
             return replace(same, debounce_streak=0)
 
         case Regime.UNDER_PRESSURE:
-            if score <= t.correction_max_score:
+            if to_correction:
                 return _enter(Regime.CORRECTION, seq, tracking, bars)
             if score >= t.confirmed_min_score:
                 streak = state.upgrade_streak + 1
                 if streak >= t.upgrade_sessions:
                     return _enter(Regime.CONFIRMED_UPTREND, seq, tracking, bars)
-                return replace(same, upgrade_streak=streak)
-            return replace(same, upgrade_streak=0)
+                return replace(same, upgrade_streak=streak, downgrade_streak=0)
+            return replace(same, upgrade_streak=0, downgrade_streak=down)
 
         case Regime.CORRECTION:
             if tracking.follow_through is not None:

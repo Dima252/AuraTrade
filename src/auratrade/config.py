@@ -526,6 +526,7 @@ class FollowThroughConfig(_Strict):
 class TransitionsConfig(_Strict):
     confirmed_min_score: int
     correction_max_score: int
+    correction_sessions: PositiveInt
     debounce_score: int
     debounce_sessions: PositiveInt
     upgrade_sessions: PositiveInt

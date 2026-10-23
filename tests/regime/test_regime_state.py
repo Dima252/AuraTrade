@@ -4,7 +4,7 @@ of plan §2.3. Scores are given directly; bars drive distribution days, rally at
 
 from dataclasses import replace
 
-from auratrade.config import DEFAULT_RISK_CONFIG, Regime, load_risk_config
+from auratrade.config import DEFAULT_RISK_CONFIG, Regime, RegimeConfig, load_risk_config
 from auratrade.indicators.bars import Bar
 from auratrade.regime.state import RegimeState, Tracking, advance, early_uptrend_stepped, track
 
@@ -23,19 +23,28 @@ class Machine:
     """Steps the machine one session at a time. Each index repeats its last close (flat, same
     volume, low = close) unless a print is given."""
 
-    def __init__(self, state: RegimeState | None = None, *, expiration: bool = False) -> None:
+    def __init__(
+        self,
+        state: RegimeState | None = None,
+        *,
+        expiration: bool = False,
+        cfg: RegimeConfig = CFG,
+    ) -> None:
         self.state = state
         self.expiration = expiration
+        self.cfg = cfg
         self.prev = {"SPY": Bar(100, 100, 100, 100, 1000), "QQQ": Bar(100, 100, 100, 100, 1000)}
         self.tracking: Tracking | None = None
 
-    def step(self, score: int = 0, **prints: Print) -> RegimeState:
+    def step(self, score: int = 0, *, trend_down: bool = False, **prints: Print) -> RegimeState:
         bars = {}
         for index, prev in self.prev.items():
             close, low, volume = prints.get(index, (prev.close, prev.close, prev.volume))
             bars[index] = (prev, Bar(close, max(close, prev.close), low, close, volume))
-        self.tracking = track(self.state, bars, expiration_session=self.expiration, cfg=CFG)
-        self.state = advance(self.state, self.tracking, bars, score, CFG)
+        self.tracking = track(self.state, bars, expiration_session=self.expiration, cfg=self.cfg)
+        self.state = advance(
+            self.state, self.tracking, bars, score, self.cfg, index_trend_down=trend_down
+        )
         self.prev = {i: bar for i, (_, bar) in bars.items()}
         return self.state
 
@@ -50,9 +59,12 @@ def p(close: float, volume: float = 1000, low: float | None = None) -> Print:
     return (close, close if low is None else low, volume)
 
 
-def in_state(regime: Regime) -> Machine:
+def in_state(regime: Regime, cfg: RegimeConfig = CFG) -> Machine:
     """A machine already in ``regime`` (entered at seq 0) with flat index bars at 100."""
-    m = Machine(RegimeState(regime=regime, seq=0, entered_seq=0, rally_lows={"SPY": 90, "QQQ": 90}))
+    m = Machine(
+        RegimeState(regime=regime, seq=0, entered_seq=0, rally_lows={"SPY": 90, "QQQ": 90}),
+        cfg=cfg,
+    )
     if regime is CORR:
         m = Machine()
         m.step()
@@ -109,6 +121,48 @@ class TestConfirmedUptrend:
         assert m.state is not None
         assert m.state.regime is CU
         assert (m.state.upgrade_streak, m.state.debounce_streak) == (0, 0)
+
+
+class TestCorrectionSessions:
+    """``correction_sessions: 2``, a 2.4 comparison: two sessions in a row at <= -1, unless the
+    index-trend pillar is at -1."""
+
+    TWO = CFG.model_copy(
+        update={"transitions": CFG.transitions.model_copy(update={"correction_sessions": 2})}
+    )
+
+    def test_the_default_is_immediate(self) -> None:
+        assert CFG.transitions.correction_sessions == 1
+
+    def test_one_session_at_minus_one_drops_a_confirmed_uptrend_to_under_pressure(self) -> None:
+        m = in_state(CU, self.TWO)
+        state = m.step(-1)
+        assert state.regime is UP
+        assert state.downgrade_streak == 1
+        assert m.step(-2).regime is CORR
+
+    def test_under_pressure_needs_two_sessions_in_a_row(self) -> None:
+        m = in_state(UP, self.TWO)
+        assert m.step(-1).regime is UP
+        assert m.step(0).regime is UP
+        assert m.state is not None
+        assert m.state.downgrade_streak == 0
+        assert m.step(-1).regime is UP
+        assert m.step(-1).regime is CORR
+
+    def test_an_upgrade_session_also_restarts_the_count(self) -> None:
+        m = in_state(UP, self.TWO)
+        m.step(-1)
+        assert m.step(3).regime is UP
+        assert m.step(-1).regime is UP
+
+    def test_the_index_trend_pillar_at_minus_one_is_still_immediate(self) -> None:
+        assert in_state(CU, self.TWO).step(-1, trend_down=True).regime is CORR
+        assert in_state(UP, self.TWO).step(-3, trend_down=True).regime is CORR
+
+    def test_the_index_trend_pillar_alone_does_not_downgrade(self) -> None:
+        # A -1 index trend with a total score above -1 is not a CORRECTION score.
+        assert in_state(UP, self.TWO).step(0, trend_down=True).regime is UP
 
 
 class TestUnderPressure:
@@ -409,3 +463,10 @@ def test_state_round_trips_through_json() -> None:
     eu = after_ftd().state
     assert eu is not None
     assert RegimeState.from_json(eu.to_json()) == eu
+
+
+def test_rows_written_before_the_downgrade_streak_existed_still_load() -> None:
+    state = replace(in_state(UP).steps(1), downgrade_streak=1)
+    data = state.to_json()
+    del data["downgrade_streak"]
+    assert RegimeState.from_json(data) == replace(state, downgrade_streak=0)

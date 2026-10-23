@@ -108,3 +108,26 @@ def test_the_index_bars_must_match_the_configured_indexes() -> None:
 
 def test_no_vix_ratio_without_both_values() -> None:
     assert inputs(vix=None).vix_ratio is None
+
+
+def test_the_index_trend_pillar_at_minus_one_makes_the_downgrade_immediate() -> None:
+    # correction_sessions 2: a -1 score with a neutral index trend waits a session; with an
+    # index below its falling 200-day it doesn't.
+    two = CFG.model_copy(
+        update={"transitions": CFG.transitions.model_copy(update={"correction_sessions": 2})}
+    )
+    state = RegimeState(regime=Regime.UNDER_PRESSURE, seq=0, entered_seq=0)
+    weak = {"fraction_above": 0.2, "vix": 35.0, "vix3m": 30.0, "breakouts": ()}
+    flat = replace(TREND, short_rising=False)
+    waits = classify(
+        state, inputs(**weak, index_trend={"SPY": flat, "QQQ": flat}), two, macro_stale_limit=STALE
+    )
+    assert (waits.pillars.index_trend, waits.score) == (0, -1)
+    assert waits.regime is Regime.UNDER_PRESSURE
+    broken = IndexTrend(
+        close=90, short_sma=95, long_sma=100, short_rising=False, short_falling=True
+    )
+    trend_weak = inputs(**weak, index_trend={"SPY": flat, "QQQ": broken})
+    now = classify(state, trend_weak, two, macro_stale_limit=STALE)
+    assert (now.pillars.index_trend, now.score) == (-1, -2)
+    assert now.regime is Regime.CORRECTION

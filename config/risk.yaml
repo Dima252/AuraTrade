@@ -227,7 +227,9 @@ regime:  # README §5.2; provisional until the 2.4 regime backtest (final after 
     last_strong_day: 7               # later FTDs are flagged weaker
   transitions:
     confirmed_min_score: 3           # +3..+5 CONFIRMED_UPTREND
-    correction_max_score: -1         # <= -1 CORRECTION (immediate from CU / UP)
+    correction_max_score: -1         # <= -1 CORRECTION from CU / UP ...
+    correction_sessions: 1           # ... after this many sessions in a row (1: immediate);
+                                     # the index-trend pillar at -1 is always immediate
     debounce_score: 2                # CU -> UP at +2 only after debounce_sessions in a row
     debounce_sessions: 2
     upgrade_sessions: 3              # UP / EU -> CU after 3 sessions >= +3 in the state
