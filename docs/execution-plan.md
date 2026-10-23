@@ -46,7 +46,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 2.1 Indicators *(built out of plan order with the user's approval: pure functions, no config dependency)*
 - [x] 2.2 Base detection and base count *(built out of plan order with the user's approval)*
 - [x] 2.3 Regime classifier *(built out of plan order with the user's approval)*
-- [ ] 2.4 Regime backtest
+- [x] 2.4 Regime backtest *(`backtest/regime.py`, report `docs/backtests/regime.md`, targets pre-registered before the first run. IBD's published thresholds failed 4 of 5 checks on 4 pillars (38% in `CORRECTION`, 7 false spells); the provisional thresholds adopted with the user (#135) pass 3: declines early, the 2020 recovery, 1 false spell. Still missed, for the 3.8 re-run: `CONFIRMED_UPTREND` 49% / 55% of 2019 / H2 2020-21 (target 60%) and ~17 switches a year)*
 
 **Phase 3: Scanner, strategies, plans, baseline**
 - [x] 3.1 Trend Template *(built out of plan order with the user's approval)*
@@ -392,6 +392,8 @@ Every function is unit-tested on hand-built series with known answers.
   - a known case from the 1.6 smoke run: the regime sat in `CORRECTION` from 2017-04-12 to 2017-10-11 (124 sessions, broken only by a 3-session `no_ftd` fallback in June that a QQQ rally-low undercut on 2017-06-09 ended), a calm market that produced no follow-through day until October (`docs/backtests/smoke.md`, "Reading")
 - comparisons: excluding expiration/rebalance distribution days vs not; the `no_ftd` fallback after 10 sessions vs other lengths; the 10-session minimum in `EARLY_UPTREND` vs none; **an immediate downgrade to `CORRECTION` vs one that needs 2 sessions at ≤ −1** (with the index-trend pillar at −1 still immediate)
 
+**Done 2026-10-23** (#135): see the tracker line and `docs/backtests/regime.md`.
+
 Thresholds are **tuned on 2016–2022 only** (trading effectively from early 2017, after the warm-up). Only about 4–5 major episodes exist in the data, so prefer IBD's published thresholds unless a change clearly helps on both periods. The report goes to `docs/backtests/regime.md`.
 
 **The holdout stays closed here.** This run has only 4 pillars; leadership health needs the breakout tracker (3.7). 2023–present is opened once, for the final 5-pillar model, in the 3.8 re-run (README §15). Opening it now and again later would mean tuning on it.
@@ -579,7 +581,7 @@ Outputs:
   - how often an entry triggers but misses its limit (the tighter limit of README §7.1), how often the opening-range rule replaces the pivot, and how often the 09:36 limit buy is used
   - the expectancy of the missed entries (had they filled at the limit), so the cost of the tight limit is visible
 
-**Regime re-run (finishes 2.4):** re-run `backtest/regime.py` with the leadership-health pillar from the breakout tracker. **Only now** is the regime holdout (2023–present) opened, once, for the final 5-pillar model. It must pick up the 2023 recovery with reasonable lag and stay at ≤ ~12 switches a year. Final thresholds go to `risk.yaml`.
+**Regime re-run (finishes 2.4):** re-run `backtest/regime.py` with the leadership-health pillar from the breakout tracker. The 4-pillar run (#135) left two misses to settle here, on 5 pillars: `CONFIRMED_UPTREND` covered 49% / 55% of 2019 / H2 2020-21 against the pre-registered 60%, and `CONFIRMED_UPTREND` ↔ `UNDER_PRESSURE` flicker kept the switch count near 17 a year; `correction_2` (2 sessions before `CORRECTION`) is the first candidate, a longer debounce the other lever. The thresholds return to the 5-pillar scale here. **Only now** is the regime holdout (2023–present) opened, once, for the final 5-pillar model. It must pick up the 2023 recovery with reasonable lag and stay at ≤ ~12 switches a year. Final thresholds go to `risk.yaml`.
 
 **"More than noise"** means the session-block bootstrap 90% interval for the difference in expectancy (or max drawdown) excludes zero on the tuning period, and the holdout difference has the same sign.
 

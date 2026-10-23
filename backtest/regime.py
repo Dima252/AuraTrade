@@ -126,10 +126,33 @@ def _distribution(cfg: RegimeConfig, **changes: Any) -> RegimeConfig:
     return cfg.model_copy(update={"distribution": cfg.distribution.model_copy(update=changes)})
 
 
-CONFIRMED_AT_2 = {"confirmed_min_score": 2, "debounce_score": 1, "no_ftd_min_score": 2}
+def ibd_published(cfg: RegimeConfig) -> RegimeConfig:
+    """IBD's published thresholds, as risk.yaml had them before #135: `CORRECTION` at <= -1,
+    `CONFIRMED_UPTREND` (and the `no_ftd` fallback) from +3, distribution -1 from 6 days."""
+    return _distribution(
+        _transitions(
+            cfg,
+            correction_max_score=-1,
+            confirmed_min_score=3,
+            debounce_score=2,
+            no_ftd_min_score=3,
+        ),
+        down_min_days=6,
+    )
+
 
 VARIANTS: dict[str, tuple[str, Callable[[RegimeConfig], RegimeConfig]]] = {
-    "baseline": ("risk.yaml as committed (IBD's published rules)", lambda c: c),
+    "baseline": (
+        "risk.yaml as committed: the provisional 4-pillar thresholds adopted after the first run "
+        "(#135): `CORRECTION` at <= -2, distribution -1 from 8 days, `CONFIRMED_UPTREND` from +2",
+        lambda c: c,
+    ),
+    "ibd_published": (
+        "IBD's published thresholds (the first run's baseline): `CORRECTION` at <= -1, "
+        "distribution -1 from 6 days, `CONFIRMED_UPTREND` from +3",
+        ibd_published,
+    ),
+    # The plan's comparisons, each against the baseline.
     "exclude_expirations": (
         "distribution days on expiration / rebalance sessions not counted",
         lambda c: _distribution(c, exclude_expiration_sessions=True),
@@ -151,35 +174,29 @@ VARIANTS: dict[str, tuple[str, Callable[[RegimeConfig], RegimeConfig]]] = {
         lambda c: _transitions(c, early_uptrend_min_sessions=1),
     ),
     "correction_2": (
-        "`CORRECTION` after 2 sessions at <= -1 (index trend at -1 still immediate)",
+        "`CORRECTION` after 2 sessions at its score (index trend at -1 still immediate)",
         lambda c: _transitions(c, correction_sessions=2),
     ),
-    # Diagnostics added after the first run, once the baseline failed (see the Reading): what
-    # makes CORRECTION so common. They are not pre-registered and nothing is adopted from them
-    # without the user.
+    # Diagnostics from the first run (not pre-registered): each change alone, on IBD's
+    # published thresholds. The three that helped together are the baseline.
     "diag_correction_-2": (
-        "diagnostic: `CORRECTION` at a score <= -2",
-        lambda c: _transitions(c, correction_max_score=-2),
+        "diagnostic, on `ibd_published`: `CORRECTION` at <= -2",
+        lambda c: _transitions(ibd_published(c), correction_max_score=-2),
     ),
     "diag_distribution_8": (
-        "diagnostic: the distribution pillar at -1 from 8 days (not 6)",
-        lambda c: _distribution(c, down_min_days=8),
+        "diagnostic, on `ibd_published`: distribution -1 from 8 days",
+        lambda c: _distribution(ibd_published(c), down_min_days=8),
     ),
     "diag_vix_ratio_1.1": (
-        "diagnostic: the volatility pillar at -1 from VIX/VIX3M > 1.1 (not 1.0)",
-        lambda c: c.model_copy(
+        "diagnostic, on `ibd_published`: volatility -1 from VIX/VIX3M > 1.1 (not 1.0)",
+        lambda c: ibd_published(c).model_copy(
             update={"volatility": c.volatility.model_copy(update={"down_min_ratio": 1.1})}
         ),
     ),
     "diag_confirmed_+2": (
-        "diagnostic: `CONFIRMED_UPTREND` (and the `no_ftd` fallback) from +2 of the 4 pillars",
-        lambda c: _transitions(c, **CONFIRMED_AT_2),
-    ),
-    "diag_combined": (
-        "diagnostic: the three that helped together: `CORRECTION` <= -2, distribution -1 from 8 "
-        "days, `CONFIRMED_UPTREND` from +2",
-        lambda c: _distribution(
-            _transitions(c, correction_max_score=-2, **CONFIRMED_AT_2), down_min_days=8
+        "diagnostic, on `ibd_published`: `CONFIRMED_UPTREND` and the `no_ftd` fallback from +2",
+        lambda c: _transitions(
+            ibd_published(c), confirmed_min_score=2, debounce_score=1, no_ftd_min_score=2
         ),
     ),
 }
@@ -252,6 +269,20 @@ def transitions(results: Sequence[RegimeResult]) -> Counter[tuple[Regime, Regime
         for prev, r in itertools.pairwise(results)
         if r.regime is not prev.regime
     )
+
+
+def failed_ftd_switches(results: Sequence[RegimeResult]) -> dict[int, int]:
+    """Per year, the switches of failed follow-through days: into an `EARLY_UPTREND` spell from
+    `CORRECTION` and back to `CORRECTION` (#135 counts these apart from the switch limit)."""
+    out: Counter[int] = Counter()
+    sp = spells(results)
+    for i, s in enumerate(sp):
+        if s.regime is not Regime.EARLY_UPTREND or s.next is not Regime.CORRECTION:
+            continue
+        if i > 0 and sp[i - 1].regime is Regime.CORRECTION:
+            out[s.first.year] += 1
+        out[sp[i + 1].first.year] += 1
+    return dict(out)
 
 
 def switches_per_year(results: Sequence[RegimeResult]) -> dict[int, int]:
@@ -465,6 +496,7 @@ class Summary:
     description: str
     shares: dict[Regime, float]
     switches: dict[int, int]
+    failed_ftd: dict[int, int]
     false: list[tuple[Spell, float]]
     uptrends: dict[str, dict[Regime, float]]
     declines: list[DeclineCheck]
@@ -481,6 +513,13 @@ class Summary:
         return max(self.switches.values(), default=0)
 
     @property
+    def max_other_switches(self) -> int:
+        """The most switches in a year besides failed follow-through days' round trips."""
+        return max(
+            (n - self.failed_ftd.get(year, 0) for year, n in self.switches.items()), default=0
+        )
+
+    @property
     def failed_early(self) -> list[EarlySpell]:
         return [e for e in self.early if e.spell.next is Regime.CORRECTION]
 
@@ -488,7 +527,8 @@ class Summary:
         return {
             "declines early": all(d.early for d in self.declines),
             "2020 recovery": self.recovery.ok,
-            "switches <= 12/yr": self.max_switches <= MAX_SWITCHES_PER_YEAR,
+            "switches <= 12/yr, failed FTDs apart": self.max_other_switches
+            <= MAX_SWITCHES_PER_YEAR,
             "CU share >= target": all(
                 u[Regime.CONFIRMED_UPTREND] >= TARGET_CONFIRMED_SHARE
                 for u in self.uptrends.values()
@@ -505,6 +545,7 @@ def summarize(name: str, description: str, results: Sequence[RegimeResult], spy:
         description=description,
         shares={g: counts[g] / len(shown) for g in ORDER} if shown else {},
         switches=switches_per_year(shown),
+        failed_ftd=failed_ftd_switches(shown),
         false=false_corrections(shown, spy),
         uptrends={w.name: window_shares(shown, w) for w in UPTRENDS},
         declines=[decline_check(shown, spy, d) for d in DECLINES],
@@ -591,7 +632,7 @@ def kept_reading(path: Path) -> str:
 def render_comparisons(summaries: Sequence[Summary]) -> list[str]:
     columns = (
         [SHORT[g] for g in ORDER]
-        + ["Switches/yr (max)", "False CORR"]
+        + ["Switches/yr (max)", "Max/yr besides failed FTDs", "False CORR"]
         + [f"CU in {w.name}" for w in UPTRENDS]
         + [f"CORR in {d.name} (SPY)" for d in DECLINES]
         + ["2020: EU / CU after", "Failed EU"]
@@ -600,6 +641,7 @@ def render_comparisons(summaries: Sequence[Summary]) -> list[str]:
     for s in summaries:
         cells = [_pct(s.shares.get(g), 0) for g in ORDER]
         cells.append(f"{s.mean_switches:.1f} ({s.max_switches})")
+        cells.append(str(s.max_other_switches))
         cells.append(str(len(s.false)))
         cells += [_pct(s.uptrends[w.name][Regime.CONFIRMED_UPTREND], 0) for w in UPTRENDS]
         cells += [
@@ -634,10 +676,11 @@ def render_detail(
     lines = [f"### `{name}` in detail", "", f"![Regime timeline over SPY]({CHART.name})", ""]
 
     lines += ["**Sessions per regime and year**, with regime switches:", ""]
-    lines += ["| Year | " + " | ".join(SHORT[g] for g in ORDER) + " | Switches |"]
-    lines += ["|---|" + "---|" * (len(ORDER) + 1)]
+    lines += ["| Year | " + " | ".join(SHORT[g] for g in ORDER) + " | Switches | Of failed FTDs |"]
+    lines += ["|---|" + "---|" * (len(ORDER) + 2)]
     for year, counts in sorted(per_year(shown).items()):
-        cells = [str(counts.get(g, 0)) for g in ORDER] + [str(summary.switches.get(year, 0))]
+        cells = [str(counts.get(g, 0)) for g in ORDER]
+        cells += [str(summary.switches.get(year, 0)), str(summary.failed_ftd.get(year, 0))]
         lines.append(f"| {year} | " + " | ".join(cells) + " |")
 
     moves = ", ".join(

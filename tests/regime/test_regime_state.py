@@ -7,8 +7,9 @@ from dataclasses import replace
 from auratrade.config import DEFAULT_RISK_CONFIG, Regime, RegimeConfig, load_risk_config
 from auratrade.indicators.bars import Bar
 from auratrade.regime.state import RegimeState, Tracking, advance, early_uptrend_stepped, track
+from tests.regime.regime_helpers import ibd_regime
 
-CFG = load_risk_config(DEFAULT_RISK_CONFIG).regime
+CFG = ibd_regime(load_risk_config(DEFAULT_RISK_CONFIG).regime)
 CU, UP, EU, CORR = (
     Regime.CONFIRMED_UPTREND,
     Regime.UNDER_PRESSURE,
@@ -132,7 +133,7 @@ class TestCorrectionSessions:
     )
 
     def test_the_default_is_immediate(self) -> None:
-        assert CFG.transitions.correction_sessions == 1
+        assert load_risk_config(DEFAULT_RISK_CONFIG).regime.transitions.correction_sessions == 1
 
     def test_one_session_at_minus_one_drops_a_confirmed_uptrend_to_under_pressure(self) -> None:
         m = in_state(CU, self.TWO)

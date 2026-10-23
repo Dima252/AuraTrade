@@ -71,6 +71,15 @@ class TestCounts:
     def test_transitions_by_kind(self) -> None:
         assert bt.transitions(timeline(DAYS[:5], "CEECE")) == {(CORR, EU): 2, (EU, CORR): 1}
 
+    def test_failed_ftd_switches_are_the_round_trips_into_and_out_of_a_failed_early_uptrend(
+        self,
+    ) -> None:
+        # C -> E -> C fails (2 switches); C -> E -> K succeeds (its switch into E isn't counted).
+        assert bt.failed_ftd_switches(timeline(DAYS[:8], "CEECCEEK")) == {2018: 2}
+
+    def test_a_failed_early_uptrend_at_the_start_has_only_its_way_out(self) -> None:
+        assert bt.failed_ftd_switches(timeline(DAYS[:3], "EEC")) == {2018: 1}
+
     def test_switches_per_year_count_changes_in_the_year_they_happen(self) -> None:
         days = [date(2018, 12, 27), date(2018, 12, 28), date(2019, 1, 2), date(2019, 1, 3)]
         assert bt.switches_per_year(timeline(days, "CEEU")) == {2018: 1, 2019: 1}
@@ -230,7 +239,9 @@ class TestSummary:
         assert s.mean_switches == 2
         assert [e.spell.sessions for e in s.failed_early] == [4]
         checks = s.checks()
-        assert checks["switches <= 12/yr"]
+        assert checks["switches <= 12/yr, failed FTDs apart"]
+        assert s.failed_ftd == {2017: 2}
+        assert s.max_other_switches == 0
         # Two CORRECTION spells over 15 sessions with SPY flat: 2 false spells in 1 year.
         assert len(s.false) == 2
         assert not checks["false CORR <= 1/yr"]
@@ -238,8 +249,8 @@ class TestSummary:
         assert not checks["2020 recovery"]
 
     def test_no_switches_on_an_empty_timeline(self) -> None:
-        s = bt.Summary("x", "d", {}, {}, [], {}, [], bt.Recovery(None, None, None, None), [], 0)
-        assert (s.mean_switches, s.max_switches) == (0.0, 0)
+        s = bt.Summary("x", "d", {}, {}, {}, [], {}, [], bt.Recovery(None, None, None, None), [], 0)
+        assert (s.mean_switches, s.max_switches, s.max_other_switches) == (0.0, 0, 0)
 
 
 def test_variants_change_only_what_they_name() -> None:
@@ -253,11 +264,14 @@ def test_variants_change_only_what_they_name() -> None:
     assert excluded.distribution.exclude_expiration_sessions
     assert bt.VARIANTS["no_eu_minimum"][1](cfg).transitions.early_uptrend_min_sessions == 1
     assert bt.VARIANTS["no_ftd_20"][1](cfg).transitions.no_ftd_sessions == 20
-    combined = bt.VARIANTS["diag_combined"][1](cfg)
-    assert combined.transitions.correction_max_score == -2
-    assert combined.transitions.confirmed_min_score == 2
-    assert combined.distribution.down_min_days == 8
-    assert bt.VARIANTS["diag_vix_ratio_1.1"][1](cfg).volatility.down_min_ratio == 1.1
+    ibd = bt.VARIANTS["ibd_published"][1](cfg)
+    assert (ibd.transitions.correction_max_score, ibd.transitions.confirmed_min_score) == (-1, 3)
+    assert ibd.distribution.down_min_days == 6
+    # The diagnostics change one thing each, on IBD's published thresholds.
+    vix = bt.VARIANTS["diag_vix_ratio_1.1"][1](cfg)
+    assert vix.volatility.down_min_ratio == 1.1
+    assert vix.transitions == ibd.transitions
+    assert bt.VARIANTS["diag_distribution_8"][1](cfg).transitions == ibd.transitions
     # Every variant is still a valid config.
     for _, change in bt.VARIANTS.values():
         type(cfg).model_validate(change(cfg).model_dump())

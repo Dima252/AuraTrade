@@ -5,7 +5,7 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 ## Where things stand
 
 - **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Tasks 1.7 and 1.8 are **built, merged and deployed** (PRs #30, #31); their acceptance runs on AWS (below). On `main` 1,267 tests pass, coverage 97%, ruff and mypy clean.
-- **Decisions:** README §16 runs to **#134** (#132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
+- **Decisions:** README §16 runs to **#135** (#135: the regime thresholds from 2.4; #132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
 - **Accounts:** both Alpaca paper accounts are active and flat (no positions, no open orders, checked 2026-10-22 14:40 ET): `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper` ($5,000). Neon `dev` (endpoint `ep-autumn-sea-…`) is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off**. Neon `paper` (endpoint `ep-summer-math-…`) is a full copy of `dev` made 2026-10-22, also at 0006.
 - **Env files (2026-10-22):** `.env` and `.env.paper` have the same keys in the layout of `.env.example` (including `ENVIRONMENT`); every key in both passes `scripts/check_keys.py` (`--env-file .env.paper` for `paper`). Any local command runs against `paper` with `uv run --env-file .env.paper ...` (checked: it resolves to the `paper` database).
 - **AWS:** account 391732005061; CLI profile `auratrade` (us-east-1) is an IAM user with `AdministratorAccess`, signed in with `aws login` (not Identity Center; equivalent for this). Budgets `auratrade-monthly-10` and `-25`. `cdk bootstrap` done; the 10 secrets are SecureStrings under `/auratrade/paper/`; **`AuraTradePaper` deployed 2026-10-22 15:48 ET** with `trading_mode=paper` (11 functions, 18 schedules in the group `auratrade-paper`). The `paper` branch was reset just before: no trading rows, **kill switch on**.
@@ -55,18 +55,11 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → **2.4** regime backtest (in progress, below) → **3.2a** onward.
+Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~2.4~~ regime backtest (done, below) → **3.2a** onward.
 
-### Task 2.4: the baseline failed; waiting on the user (2026-10-23)
+### Task 2.4: done (2026-10-23, #135)
 
-On branch `phase-2/regime-backtest` (pushed, no PR): `backtest/regime.py`, `transitions.correction_sessions` (default 1, live behaviour unchanged), tests; report `docs/backtests/regime.md` with its Reading. The acceptance targets were committed before the first real run (`e405953`).
-
-The 4-pillar baseline turns defensive early in every decline but fails the other 4 checks: `CONFIRMED_UPTREND` holds 34% / 36% / 17% of 2017 / 2019 / H2 2020-21 (target 60%), 7 false `CORRECTION` spells in 6 years, 82 sessions to `CONFIRMED_UPTREND` after the 2020 low, 17 switches a year. None of the plan's comparisons fixes it. Cause: one pillar at -1 makes `CORRECTION` and only an FTD ends it; leadership health (absent until 3.7) scores 0; the distribution pillar is at -1 on 36% of sessions (ETF volume). The switch target (≤ 12 a year) and the FTD cycle don't fit: 45 of 101 switches are failed-FTD round trips.
-
-Options put to the user (CLAUDE.md §5):
-- **A.** Adopt the diagnosed set as the provisional 4-pillar thresholds (`CORRECTION` at <= -2, distribution -1 from 8 days, `CONFIRMED_UPTREND` from +2), relax the switch criterion to count failed-FTD round trips separately, tick 2.4 with the remaining misses written down, and settle the 5-pillar thresholds in the 3.8 re-run.
-- **B.** Keep IBD's thresholds, leave 2.4 open, and decide in 3.8 once leadership health exists (the skeleton ignores the regime, so nothing live depends on it before Phase 4).
-- **C.** Pull a spike-grade leadership proxy (bases + Trend Template on the history, as in the smoke run) into 2.4 so the thresholds are judged on 5 pillars now.
+`backtest/regime.py` and `docs/backtests/regime.md`. IBD's published thresholds failed 4 of 5 pre-registered checks on 4 pillars; the user chose option A: provisional thresholds (`CONFIRMED_UPTREND` from +2, `CORRECTION` at ≤ −2, distribution −1 from 8 days), failed-FTD round trips counted apart from the switch limit. They pass 3 checks; the two misses (uptrend coverage in 2019 / H2 2020-21, ~17 switches a year) go to the 3.8 re-run. Nothing live depends on the regime yet (the skeleton ignores it, #131); the next AWS deploy carries the new thresholds into the evening `regime` job.
 
 ## How to resume in a new chat
 

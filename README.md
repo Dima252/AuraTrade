@@ -247,7 +247,7 @@ Five pillars, each **+1, 0 or −1**:
 | **Index trend** | **Both** SPY and QQQ: close > 50 SMA > 200 SMA, 50 SMA rising (above its value 10 sessions earlier) | **Either** closes < 200 SMA with the 50 SMA falling | Bars |
 | **Breadth** | > 60% of the universe above its 50 SMA, and new highs − new lows (10-session average) > 0 | < 35% above the 50 SMA, or new lows > new highs (same 10-session average) | Full universe |
 | **Volatility** | VIX < 20 and VIX/VIX3M < 0.9 | VIX/VIX3M > 1.0 or VIX > 30 | CBOE / FRED |
-| **Distribution** | ≤ 3 distribution days in the last 25 sessions | ≥ 6 | SPY and QQQ counted separately; the **higher** count is used ([IBD](#18-methodology-sources)) |
+| **Distribution** | ≤ 3 distribution days in the last 25 sessions | ≥ 8 (IBD: 6; #135) | SPY and QQQ counted separately; the **higher** count is used ([IBD](#18-methodology-sources)) |
 | **Leadership health** | ≥ 55% of **all** breakouts from the 20-session window are above their trigger 5 sessions later | ≤ 35% | Breakout tracker (§5.12) |
 
 **Leadership health** is how a practitioner notices that "breakouts aren't working" before the indexes show it. Kullamägi trades "fewer or no trades" when setups stop working; Minervini sizes down when he's trading poorly.
@@ -257,10 +257,12 @@ Five pillars, each **+1, 0 or −1**:
 
 | Total score | Regime |
 |---|---|
-| +3 to +5 | `CONFIRMED_UPTREND` |
-| 0 to +2 | `UNDER_PRESSURE` |
-| ≤ −1 | `CORRECTION` |
+| +2 to +5 | `CONFIRMED_UPTREND` |
+| −1 to +1 | `UNDER_PRESSURE` |
+| ≤ −2 | `CORRECTION` |
 | CORRECTION, then a follow-through day | `EARLY_UPTREND` |
+
+**These are provisional 4-pillar thresholds** from the regime backtest (2.4, #135; `docs/backtests/regime.md`). IBD's published values (`CONFIRMED_UPTREND` from +3, `CORRECTION` at ≤ −1, distribution −1 from 6 days) sat in `CORRECTION` 38% of 2017–2022 with leadership health absent (it scores 0 until the breakout tracker, 3.7) and ETF volume overcounting distribution days. All of them are set again on 5 pillars in the 3.8 re-run. Every score below is the configured one: `risk.yaml` holds the values.
 
 - **Naming.** IBD's "rally attempt" is the stretch *before* a follow-through day. Here it is tracked as a sub-state inside `CORRECTION` (rally day count, rally low). `EARLY_UPTREND` is the period *after* the FTD, when only starter positions are allowed. Every prompt defines the four labels this way, so the LLM doesn't map them onto IBD's wording.
 - **Distribution day** (IBD): an index down ≥ 0.2% on volume higher than the prior session, counted per index (SPY, QQQ). **Both counts reset to zero after a follow-through day.** ETF volume stands in for exchange volume. Sessions with quarterly option expirations or index rebalances inflate it, so distribution days on those sessions are flagged, and the regime backtest decides whether to exclude them. The flagged sessions are the third Friday of March, June, September and December (the session before, if that's a holiday) and the S&P 500 and Nasdaq-100 rebalance dates; they count by default (#127).
@@ -271,27 +273,27 @@ Five pillars, each **+1, 0 or −1**:
   - The best FTDs come on days 4–7, so later ones are flagged as weaker.
   - The attempt is cancelled if **either** index undercuts its rally low.
 - **Hysteresis:**
-  - Downgrades to `CORRECTION` from `CONFIRMED_UPTREND` or `UNDER_PRESSURE` are immediate.
-  - `CONFIRMED_UPTREND` → `UNDER_PRESSURE` happens at once on a score ≤ +1, or after 2 consecutive sessions at +2, so that one pillar flickering across a threshold doesn't flip the regime.
+  - Downgrades to `CORRECTION` from `CONFIRMED_UPTREND` or `UNDER_PRESSURE` are immediate (`correction_sessions: 1`; the backtest compares 2 sessions, with the index-trend pillar at −1 always immediate).
+  - `CONFIRMED_UPTREND` → `UNDER_PRESSURE` happens at once on a score ≤ 0, or after 2 consecutive sessions at +1, so that one pillar flickering across a threshold doesn't flip the regime.
   - Upgrades need 3 consecutive sessions, counted only while in the current state. Leaving `EARLY_UPTREND` upward also needs at least 10 sessions in it.
   - `premarket_check` may only downgrade.
 - **State transitions** (a new uptrend needs a follow-through day, as in IBD, with one safety fallback):
 
   | From | To | When |
   |---|---|---|
-  | `CONFIRMED_UPTREND` | `UNDER_PRESSURE` | Score ≤ +1 (immediate), or score +2 for 2 consecutive sessions |
-  | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` | `CORRECTION` | Score ≤ −1 (immediate) |
-  | `UNDER_PRESSURE` | `CONFIRMED_UPTREND` | Score ≥ +3 for 3 sessions |
+  | `CONFIRMED_UPTREND` | `UNDER_PRESSURE` | Score ≤ 0 (immediate), or score +1 for 2 consecutive sessions |
+  | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` | `CORRECTION` | Score ≤ −2 (immediate) |
+  | `UNDER_PRESSURE` | `CONFIRMED_UPTREND` | Score ≥ +2 for 3 sessions |
   | `CORRECTION` | `EARLY_UPTREND` | Follow-through day |
-  | `CORRECTION` | `EARLY_UPTREND` (flagged `no_ftd`) | **Fallback:** score ≥ +3 for 10 consecutive sessions without a qualifying FTD. ETF volume can miss a real FTD, and without this the system could sit in cash through a whole recovery. With no FTD, each index's **rally low** is its lowest intraday low over those 10 sessions |
-  | `EARLY_UPTREND` | `CONFIRMED_UPTREND` | Score ≥ +3 for 3 sessions, after at least 10 sessions in `EARLY_UPTREND` |
-  | `EARLY_UPTREND` | `CORRECTION` | Either index undercuts its rally low, or the distribution pillar reaches −1 (≥ 6 distribution days since entering `EARLY_UPTREND`, higher index count) |
+  | `CORRECTION` | `EARLY_UPTREND` (flagged `no_ftd`) | **Fallback:** score ≥ +2 for 10 consecutive sessions without a qualifying FTD. ETF volume can miss a real FTD, and without this the system could sit in cash through a whole recovery. With no FTD, each index's **rally low** is its lowest intraday low over those 10 sessions |
+  | `EARLY_UPTREND` | `CONFIRMED_UPTREND` | Score ≥ +2 for 3 sessions, after at least 10 sessions in `EARLY_UPTREND` |
+  | `EARLY_UPTREND` | `CORRECTION` | Either index undercuts its rally low, or ≥ 6 distribution days since entering `EARLY_UPTREND` (higher index count; IBD's count, kept when the pillar's −1 moved to 8, #135) |
 
   **The score doesn't end `EARLY_UPTREND`.** A follow-through day comes near the low, when the index-trend, breadth and volatility pillars are usually still negative, so the score is often ≤ −1 on the FTD itself. An earlier draft sent `EARLY_UPTREND` back to `CORRECTION` on a score ≤ −1. That would have cancelled most FTDs at the next session, and the regime would have flapped on every later +1.25% day. As in IBD, a new uptrend fails on a rally-low undercut or heavy distribution after the FTD.
 
   **No timeout out of `EARLY_UPTREND`.** A stalled early uptrend keeps its small limits until it confirms or fails. An earlier draft moved it to `UNDER_PRESSURE` after 25 sessions, but that state allows more risk (§6), so stalling would have been rewarded. For the same reason, the step-up from starter limits after 10 sessions (§6) applies only on sessions with a score ≥ +1.
 
-  **The 10-session minimum** keeps the starter limits (§6) in force for their full 10 sessions on both paths. Without it, the `no_ftd` path, which enters at a score ≥ +3, would reach `CONFIRMED_UPTREND` within 3 sessions.
+  **The 10-session minimum** keeps the starter limits (§6) in force for their full 10 sessions on both paths. Without it, the `no_ftd` path, which enters at a score ≥ +2, would reach `CONFIRMED_UPTREND` within 3 sessions.
 - **Crisis override (code):** VIX/VIX3M > 1.0 for ≥ 2 sessions (for as long as it lasts), or SPY −4% in a session (for the rest of that session and the next one) → no new entries.
   - VIX/VIX3M is the latest value on or before the session, from any source in the order above (§5.1). The override is also set, with an alert, when every source is more than 2 sessions stale. With one stale day, the 2-session check can read the same observation twice; that is accepted (#127).
 - **Starting state:** `CORRECTION` (fail closed). A replay starts at least 252 sessions before the first label it needs.
@@ -300,10 +302,10 @@ Five pillars, each **+1, 0 or −1**:
 - **A morning downgrade doesn't fund unreviewed strategies.** The evening scan sends only the computed regime's fundable strategies to the Analyst. A strategy that becomes fundable only through a morning downgrade has no verdicts, so it isn't funded until the next evening's scan. With the current mapping (§6) this can't happen: `UNDER_PRESSURE`'s strategies are a subset of `CONFIRMED_UPTREND`'s, and `EARLY_UPTREND` is never assigned in the morning. The rule stays for any future mapping.
 - Thresholds are tuned in the regime backtest: tuned on 2016–2022 and checked once, untouched, on 2023–present (§15).
 - **The regime is judged in both directions.** Turning defensive early in a decline isn't enough. It also has to stay invested in strong uptrends.
-  - Several pillars score 0 in many healthy markets (VIX ≥ 20, 4–5 distribution days, under 10 tracked breakouts), so +2 (`UNDER_PRESSURE`) could become the normal bull-market state.
-  - One session at ≤ −1 drops to `CORRECTION`, and getting out needs a follow-through day.
+  - Several pillars score 0 in many healthy markets (VIX ≥ 20, 4–5 distribution days, under 10 tracked breakouts), so +2 could become the normal bull-market state. The 2.4 backtest found exactly that on 4 pillars, and `CONFIRMED_UPTREND` now starts at +2 (#135).
+  - One session at the `CORRECTION` score drops to `CORRECTION`, and getting out needs a follow-through day.
   - So the backtest reports each pillar's score distribution, time in each regime during known uptrends, and every **false `CORRECTION`**: a `CORRECTION` spell lasting more than 15 sessions in which SPY never closes 8% or more below its prior 52-week high.
-  - It also compares an immediate downgrade to `CORRECTION` against one that needs 2 sessions at ≤ −1 (with the index-trend pillar at −1 still immediate).
+  - It also compares an immediate downgrade to `CORRECTION` against one that needs 2 sessions at that score (with the index-trend pillar at −1 still immediate).
 
 ### 5.3 Scanner (`scan`)
 
@@ -1162,6 +1164,7 @@ If the point estimate is ≤ 0, the LLM filter isn't adding value: don't go live
 | 132 | 1.7's live acceptance moves to AWS | The rest of 1.7's live acceptance (3 paper sessions and the hand check of a job killed right after reducing a stop) runs on the AWS deploy of task 1.8, against the `paper` Alpaca account and the Neon `paper` branch, instead of on this PC against `dev`. 1.7 is ticked when they pass, and they count toward 1.8's 10 unattended sessions. Until then the local scheduler keeps running on `dev`, with nothing depending on it. *Why:* on 2026-10-21 the PC was on a phone hotspot and couldn't be relied on to stay connected through a session; the automated chaos suite already covers the order paths in CI, and the deployed skeleton is where the long record comes from anyway (approved by the user) |
 | 133 | AWS skeleton readings | One schedule module (`jobs/schedule.py`) feeds the AWS schedules, the watchdog and the local stand-in. A chained job's fallback fires every 10 minutes up to its deadline. `eod_review` fires at 12:40 and 15:40 every weekday and runs only within 30 minutes before that session's close. The watchdog reports a heartbeat missing 15 minutes past its slot (a chained job's: past its deadline), a run RUNNING for 20 minutes, and any disabled schedule of its environment (how `stop_guard` is watched); each finding is alerted once per session, and every run pings the dead-man's switch. One container image for all functions; order jobs get 15 minutes and 2 async retries, the rest none; events older than an hour are dropped; the scheduler retries only a failed start. Secrets are SSM SecureStrings read at function start, failing closed when none are found; the trading mode is a deploy-time stack setting (default `dry_run`, `live` refused), never a parameter. Each evening job may invoke only its successor; one private bucket per environment, kept on stack deletion, reachable only by `post_market` and `ingest`. *Why:* the 1.8 build needed each of these defined; a scheduler can't follow the calendar, so the half-day rule moves into the job; `stop_guard` writes no heartbeat to watch (approved by the user 2026-10-22) |
 | 134 | Public site: simple now, showcase at 5.7 | The current explainer page (0.5) is deployed in 1.8 as it is, with its build-status strip brought up to date, on the CloudFront address (a domain can be added any time). Task 5.7 becomes a designed showcase site: the LLM-vs-baseline results, the verdict scorecard, closed trades with the Analyst's thesis next to the outcome, the regime timeline, optionally a published hash of each night's snapshot so the history can be checked for edits. The architecture stays as #108: static files and one nightly, allow-listed, one-way snapshot; no API, no backend, no open positions. Before live money (Phase 8) the AWS account is hardened. *Why:* the user wants a site that does the project justice and stays secure when real money is connected; a big design pass now would show empty panels, and a dynamic site would open a path toward the trading data for little gain. (User, 2026-10-22.) |
+| 135 | Regime thresholds after the 2.4 backtest | Provisional 4-pillar thresholds until the 3.8 re-run: `CONFIRMED_UPTREND` from +2 (debounce at +1; the `no_ftd` fallback also at +2), `CORRECTION` at ≤ −2, the distribution pillar at −1 from 8 days in 25 sessions (`EARLY_UPTREND` still ends on 6 since entering it). `transitions.correction_sessions` (default 1) lets the backtest compare a 2-session downgrade. The switch limit (≤ ~12 a year) counts the two switches of each failed follow-through day apart. The remaining misses are written down, not tuned away: `CONFIRMED_UPTREND` holds 83% / 49% / 55% of 2017 / 2019 / H2 2020–21 against a pre-registered 60%, and the busiest year has 18 switches besides failed FTDs. *Why:* IBD's published values failed 4 of 5 pre-registered checks on 2016–2022: `CORRECTION` 38% of the time, 7 false `CORRECTION` spells, 82 sessions to `CONFIRMED_UPTREND` after the 2020 low; one pillar at −1 was enough with leadership health absent, and ETF volume put the distribution pillar at −1 on 36% of sessions. The adopted set keeps all three declines early, passes the 2020 recovery and leaves 1 false spell (user's choice of option A, 2026-10-23; `docs/backtests/regime.md`) |
 
 ---
 
