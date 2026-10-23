@@ -409,3 +409,22 @@ strategies:  # README §5.3 scans (task 3.2a); see auratrade.strategies. Provisi
     max_drawdown_vs_index: 1.5       # ... and is at most 1.5x SPY's over the same window
     max_sessions_since_correction: 63  # only within 3 months of the correction's end
     stop_sessions: 5                 # structural stop = the 5-session low (#137: the 10-session low was > 8% on 69%)
+
+ranking:  # README §5.3 "Ranking and cap", "Verdict cache"; see auratrade.strategies.ranking (task 3.3)
+  # The quality score is the plain average of 8 components, each scaled to 0-1 (#138, the user's
+  # choice: no weights to fit). Only setups fundable in the regime compete; one slot per ticker.
+  rs_line:                           # close / SPY
+    high_window: 252                 # "at a new high": the highest of 52 weeks ...
+    near_tolerance: 0.05             # ... "near" it: within 5%
+    low_window: 50                   # "at a low": the lowest of 50 sessions (the pullback gate's)
+  up_down_sessions: 50               # up/down volume ratio >= 1.0 = accumulation
+  adr_sessions: 20                   # tightness = stop width / ADR, ranked within the session's pool
+  extension_sma: 50                  # > guardrails.max_above_50d above it: excluded (momentum, EP exempt)
+  catalyst:                          # without the surprise (no history)
+    gap_lookback_sessions: 63        # an earnings gap-up within the last quarter ...
+    min_gap: 0.05                    # ... opening >= 5% above the prior close ...
+    min_volume_ratio: 1.5            # ... on >= 1.5x the prior 50-session volume
+    volume_sessions: 50
+    min_eps_growth: 0.25             # O'Neil's C: quarterly EPS up >= 25% year on year
+  missing_component: 0.5             # a component without data scores neutral
+  verdict_max_age_sessions: 3        # re-review a verdict older than 3 sessions

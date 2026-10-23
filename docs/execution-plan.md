@@ -52,7 +52,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 3.1 Trend Template *(built out of plan order with the user's approval)*
 - [x] 3.2a Strategy registry + core scans (VCP, momentum, EP proxy) *(`strategies/` base, registry, `vcp_breakout`, `momentum_breakout`, `episodic_pivot`; pure, 100% branch coverage. Real-data run over 2017-2022 in `docs/backtests/scans.md`: 0 exceptions. Readings approved as #136: a 5% floor on a VCP's first contraction (merger-arbitrage flatliners), no momentum depth cap until 3.8)*
 - [x] 3.2b Remaining scans (leader pullback, emerging leader) *(`leader_pullback`, `emerging_leader`; `SymbolData` gains RS ratings, SPY's closes and the regime's `CORRECTION` spells. Real-data run with all five scans in `docs/backtests/scans.md`, 0 exceptions. The user's choices are #137: drawdown at most 1.5x SPY's, a pullback at least 2 x ATR deep, the 5-session-low stop)*
-- [ ] 3.3 Ranking, cap, verdict cache
+- [x] 3.3 Ranking, cap, verdict cache *(`strategies/ranking.py`, `verdict_cache.py`; pure, 100% branch coverage. The user's choices are #138: equal weights, one slot per ticker, the fundable strategies taking turns. Real-data run in `docs/backtests/scans.md`. Not yet used by the evening `scan` job: Phase 4 wires the Analyst)*
 - [ ] 3.4 Charts
 - [x] 3.5a Position plans engine *(built out of plan order with the user's approval)*
 - [ ] 3.5b Guardrails, sizing, triggers, risk multiplier (pure; the 3.8 backtest needs them)

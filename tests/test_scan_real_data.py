@@ -13,9 +13,11 @@ from auratrade.history.build import build_history, fetch_bars
 from auratrade.history.macro import MACRO, MACRO_SCHEMA
 from auratrade.history.securities import KnownAsset
 from auratrade.history.store import put_table, table_key
+from auratrade.indicators.earnings import EarningsTiming
 from auratrade.ingest.classify import SecurityType
 from auratrade.storage import LocalStore
 from auratrade.strategies.base import Correction
+from auratrade.strategies.ranking import Fundamentals
 from scripts import scan_real_data as scans
 from tests.ingest.fakes import RISK, FakeBars
 from tests.test_smoke_real_data import SESSIONS, wave
@@ -77,6 +79,8 @@ def test_scan_run_on_a_synthetic_history(tmp_path: Path) -> None:
     report = scans.render(run, risk, "")
     assert "## Setups per year" in report
     assert "## Setups by regime" in report
+    assert "## Ranking and the cap (3.3)" in report
+    assert len(run.ranked) == len(run.sessions)
     assert "## Reading" in report
     scans.write_detail(run, tmp_path / "detail")
     assert (tmp_path / "detail" / "setups.csv").read_text(encoding="utf-8").count("\n") == len(
@@ -96,3 +100,20 @@ def test_correction_spells_and_their_positions() -> None:
     assert scans.corrections_for(days[:6], spells) == (Correction(2, 4),)
     # One that starts after a spell ended drops it.
     assert scans.corrections_for(days[6:], spells) == (Correction(3, None),)
+
+
+def test_reaction_sessions_and_point_in_time_fundamentals() -> None:
+    days = [date(2021, 2, d) for d in (1, 2, 3, 4, 5, 8)]
+    reports = [
+        (date(2021, 2, 2), EarningsTiming.BEFORE_OPEN),  # reacts that session (1)
+        (date(2021, 2, 3), EarningsTiming.AFTER_CLOSE),  # the next one (3)
+        (date(2021, 2, 6), EarningsTiming.BEFORE_OPEN),  # a Saturday: Monday (5)
+        (date(2021, 2, 8), EarningsTiming.AFTER_CLOSE),  # after the last bar: dropped
+        (date(2021, 3, 1), EarningsTiming.BEFORE_OPEN),  # after the history: dropped
+    ]
+    assert scans.reaction_sessions(days, reports) == frozenset({1, 3, 5})
+    q1, q2 = Fundamentals(0.3, None), Fundamentals(0.5, 0.2)
+    quarters = [(date(2021, 2, 2), q1), (date(2021, 2, 5), q2)]
+    assert scans.known_on(quarters, date(2021, 2, 2)) is None  # filed that day: not yet
+    assert scans.known_on(quarters, date(2021, 2, 3)) == q1
+    assert scans.known_on(quarters, date(2021, 2, 8)) == q2
