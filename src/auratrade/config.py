@@ -960,8 +960,9 @@ class VcpConfig(_Strict):
 
     min_base_sessions: PositiveInt
     max_base_sessions: PositiveInt
+    min_depth: Annotated[float, Field(ge=0.0, lt=1.0)]
     max_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
-    """The first (deepest) contraction: the base's high to its low."""
+    """Bounds on the first (deepest) contraction: the base's high to its low."""
     min_contractions: PositiveInt
     max_contractions: PositiveInt
     max_final_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
@@ -980,6 +981,8 @@ class VcpConfig(_Strict):
             raise ValueError("max_contractions must be >= min_contractions")
         if self.min_contractions < 2:
             raise ValueError("a VCP needs at least 2 contractions")
+        if self.min_depth >= self.max_depth:
+            raise ValueError("min_depth must be < max_depth")
         return self
 
 

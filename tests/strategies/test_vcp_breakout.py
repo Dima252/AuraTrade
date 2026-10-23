@@ -100,6 +100,7 @@ def test_trend_template_failure_rejects() -> None:
     ("changes", "why"),
     [
         ({"max_depth": 0.2}, "the first contraction (25%) is too deep"),
+        ({"min_depth": 0.3}, "the first contraction (25%) is too shallow"),
         ({"max_final_depth": 0.05}, "the final contraction (6%) is too loose"),
         ({"min_contractions": 4}, "too few contractions"),
         ({"max_contractions": 2}, "too many contractions"),

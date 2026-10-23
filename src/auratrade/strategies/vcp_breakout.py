@@ -132,7 +132,7 @@ class VcpBreakout(BaseStrategy):
         if not cfg.min_contractions <= len(found) <= cfg.max_contractions:
             return None
         depths = [c.depth for c in found]
-        if depths[0] > cfg.max_depth or depths[-1] > cfg.max_final_depth:
+        if not cfg.min_depth <= depths[0] <= cfg.max_depth or depths[-1] > cfg.max_final_depth:
             return None
         base_high, base_low = found[0].high, found[0].low
         final = found[-1]

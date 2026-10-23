@@ -99,6 +99,7 @@ def _dump() -> dict[str, object]:
     [
         ("VCP_BREAKOUT", {"max_base_sessions": 10}, "max_base_sessions"),
         ("VCP_BREAKOUT", {"max_contractions": 1}, "max_contractions"),
+        ("VCP_BREAKOUT", {"min_depth": 0.35}, "min_depth"),
         ("VCP_BREAKOUT", {"min_contractions": 1, "max_contractions": 3}, "at least 2"),
         ("MOMENTUM_BREAKOUT", {"max_consolidation_sessions": 5}, "max_consolidation"),
     ],

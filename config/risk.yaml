@@ -367,7 +367,8 @@ strategies:  # README §5.3 scans (task 3.2a); see auratrade.strategies. Provisi
   VCP_BREAKOUT:                      # Minervini
     min_base_sessions: 15            # a base of 3 ...
     max_base_sessions: 325           # ... to 65 weeks
-    max_depth: 0.35                  # the first (deepest) contraction
+    min_depth: 0.05                  # the first (deepest) contraction: >= 5% (#136: not a merger-arbitrage flatline) ...
+    max_depth: 0.35                  # ... and <= 35%
     min_contractions: 2              # 2-4, up to 6, each shallower than the last
     max_contractions: 6
     max_final_depth: 0.10            # the final contraction is tight
