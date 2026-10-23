@@ -414,6 +414,7 @@ class RiskConfig(_Strict):
     plans: PlansConfig
     execution: ExecutionConfig
     skeleton: SkeletonConfig
+    strategies: StrategiesConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -949,6 +950,78 @@ class SkeletonConfig(_Strict):
         if self.candidates < self.picks:
             raise ValueError("candidates must be >= picks")
         return self
+
+
+# --- risk.yaml: the strategy scans (task 3.2a) ----------------------------------------------
+
+
+class VcpConfig(_Strict):
+    """`VcpBreakout` detection (README §5.3, Minervini); see ``strategies.vcp_breakout``."""
+
+    min_base_sessions: PositiveInt
+    max_base_sessions: PositiveInt
+    min_depth: Annotated[float, Field(ge=0.0, lt=1.0)]
+    max_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
+    """Bounds on the first (deepest) contraction: the base's high to its low."""
+    min_contractions: PositiveInt
+    max_contractions: PositiveInt
+    max_final_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
+    swing_confirm_sessions: PositiveInt
+    """A contraction's high counts once at least this many sessions follow it."""
+    pivot_min_position: Annotated[float, Field(gt=0.0, lt=1.0)]
+    volume_sessions: PositiveInt
+    max_final_volume_ratio: Positive
+    """The final contraction's average volume vs the ``volume_sessions`` average."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.max_base_sessions < self.min_base_sessions:
+            raise ValueError("max_base_sessions must be >= min_base_sessions")
+        if self.max_contractions < self.min_contractions:
+            raise ValueError("max_contractions must be >= min_contractions")
+        if self.min_contractions < 2:
+            raise ValueError("a VCP needs at least 2 contractions")
+        if self.min_depth >= self.max_depth:
+            raise ValueError("min_depth must be < max_depth")
+        return self
+
+
+class MomentumConfig(_Strict):
+    """`MomentumBreakout` detection (README §5.3, Kullamägi); see
+    ``strategies.momentum_breakout``."""
+
+    rank_lookbacks: tuple[PositiveInt, ...] = Field(min_length=1)
+    min_rank: Annotated[float, Field(ge=0.0, le=100.0)]
+    """Top ~2%: the momentum rank on any of ``rank_lookbacks`` is at least this percentile."""
+    move_sessions: PositiveInt
+    min_move: Positive
+    min_consolidation_sessions: Annotated[int, Field(ge=2)]
+    max_consolidation_sessions: PositiveInt
+    ride_smas: tuple[PositiveInt, ...] = Field(min_length=1)
+    ma_rising_sessions: PositiveInt
+    adr_sessions: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.max_consolidation_sessions < self.min_consolidation_sessions:
+            raise ValueError("max_consolidation_sessions must be >= min_consolidation_sessions")
+        return self
+
+
+class EpisodicPivotProxyConfig(_Strict):
+    """The `EpisodicPivot` backtest proxy (README §5.3; live detection is task 5.6)."""
+
+    min_gap: Positive
+    min_volume_ratio: Positive
+    volume_sessions: PositiveInt
+    rally_lookbacks: tuple[PositiveInt, ...] = Field(min_length=1)
+    adr_sessions: PositiveInt
+
+
+class StrategiesConfig(_Strict):
+    VCP_BREAKOUT: VcpConfig
+    MOMENTUM_BREAKOUT: MomentumConfig
+    EPISODIC_PIVOT: EpisodicPivotProxyConfig
 
 
 RiskConfig.model_rebuild()

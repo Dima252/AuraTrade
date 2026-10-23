@@ -50,7 +50,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 **Phase 3: Scanner, strategies, plans, baseline**
 - [x] 3.1 Trend Template *(built out of plan order with the user's approval)*
-- [ ] 3.2a Strategy registry + core scans (VCP, momentum, EP proxy)
+- [x] 3.2a Strategy registry + core scans (VCP, momentum, EP proxy) *(`strategies/` base, registry, `vcp_breakout`, `momentum_breakout`, `episodic_pivot`; pure, 100% branch coverage. Real-data run over 2017-2022 in `docs/backtests/scans.md`: 0 exceptions. Readings approved as #136: a 5% floor on a VCP's first contraction (merger-arbitrage flatliners), no momentum depth cap until 3.8)*
 - [ ] 3.2b Remaining scans (leader pullback, emerging leader)
 - [ ] 3.3 Ranking, cap, verdict cache
 - [ ] 3.4 Charts

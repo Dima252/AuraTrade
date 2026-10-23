@@ -4,8 +4,8 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 
 ## Where things stand
 
-- **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.3; Phase 3 tasks 3.1 and 3.5a. Tasks 1.7 and 1.8 are **built, merged and deployed** (PRs #30, #31); their acceptance runs on AWS (below). On `main` 1,267 tests pass, coverage 97%, ruff and mypy clean.
-- **Decisions:** README §16 runs to **#135** (#135: the regime thresholds from 2.4; #132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
+- **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.4; Phase 3 tasks 3.1, 3.2a (#136) and 3.5a. Tasks 1.7 and 1.8 are **built, merged and deployed** (PRs #30, #31); their acceptance runs on AWS (below). On `main` 1,267 tests pass, coverage 97%, ruff and mypy clean.
+- **Decisions:** README §16 runs to **#136** (#136: the strategy-scan readings from 3.2a, approved; #135: the regime thresholds from 2.4; #132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
 - **Accounts:** both Alpaca paper accounts are active and flat (no positions, no open orders, checked 2026-10-22 14:40 ET): `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper` ($5,000). Neon `dev` (endpoint `ep-autumn-sea-…`) is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off**. Neon `paper` (endpoint `ep-summer-math-…`) is a full copy of `dev` made 2026-10-22, also at 0006.
 - **Env files (2026-10-22):** `.env` and `.env.paper` have the same keys in the layout of `.env.example` (including `ENVIRONMENT`); every key in both passes `scripts/check_keys.py` (`--env-file .env.paper` for `paper`). Any local command runs against `paper` with `uv run --env-file .env.paper ...` (checked: it resolves to the `paper` database).
 - **AWS:** account 391732005061; CLI profile `auratrade` (us-east-1) is an IAM user with `AdministratorAccess`, signed in with `aws login` (not Identity Center; equivalent for this). Budgets `auratrade-monthly-10` and `-25`. `cdk bootstrap` done; the 10 secrets are SecureStrings under `/auratrade/paper/`; **`AuraTradePaper` deployed 2026-10-22 15:48 ET** with `trading_mode=paper` (11 functions, 18 schedules in the group `auratrade-paper`). The `paper` branch was reset just before: no trading rows, **kill switch on**.
@@ -64,7 +64,11 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~2.4~~ regime backtest (done, below) → **3.2a** onward.
+Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~2.4~~ regime backtest (done, below) → ~~3.2a~~ (done, below) → **3.2b** onward.
+
+### Task 3.2a: done (2026-10-23, #136)
+
+`strategies/base.py` (the interface: `scan`, `build_llm_context`, `system_prompt`, `entry_policy`, `exit_policy`, `default_risk`; `SymbolData` with the series cached per symbol), `registry.py`, `vcp_breakout.py`, `momentum_breakout.py`, `episodic_pivot.py` (the backtest proxy), `risk.yaml` `strategies:`. Pure, 100% branch coverage. `scripts/scan_real_data.py` → `docs/backtests/scans.md`: 2017-2022, 0 exceptions. The user approved #136 and chose: a 5% floor on a VCP's first contraction (merger-arbitrage flatliners), no momentum depth cap until 3.8. Nothing live uses the scans yet: the skeleton's scan-lite stays until 3.3 and Phase 5.
 
 ### Task 2.4: done (2026-10-23, #135)
 
