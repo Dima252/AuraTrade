@@ -22,6 +22,7 @@ def data(
     bars: Sequence[Bar],
     *,
     template: TrendTemplate = PASSING,
+    rs: float | None = 90.0,
     momentum: float | None = 99.0,
     earnings: frozenset[int] = frozenset(),
 ) -> SymbolData:
@@ -29,6 +30,7 @@ def data(
         symbol="TEST",
         bars=list(bars),
         templates=[template] * len(bars),
+        rs_ratings=[rs] * len(bars),
         momentum_ranks=[momentum] * len(bars),
         earnings_sessions=earnings,
     )
@@ -91,3 +93,26 @@ def momentum_bars(
 # --- an episodic pivot: 60 quiet sessions at 20, then a 12.5% gap on 4x volume ----------------
 QUIET = [Bar(open=20, high=20.2, low=19.8, close=20, volume=1000) for _ in range(60)]
 GAP = Bar(open=22.5, high=24, low=22, close=23.5, volume=4000)
+
+
+def line(closes: Sequence[float], *, volume: float = 1000) -> list[Bar]:
+    """Bars closing at ``closes`` with a range of 1 around each close."""
+    return [bar(c + 0.5, c - 0.5, close=c, volume=volume) for c in closes]
+
+
+# --- a leader pullback: 60 sessions up 0.5 a day, then 3 lighter sessions down ---------------
+# The swing high is 80 at session 59; T = 62 closes 77.4 with a low of 76.9, within 1 ATR (~1.0)
+# of the 10-day EMA (~77.6), on 600 shares against the 50-day average of 976.
+ADVANCE = line([50 + 0.5 * i for i in range(60)])
+PULLBACK = line([79.0, 78.2, 77.4], volume=600)
+
+# --- an emerging leader: through a correction (sessions 22-29) the stock dips 5% while SPY
+# falls 10.7%; at T = 34 the stock is at a new 20-session high (the tests shorten the windows).
+LEADER_CLOSES = [100 + 0.5 * i for i in range(20)] + [
+    109, 107, 105, 104, 104.5, 105.5, 106, 107, 108, 109,
+    110, 110.5, 111, 111.5, 112,
+]  # fmt: skip
+SPY_CLOSES = [300.0 + i for i in range(20)] + [
+    315, 308, 300, 292, 285, 288, 290, 292, 294, 295,
+    296, 297, 298, 299, 300,
+]  # fmt: skip

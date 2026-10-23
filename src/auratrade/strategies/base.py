@@ -21,12 +21,21 @@ from typing import ClassVar, Protocol
 
 from auratrade.config import EntryPolicy, ExitPlan, Regime, RiskConfig, Strategy
 from auratrade.indicators.bars import OHLCV
-from auratrade.indicators.moving_averages import sma
+from auratrade.indicators.moving_averages import ema, sma
 from auratrade.indicators.series import Series, check_same_length, rolling_mean
-from auratrade.indicators.volatility import adr_pct
+from auratrade.indicators.volatility import adr_pct, atr
 from auratrade.strategies.trend_template import TrendTemplate, passes_for, trend_template
 
 type Fact = float | int | bool | str | None
+
+
+@dataclass(frozen=True, slots=True)
+class Correction:
+    """A `CORRECTION` spell of the regime, in the symbol's bar positions (README §5.2)."""
+
+    start: int
+    end: int | None
+    """Its last session; ``None`` while it lasts. A scan at an earlier session cuts it there."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,16 +46,23 @@ class SymbolData:
     symbol: str
     bars: Sequence[OHLCV]
     templates: Sequence[TrendTemplate]
+    rs_ratings: Sequence[float | None]
     momentum_ranks: Sequence[float | None]
     """The best momentum-rank percentile over ``strategies.MOMENTUM_BREAKOUT.rank_lookbacks``."""
     earnings_sessions: frozenset[int] = frozenset()
     """Bar positions of earnings reaction sessions (``indicators.earnings.reaction_session``)."""
+    benchmark_closes: Sequence[float] | None = None
+    """SPY's closes on the same sessions, for the RS line and the market's drawdown."""
+    corrections: tuple[Correction, ...] = ()
+    """The regime's `CORRECTION` spells, oldest first, the same for every symbol."""
     _cache: dict[tuple[str, int], Series] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
 
     def __post_init__(self) -> None:
-        check_same_length(self.bars, self.templates, self.momentum_ranks)
+        check_same_length(self.bars, self.templates, self.rs_ratings, self.momentum_ranks)
+        if self.benchmark_closes is not None:
+            check_same_length(self.bars, self.benchmark_closes)
 
     @classmethod
     def build(
@@ -58,34 +74,46 @@ class SymbolData:
         momentum_ranks: Sequence[float | None],
         risk: RiskConfig,
         earnings_sessions: frozenset[int] = frozenset(),
+        benchmark_closes: Sequence[float] | None = None,
+        corrections: tuple[Correction, ...] = (),
     ) -> "SymbolData":
         return cls(
             symbol=symbol,
             bars=bars,
             templates=trend_template(bars, rs_ratings, risk.trend_template),
+            rs_ratings=rs_ratings,
             momentum_ranks=momentum_ranks,
             earnings_sessions=earnings_sessions,
+            benchmark_closes=benchmark_closes,
+            corrections=corrections,
         )
 
     @property
     def last(self) -> int:
         return len(self.bars) - 1
 
-    def _cached(self, kind: str, window: int, compute: Callable[[], Series]) -> Series:
+    def cached(self, kind: str, window: int, compute: Callable[[], Series]) -> Series:
+        """A series computed once per symbol, keyed by its kind and window."""
         key = (kind, window)
         if key not in self._cache:
             self._cache[key] = compute()
         return self._cache[key]
 
     def sma(self, window: int) -> Series:
-        return self._cached("sma", window, lambda: sma([b.close for b in self.bars], window))
+        return self.cached("sma", window, lambda: sma([b.close for b in self.bars], window))
+
+    def ema(self, window: int) -> Series:
+        return self.cached("ema", window, lambda: ema([b.close for b in self.bars], window))
+
+    def atr(self, window: int) -> Series:
+        return self.cached("atr", window, lambda: atr(self.bars, window))
 
     def adr(self, window: int) -> Series:
-        return self._cached("adr", window, lambda: adr_pct(self.bars, window))
+        return self.cached("adr", window, lambda: adr_pct(self.bars, window))
 
     def average_volume(self, window: int) -> Series:
         """The average volume of the ``window`` sessions ending at each session."""
-        return self._cached(
+        return self.cached(
             "volume", window, lambda: rolling_mean([b.volume for b in self.bars], window)
         )
 

@@ -392,3 +392,20 @@ strategies:  # README §5.3 scans (task 3.2a); see auratrade.strategies. Provisi
     volume_sessions: 50              # ... of the prior 50 sessions
     rally_lookbacks: [63, 126]       # the prior 3- and 6-month moves, reported (a preference, not a filter)
     adr_sessions: 20                 # the pre-gap ADR
+  LEADER_PULLBACK:                   # Minervini / O'Neil: buying a leader's pullback to its 10/21 EMA
+    min_rs_rating: 80
+    emas: [10, 21]                   # the averages it may test, shortest first
+    atr_sessions: 14
+    max_atr_from_ema: 1.0            # the session's low within 1 x ATR of the average
+    swing_sessions: 10               # the pullback runs from the highest high of the last 10 sessions ...
+    min_pullback_sessions: 2         # ... and has lasted at least 2 ...
+    min_depth_atr: 2.0               # ... falling >= 2 x ATR to its low (#137: a real pullback, not a dip)
+    volume_sessions: 50
+    max_volume_ratio: 1.0            # on declining volume: the pullback below the 50-day average
+  EMERGING_LEADER:                   # O'Neil: the first leaders out of a correction
+    min_rs_rating: 85
+    high_sessions: 252               # a new 52-week high, or the RS line at one
+    lead_sessions: 21                # the drawdown counts from a month before the correction ...
+    max_drawdown_vs_index: 1.5       # ... and is at most 1.5x SPY's over the same window
+    max_sessions_since_correction: 63  # only within 3 months of the correction's end
+    stop_sessions: 5                 # structural stop = the 5-session low (#137: the 10-session low was > 8% on 69%)
