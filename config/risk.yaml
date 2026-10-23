@@ -362,3 +362,32 @@ skeleton:  # execution plan task 1.7: rule-only, no LLM; Phase 5 replaces the sc
   candidates: 10                     # ranked signals written per evening
   max_positions: 6
   trail: EMA_21                      # the one soft rule: a decision price below the 21 EMA
+
+strategies:  # README §5.3 scans (task 3.2a); see auratrade.strategies. Provisional until 3.8.
+  VCP_BREAKOUT:                      # Minervini
+    min_base_sessions: 15            # a base of 3 ...
+    max_base_sessions: 325           # ... to 65 weeks
+    max_depth: 0.35                  # the first (deepest) contraction
+    min_contractions: 2              # 2-4, up to 6, each shallower than the last
+    max_contractions: 6
+    max_final_depth: 0.10            # the final contraction is tight
+    swing_confirm_sessions: 3        # a contraction's high needs 3 sessions after it
+    pivot_min_position: 0.5          # the final contraction sits in the upper half of the base
+    volume_sessions: 50
+    max_final_volume_ratio: 1.0      # volume dries up: the final contraction below the 50-day average
+  MOMENTUM_BREAKOUT:                 # Kullamägi
+    rank_lookbacks: [21, 63, 126]    # 1-, 3- and 6-month returns ...
+    min_rank: 98                     # ... top ~2% of the universe on any of them
+    move_sessions: 63                # the prior move, within the last 1-3 months ...
+    min_move: 0.30                   # ... of at least 30% (low to the consolidation's high)
+    min_consolidation_sessions: 10
+    max_consolidation_sessions: 40
+    ride_smas: [10, 20]              # riding the rising 10- or 20-day ...
+    ma_rising_sessions: 5            # ... "rising": above its value 5 sessions ago
+    adr_sessions: 20
+  EPISODIC_PIVOT:                    # Kullamägi; the backtest proxy (no earnings beat: no free history)
+    min_gap: 0.10                    # open >= 10% above the prior close ...
+    min_volume_ratio: 3.0            # ... on >= 3x the average volume ...
+    volume_sessions: 50              # ... of the prior 50 sessions
+    rally_lookbacks: [63, 126]       # the prior 3- and 6-month moves, reported (a preference, not a filter)
+    adr_sessions: 20                 # the pre-gap ADR
