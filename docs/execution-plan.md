@@ -56,7 +56,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 3.4 Charts *(`charts.py`: daily and weekly PNGs at the README sizes, stored under `charts/<session>/`; checked by eye on real setups (FIVN VCP, TDOC momentum, KURA emerging leader, DDOG EP). Readings #139. The `scan` job doesn't draw them yet: Phase 4 wires the Analyst)*
 - [x] 3.5a Position plans engine *(built out of plan order with the user's approval)*
 - [x] 3.5b Guardrails, sizing, triggers, risk multiplier (pure; the 3.8 backtest needs them) *(`guardrails/` (`evaluate`, the 09:36 `orders` check and one module per rule family, 100% branch coverage enforced in CI), `execution/triggers.py`, `execution/sizing.py`, `journal/risk_multiplier.py`, `journal/numbers.py`; `risk.yaml` `entries:` and the per-strategy stop widths. Readings #140. Nothing live calls them yet: Phase 5 wires them; the skeleton keeps its own sizing)*
-- [ ] 3.6 Simulator and fake broker (`sim/`)
+- [x] 3.6 Simulator and fake broker (`sim/`) *(`sim/fills.py` (the fill model), `sim/trade.py` (one approved entry played forward through the live order check, plans and tranche-2 code; R, marks, fills), the fake broker's `play`; `risk.yaml` `sim:` (liquidity-tiered slippage). Pure, 100% branch coverage on the new modules. Readings #141. Nothing calls it yet: 3.7 builds the baseline book and the scorecard on it)*
 - [ ] 3.7 Watchlist, baseline book, breakout tracker, verdict scorecard
 - [ ] 3.8 Baseline backtest (choose defaults) + re-run 2.4 with leadership health
 

@@ -461,3 +461,16 @@ charts:  # README §5.3 "Charts" (task 3.4); see auratrade.charts. Image tokens 
     10-week SMA: {kind: SMA, window: 10}
     40-week SMA: {kind: SMA, window: 40}
   dpi: 100
+
+sim:  # README §5.12 fill model (task 3.6); see auratrade.sim. Provisional until the 3.8 backtest.
+  # Liquidity-scaled slippage: a fraction of the price, by the 50-session average dollar
+  # volume (the universe floor is $10M). The first tier the stock reaches applies.
+  slippage:
+    - {min_dollar_volume: 500000000, fraction: 0.0005}
+    - {min_dollar_volume: 100000000, fraction: 0.001}
+    - {min_dollar_volume: 25000000, fraction: 0.002}
+    - {min_dollar_volume: 0, fraction: 0.003}
+  entry_minutes: 6                   # entries go in at 09:36 (the open + 6 minutes) ...
+  delayed_entry_minutes: 21          # ... or 09:51 on the delayed-SIP opening range (#109)
+  volume_sessions: 50                # the average volume the plan rules compare with
+  long_average_sessions: 200         # the climax "far above the 200-day" signal
