@@ -428,3 +428,21 @@ ranking:  # README §5.3 "Ranking and cap", "Verdict cache"; see auratrade.strat
     min_eps_growth: 0.25             # O'Neil's C: quarterly EPS up >= 25% year on year
   missing_component: 0.5             # a component without data scores neutral
   verdict_max_age_sessions: 3        # re-review a verdict older than 3 sessions
+
+charts:  # README §5.3 "Charts" (task 3.4); see auratrade.charts. Image tokens ~ width x height / 750.
+  daily_sessions: 252                # 1 year
+  daily_width: 800
+  daily_height: 600
+  daily_averages:                    # the 10/21/50/150/200 of the README
+    10-day SMA: {kind: SMA, window: 10}
+    21-day EMA: {kind: EMA, window: 21}
+    50-day SMA: {kind: SMA, window: 50}
+    150-day SMA: {kind: SMA, window: 150}
+    200-day SMA: {kind: SMA, window: 200}
+  weekly_weeks: 104                  # 2 years
+  weekly_width: 600
+  weekly_height: 400
+  weekly_averages:                   # IBD's weekly lines, the 50- and 200-day equivalents
+    10-week SMA: {kind: SMA, window: 10}
+    40-week SMA: {kind: SMA, window: 40}
+  dpi: 100
