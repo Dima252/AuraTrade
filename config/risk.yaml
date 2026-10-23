@@ -63,6 +63,21 @@ guardrails:  # README §8
   earnings_estimate_sessions: 63     # unknown next date: last report + 63 sessions
   earnings_estimate_window_sessions: 10
   tranche2_max_sessions: 3
+  stop_widths:                       # max stop width (§7.1); the noise floor bounds the cap below
+    VCP_BREAKOUT: {unit: LIMIT_PCT, max: 0.08, noise_floor_atr: 1.0}       # 8% below the limit
+    EMERGING_LEADER: {unit: LIMIT_PCT, max: 0.08, noise_floor_atr: 1.0}
+    LEADER_PULLBACK: {unit: ATR, max: 1.5, noise_floor_atr: 1.0}           # 1.5 x ATR below the trigger
+    MOMENTUM_BREAKOUT: {unit: ADR, max: 1.0, noise_floor_atr: 0.5}         # 1 x ADR below the trigger
+    EPISODIC_PIVOT: {unit: ADR, max: 1.5, noise_floor_atr: 0.5}            # 1.5 x pre-gap ADR (3.8 compares 1x)
+  keep_losses_small_trades: 20       # after 20 closed trades of a strategy ...
+  keep_losses_small_gain_share: 0.5  # ... max width <= ½ x its rolling 20-trade average gain
+
+entries:  # README §7.1; see auratrade.execution.triggers and auratrade.execution.sizing
+  opening_range_minutes: 5           # 09:30-09:34
+  limit_max_above_trigger: 0.02      # limit = min(trigger x (1 + min(2%, ½ ADR)), code pivot x 1.05)
+  limit_adr_fraction: 0.5
+  tranche1_fraction: 0.5             # tranche 1 = 50% at the trigger
+  min_two_tranche_shares: 2          # under 2 shares: a single tranche at the trigger (#122)
 
 halts:  # README §8, §5.13
   daily_loss: 0.02

@@ -55,3 +55,6 @@ jobs:
           # Fail instead of skipping the database tests if Postgres isn't reachable.
           AURATRADE_REQUIRE_DB: "1"
         run: uv run pytest --cov --cov-report=term --cov-fail-under=95
+
+      - name: Guardrails coverage (100% branch, README §8)
+        run: uv run coverage report --include="*/auratrade/guardrails/*" --fail-under=100

@@ -212,6 +212,35 @@ class GuardrailsConfig(_Strict):
     earnings_estimate_sessions: PositiveInt
     earnings_estimate_window_sessions: PositiveInt
     tranche2_max_sessions: PositiveInt
+    stop_widths: dict[Strategy, StopWidthRule]
+    # "Keep losses small vs gains": after this many closed trades of a strategy, its max stop
+    # width is also capped at `keep_losses_small_gain_share` x its rolling average gain.
+    keep_losses_small_trades: PositiveInt
+    keep_losses_small_gain_share: Fraction
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if missing := set(Strategy) - set(self.stop_widths):
+            raise ValueError(f"stop_widths has no rule for {sorted(missing)}")
+        return self
+
+
+class StopWidthUnit(StrEnum):
+    """What a strategy's max stop width is measured in (README §7.1, §8)."""
+
+    LIMIT_PCT = "LIMIT_PCT"
+    """A fraction of the limit price (the worst fill), measured down from the limit."""
+    ATR = "ATR"
+    """ATR multiples, measured down from the trigger."""
+    ADR = "ADR"
+    """ADR multiples (ADR% x the trigger), measured down from the trigger."""
+
+
+class StopWidthRule(_Strict):
+    unit: StopWidthUnit
+    max: Positive
+    noise_floor_atr: Positive
+    """The narrowest max width the keep-losses-small cap may leave, in ATR multiples."""
 
 
 class HaltsConfig(_Strict):
@@ -400,6 +429,7 @@ class JobsConfig(_Strict):
 class RiskConfig(_Strict):
     regimes: RegimesConfig
     guardrails: GuardrailsConfig
+    entries: EntriesConfig
     halts: HaltsConfig
     multiplier: MultiplierConfig
     climax: ClimaxConfig
@@ -925,6 +955,19 @@ class ExecutionConfig(_Strict):
         if self.lock_wait_max_seconds < self.lock_wait_alert_seconds:
             raise ValueError("lock_wait_max_seconds must be >= lock_wait_alert_seconds")
         return self
+
+
+class EntriesConfig(_Strict):
+    """Entry triggers, limits and sizing (README §7.1); see ``execution.triggers``, ``.sizing``."""
+
+    opening_range_minutes: PositiveInt
+    # limit = min(trigger x (1 + min(limit_max_above_trigger, limit_adr_fraction x ADR)),
+    #             code pivot x (1 + guardrails.max_chase_above_pivot))
+    limit_max_above_trigger: Fraction
+    limit_adr_fraction: Positive
+    tranche1_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    # A planned size under this many shares goes in as a single tranche (#122).
+    min_two_tranche_shares: Annotated[int, Field(ge=2)]
 
 
 class SkeletonConfig(_Strict):
