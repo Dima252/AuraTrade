@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (136 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review, #108 the public site, #109–112 spike findings, #113–128 the 0.4 spike review, #129 the ingest build, #130 the backfill build, #131 the skeleton build, #132 1.7's acceptance moved to AWS, #133 the AWS skeleton, #134 the public site plan, #135 the regime thresholds from 2.4, #136 the strategy-scan readings from 3.2a) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
+| README §16 "Decision log" | **Why** things are the way they are (137 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review, #108 the public site, #109–112 spike findings, #113–128 the 0.4 spike review, #129 the ingest build, #130 the backfill build, #131 the skeleton build, #132 1.7's acceptance moved to AWS, #133 the AWS skeleton, #134 the public site plan, #135 the regime thresholds from 2.4, #136 the strategy-scan readings from 3.2a, #137 those from 3.2b) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
@@ -85,7 +85,7 @@ uv run python scripts/backfill.py all     # the Parquet history since 2016 (hour
 uv run python scripts/backfill.py postgres   # the 2-year window's earnings, fundamentals, VIX into Postgres (after an ingest run)
 uv run python scripts/smoke_real_data.py  # the early modules over the whole history -> docs/backtests/smoke.md
 uv run python backtest/regime.py         # the regime backtest, 2016-2022 only (holdout closed) -> docs/backtests/regime.md
-uv run python scripts/scan_real_data.py   # the strategy scans over 2017-2022 (holdout closed) -> docs/backtests/scans.md
+uv run python scripts/scan_real_data.py   # every strategy scan over 2017-2022 (holdout closed) -> docs/backtests/scans.md
 uv run auratrade kill on|off|status       # the kill switch (entries only); also: auratrade mismatches / resolve <id> --note
 uv run --env-file .env.paper auratrade kill status   # any command against `paper` (its file's values override .env)
 TRADING_MODE=paper uv run python scripts/local_session.py --until YYYY-MM-DD   # the skeleton's jobs on schedule (dev paper)

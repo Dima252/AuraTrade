@@ -14,13 +14,9 @@ from auratrade.strategies.vcp_breakout import VcpBreakout
 from tests.strategies.scan_data import GAP, QUIET, RISK, data, momentum_bars, vcp_bars
 
 
-def test_registry_holds_the_core_strategies() -> None:
+def test_registry_holds_every_strategy() -> None:
     strategies = build_strategies(RISK)
-    assert set(strategies) == {
-        Strategy.VCP_BREAKOUT,
-        Strategy.MOMENTUM_BREAKOUT,
-        Strategy.EPISODIC_PIVOT,
-    }
+    assert set(strategies) == set(Strategy)
     for name, strategy in strategies.items():
         assert strategy.strategy is name
         assert strategy.system_prompt
@@ -28,10 +24,15 @@ def test_registry_holds_the_core_strategies() -> None:
 
 def test_scan_all_runs_every_strategy() -> None:
     strategies = build_strategies(RISK)
-    # The textbook VCP is also a momentum flag (+69% into its base) when it ranks in the top 2%.
-    both = scan_all(strategies, data(vcp_bars()))
-    assert [s.strategy for s in both] == [Strategy.VCP_BREAKOUT, Strategy.MOMENTUM_BREAKOUT]
-    vcp_only = scan_all(strategies, data(vcp_bars(), momentum=None))
+    # The textbook VCP is also a momentum flag (+69% into its base) when it ranks in the top 2%,
+    # and a pullback to its 10-day EMA on light volume when its RS rating is 80 or more.
+    every = scan_all(strategies, data(vcp_bars()))
+    assert [s.strategy for s in every] == [
+        Strategy.VCP_BREAKOUT,
+        Strategy.MOMENTUM_BREAKOUT,
+        Strategy.LEADER_PULLBACK,
+    ]
+    vcp_only = scan_all(strategies, data(vcp_bars(), rs=75, momentum=None))
     assert [s.strategy for s in vcp_only] == [Strategy.VCP_BREAKOUT]
     assert [s.strategy for s in scan_all(strategies, data(momentum_bars()))] == [
         Strategy.MOMENTUM_BREAKOUT

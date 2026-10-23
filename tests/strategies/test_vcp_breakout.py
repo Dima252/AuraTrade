@@ -162,7 +162,9 @@ def test_llm_context_is_rounded_facts() -> None:
 def test_symbol_data_rejects_misaligned_series() -> None:
     bars = vcp_bars()
     with pytest.raises(ValueError, match="lengths differ"):
-        SymbolData("X", bars, templates=[FAILING], momentum_ranks=[None] * len(bars))
+        SymbolData(
+            "X", bars, templates=[FAILING], rs_ratings=[None], momentum_ranks=[None] * len(bars)
+        )
 
 
 def test_symbol_data_build_computes_the_trend_template() -> None:

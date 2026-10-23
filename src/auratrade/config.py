@@ -1018,10 +1018,52 @@ class EpisodicPivotProxyConfig(_Strict):
     adr_sessions: PositiveInt
 
 
+class LeaderPullbackConfig(_Strict):
+    """`LeaderPullback` detection (README §5.3, Minervini / O'Neil); see
+    ``strategies.leader_pullback``."""
+
+    min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
+    emas: tuple[PositiveInt, ...] = Field(min_length=1)
+    """The averages a pullback may test, shortest first."""
+    atr_sessions: PositiveInt
+    max_atr_from_ema: Positive
+    swing_sessions: PositiveInt
+    """The pullback starts at the highest high of this many sessions."""
+    min_pullback_sessions: PositiveInt
+    min_depth_atr: Annotated[float, Field(ge=0.0)]
+    """The pullback falls at least this many ATRs from its swing high to its low."""
+    volume_sessions: PositiveInt
+    max_volume_ratio: Positive
+    """The pullback's average volume vs the ``volume_sessions`` average."""
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.min_pullback_sessions > self.swing_sessions:
+            raise ValueError("min_pullback_sessions must be <= swing_sessions")
+        if list(self.emas) != sorted(set(self.emas)):
+            raise ValueError("emas must be distinct, shortest first")
+        return self
+
+
+class EmergingLeaderConfig(_Strict):
+    """`EmergingLeader` detection (README §5.3, O'Neil); see ``strategies.emerging_leader``."""
+
+    min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
+    high_sessions: PositiveInt
+    """A new high (price or RS line) is the highest of this many sessions."""
+    lead_sessions: Annotated[int, Field(ge=0)]
+    """The drawdown is measured from this many sessions before the correction's first."""
+    max_drawdown_vs_index: Positive
+    max_sessions_since_correction: PositiveInt
+    stop_sessions: PositiveInt
+
+
 class StrategiesConfig(_Strict):
     VCP_BREAKOUT: VcpConfig
     MOMENTUM_BREAKOUT: MomentumConfig
     EPISODIC_PIVOT: EpisodicPivotProxyConfig
+    LEADER_PULLBACK: LeaderPullbackConfig
+    EMERGING_LEADER: EmergingLeaderConfig
 
 
 RiskConfig.model_rebuild()

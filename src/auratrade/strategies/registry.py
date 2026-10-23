@@ -4,8 +4,6 @@ regime funds.
 **All scans run every evening**, whatever the regime: the breakout tracker and the watchlist
 need every trigger (README §5.12). ``risk.yaml`` decides which strategies are fundable in each
 regime; only those compete for the Analyst's slots (task 3.3).
-
-Tasks 3.2b adds `LeaderPullback` and `EmergingLeader`.
 """
 
 from collections.abc import Mapping, Sequence
@@ -14,12 +12,20 @@ from dataclasses import dataclass
 from auratrade.config import FundedStrategy, Regime, RiskConfig, Strategy
 from auratrade.indicators.relative_strength import momentum_ranks
 from auratrade.strategies.base import BaseStrategy, Setup, SymbolData
+from auratrade.strategies.emerging_leader import EmergingLeader
 from auratrade.strategies.episodic_pivot import EpisodicPivot
+from auratrade.strategies.leader_pullback import LeaderPullback
 from auratrade.strategies.momentum_breakout import MomentumBreakout
 from auratrade.strategies.trend_template import rs_ratings
 from auratrade.strategies.vcp_breakout import VcpBreakout
 
-STRATEGY_CLASSES: tuple[type[BaseStrategy], ...] = (VcpBreakout, MomentumBreakout, EpisodicPivot)
+STRATEGY_CLASSES: tuple[type[BaseStrategy], ...] = (
+    VcpBreakout,
+    MomentumBreakout,
+    EpisodicPivot,
+    LeaderPullback,
+    EmergingLeader,
+)
 
 
 def build_strategies(risk: RiskConfig) -> dict[Strategy, BaseStrategy]:

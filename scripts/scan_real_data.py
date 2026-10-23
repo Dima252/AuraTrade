@@ -1,11 +1,13 @@
-"""Real-data run of the strategy scans (task 3.2a) over the tuning period's point-in-time
-universe: what they find, how often, and with what levels.
+"""Real-data run of the strategy scans (tasks 3.2a, 3.2b) over the tuning period's
+point-in-time universe: what they find, how often, and with what levels.
 
     uv run python scripts/scan_real_data.py            # writes docs/backtests/scans.md
 
-`VcpBreakout`, `MomentumBreakout` and the `EpisodicPivot` proxy run on every universe member on
+Every strategy (the `EpisodicPivot` one as its backtest proxy) runs on every universe member on
 every session of 2017-2022 (2016 warms up the 200-day and the 252-session windows), with the
-RS rating and momentum rank ranked within that session's universe. **The holdout stays
+RS rating and momentum rank ranked within that session's universe. `EmergingLeader` reads the
+regime's `CORRECTION` spells from a replay of the live classifier over the same history, as
+`backtest/regime.py` runs it, and SPY's closes. **The holdout stays
 closed:** nothing after 2022 is loaded. Nothing is tuned here; the counts and levels are for a
 human to judge, and the samples are for a visual check against charts. The scans are judged
 on trades in the 3.8 baseline backtest. Every setup goes to var/scans/setups.csv (git-ignored).
@@ -18,6 +20,7 @@ half-day volume normalization (a handful of sessions a year).
 from __future__ import annotations
 
 import argparse
+import bisect
 import csv
 import random
 import statistics
@@ -29,12 +32,24 @@ from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from auratrade.config import REPO_ROOT, RiskConfig, Strategy, load_risk_config
-from auratrade.history.read import SecuritySeries, load_membership, load_securities, load_series
+from auratrade.config import REPO_ROOT, Regime, RiskConfig, Strategy, load_risk_config
+from auratrade.history.read import (
+    SecuritySeries,
+    index_securities,
+    load_macro,
+    load_membership,
+    load_securities,
+    load_series,
+)
 from auratrade.indicators.relative_strength import percentile_ranks
+from auratrade.regime.classifier import classify
+from auratrade.regime.inputs import LoadedData, MacroSeries, build_inputs
+from auratrade.regime.state import RegimeState
 from auratrade.storage import ObjectStore
-from auratrade.strategies.base import Setup, SymbolData
+from auratrade.strategies.base import Correction, Setup, SymbolData
+from auratrade.strategies.emerging_leader import EmergingDetail
 from auratrade.strategies.episodic_pivot import EpisodicPivotDetail
+from auratrade.strategies.leader_pullback import PullbackDetail
 from auratrade.strategies.momentum_breakout import MomentumDetail
 from auratrade.strategies.registry import build_strategies
 from auratrade.strategies.trend_template import rs_scores
@@ -65,6 +80,7 @@ class ScanRun:
     sessions: list[date]
     members: list[int] = field(default_factory=list)
     found: list[Found] = field(default_factory=list)
+    regimes: dict[date, Regime] = field(default_factory=dict)
     exceptions: list[str] = field(default_factory=list)
     seconds: dict[str, float] = field(default_factory=dict)
 
@@ -103,9 +119,71 @@ def ranks_by_security(
     return rs_out, mom_out
 
 
+def replay_regime(
+    series: Mapping[str, SecuritySeries],
+    indexes: Mapping[str, str],
+    universe: Sequence[str],
+    macro: Mapping[str, MacroSeries],
+    sessions: Sequence[date],
+    minutes: Mapping[date, int],
+    risk: RiskConfig,
+) -> dict[date, Regime]:
+    """The live classifier from the second session, starting in `CORRECTION` (as the replay)."""
+    data = LoadedData(
+        sessions=list(sessions),
+        session_minutes=dict(minutes),
+        indexes={symbol: series[key].ticker_history() for symbol, key in indexes.items()},
+        universe=[series[k].ticker_history() for k in universe if k in series],
+        macro=dict(macro),
+    )
+    state: RegimeState | None = None
+    out: dict[date, Regime] = {}
+    for inputs in build_inputs(data, sessions[1:], risk.regime, risk.universe):
+        result = classify(
+            state, inputs, risk.regime, macro_stale_limit=risk.data.macro_stale_sessions
+        )
+        out[result.session] = result.regime
+        state = result.state
+    return out
+
+
+def correction_spells(regimes: Mapping[date, Regime]) -> list[tuple[date, date | None]]:
+    """Each `CORRECTION` spell's first and last session (``None`` if still open at the end)."""
+    spells: list[tuple[date, date | None]] = []
+    start: date | None = None
+    previous: date | None = None
+    for day in sorted(regimes):
+        if regimes[day] is Regime.CORRECTION:
+            start = start or day
+        elif start is not None:
+            spells.append((start, previous))
+            start = None
+        previous = day
+    if start is not None:
+        spells.append((start, None))
+    return spells
+
+
+def corrections_for(
+    dates: Sequence[date], spells: Sequence[tuple[date, date | None]]
+) -> tuple[Correction, ...]:
+    """The spells in one security's bar positions (spells outside its bars are dropped)."""
+    out = []
+    for start, end in spells:
+        first = bisect.bisect_left(dates, start)
+        if first == len(dates):
+            continue
+        last = None if end is None else bisect.bisect_right(dates, end) - 1
+        if last is not None and last < first:
+            continue
+        out.append(Correction(first, last))
+    return tuple(out)
+
+
 def run_scans(
     store: ObjectStore,
     sessions: Sequence[date],
+    minutes: Mapping[date, int],
     risk: RiskConfig,
     *,
     log: Callable[[str], None] = lambda _: None,
@@ -122,19 +200,40 @@ def run_scans(
     securities = load_securities(store)
     members = load_membership(store, {d.year for d in sessions})
     ever = set().union(*(members.get(d, set()) for d in sessions))
-    series = load_series(store, sessions, securities=ever)
+    indexes = index_securities(securities, risk.regime.indexes)
+    series = load_series(store, sessions, securities=ever | set(indexes.values()))
+    last = sessions[-1]
+    macro = {
+        name: MacroSeries(
+            [d for d in m.dates if d <= last],
+            [v for d, v in zip(m.dates, m.values, strict=True) if d <= last],
+        )
+        for name, m in load_macro(store).items()
+    }
     lap("load")
+    run.regimes = replay_regime(series, indexes, sorted(ever), macro, sessions, minutes, risk)
+    spells = correction_spells(run.regimes)
+    spy = series[indexes["SPY"]]
+    spy_close = dict(zip(spy.dates, spy.close, strict=True))
+    lap("regime")
     rs, momentum = ranks_by_security(series, members, risk)
     lap("ranks")
     run.members = [len(members.get(d, ())) for d in run.sessions]
     strategies = build_strategies(risk)
-    for key in sorted(series):
+    for key in sorted(ever & series.keys()):
         s = series[key]
         symbol = str(securities[key]["symbol"])
         try:
             bars = s.bars()
+            benchmark = [spy_close.get(d) for d in s.dates]
             data = SymbolData.build(
-                symbol, bars, rs_ratings=rs[key], momentum_ranks=momentum[key], risk=risk
+                symbol,
+                bars,
+                rs_ratings=rs[key],
+                momentum_ranks=momentum[key],
+                risk=risk,
+                benchmark_closes=None if None in benchmark else [c or 0.0 for c in benchmark],
+                corrections=corrections_for(s.dates, spells),
             )
             for i, d in enumerate(s.dates):
                 if d < FIRST_REPORTED or key not in members.get(d, ()):
@@ -187,9 +286,15 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
     for f in run.found:
         by[f.setup.strategy].append(f)
     years = sorted({d.year for d in run.sessions})
-    order = [Strategy.VCP_BREAKOUT, Strategy.MOMENTUM_BREAKOUT, Strategy.EPISODIC_PIVOT]
+    order = [
+        Strategy.VCP_BREAKOUT,
+        Strategy.MOMENTUM_BREAKOUT,
+        Strategy.EPISODIC_PIVOT,
+        Strategy.LEADER_PULLBACK,
+        Strategy.EMERGING_LEADER,
+    ]
     lines = [
-        "# Strategy scans on real data (task 3.2a)",
+        "# Strategy scans on real data (tasks 3.2a, 3.2b)",
         "",
         f"Generated by `scripts/scan_real_data.py` on {datetime.now(UTC):%Y-%m-%d %H:%M} UTC, "
         f"`risk.yaml` {risk.short_hash}. Sessions {run.sessions[0]} to {run.sessions[-1]} "
@@ -221,6 +326,27 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
             + " | ".join(f"{per_year.get(y, 0):,}" for y in years)
             + f" | {statistics.median(counts):.0f} ({max(counts)})"
             + f" | {len({f.security for f in found}):,} |"
+        )
+    regimes = list(reversed(Regime))  # CONFIRMED_UPTREND first
+    spread = Counter(run.regimes.get(d) for d in run.sessions)
+    lines += [
+        "",
+        "## Setups by regime",
+        "",
+        "Setups per session in each regime (the regime of the scan session, from the replay). "
+        "Sessions: "
+        + ", ".join(f"`{r.value}` {spread.get(r, 0)}" for r in regimes)
+        + ". The regime decides what is fundable (README §6), not what is scanned.",
+        "",
+        "| Strategy | " + " | ".join(f"`{r.value}`" for r in regimes) + " |",
+        "|---|" + "---|" * len(regimes),
+    ]
+    for strategy in order:
+        hits = Counter(run.regimes.get(f.day) for f in by[strategy])
+        lines.append(
+            f"| `{strategy.value}` | "
+            + " | ".join(f"{hits.get(r, 0) / max(1, spread.get(r, 0)):.1f}" for r in regimes)
+            + " |"
         )
     vcp_keys = {(f.security, f.day) for f in by[Strategy.VCP_BREAKOUT]}
     both = sum((f.security, f.day) in vcp_keys for f in by[Strategy.MOMENTUM_BREAKOUT])
@@ -264,6 +390,17 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
         for f in by[Strategy.EPISODIC_PIVOT]
         if isinstance(f.setup.detail, EpisodicPivotDetail)
     ]
+    pullbacks = [
+        f.setup.detail
+        for f in by[Strategy.LEADER_PULLBACK]
+        if isinstance(f.setup.detail, PullbackDetail)
+    ]
+    emerging = [
+        f.setup.detail
+        for f in by[Strategy.EMERGING_LEADER]
+        if isinstance(f.setup.detail, EmergingDetail)
+    ]
+    tested = Counter(d.tested_ema for d in pullbacks)
     contraction_mix = Counter(len(d.contractions) for d in vcp)
     lines += [
         "",
@@ -286,6 +423,19 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
         f"{_q([d.volume_ratio for d in ep], 1, pct=False)} x; gap held into the close (close > "
         f"open) on {sum(d.day_gain > d.gap for d in ep) / max(1, len(ep)):.0%}; prior 6-month move "
         f"{_q([m for d in ep if (m := d.prior_moves.get(126)) is not None], 0)}.",
+        "",
+        "**`LeaderPullback`:** tested average "
+        + ", ".join(f"{n}-day EMA: {tested[n]:,}" for n in sorted(tested))
+        + f"; pullback {_q([float(d.pullback_sessions) for d in pullbacks], 0, pct=False)} "
+        f"sessions, {_q([d.depth for d in pullbacks])} deep; volume ratio "
+        f"{_q([d.volume_ratio for d in pullbacks], 2, pct=False)}.",
+        "",
+        "**`EmergingLeader`:** new 52-week high "
+        f"{sum(d.new_price_high for d in emerging) / max(1, len(emerging)):.0%}, RS line at a "
+        f"new high {sum(d.rs_line_new_high for d in emerging) / max(1, len(emerging)):.0%}; "
+        f"drawdown vs SPY {_q([d.drawdown / d.index_drawdown for d in emerging], 2, pct=False)}; "
+        "sessions since the correction "
+        f"{_q([float(d.sessions_since_correction) for d in emerging], 0, pct=False)}.",
         "",
         "## Samples for a visual check",
         "",
@@ -327,6 +477,12 @@ _SAMPLE_FACTS = {
     "consolidation_depth",
     "gap",
     "volume_ratio",
+    "tested_ema",
+    "pullback_depth",
+    "pullback_volume_ratio",
+    "drawdown_vs_spy",
+    "sessions_since_correction",
+    "new_52_week_high",
 }
 
 
@@ -373,6 +529,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = run_scans(
         make_store(settings),
         [s.day for s in days],
+        {s.day: s.minutes for s in days},
         risk,
         log=lambda line: print(line, file=sys.stderr),
     )
