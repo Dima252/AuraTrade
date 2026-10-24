@@ -33,9 +33,10 @@ import structlog
 from auratrade.config import RiskConfig
 from auratrade.data.alpaca_data import Adjustment, DailyBar
 from auratrade.history.bars import prepare
-from auratrade.history.securities import KnownAsset, Security, securities_for
+from auratrade.history.securities import DELISTED_FUNDS, KnownAsset, Security, securities_for
 from auratrade.history.store import (
     BAR_SCHEMA,
+    get_table,
     membership_key,
     put_table,
     table_key,
@@ -414,6 +415,33 @@ def build_history(
     report.dropped = dict(dropped)
     report.corrections = len(corrections)
     return report
+
+
+def retype_funds(store: ObjectStore, risk: RiskConfig, through: date) -> list[str]:
+    """Apply `DELISTED_FUNDS` to a history built before the list: retype those assumed-type
+    securities and take every security outside the universe's types out of the membership
+    tables. Idempotent; returns the symbols retyped."""
+    table = get_table(store, table_key(SECURITIES))
+    if table is None:
+        raise FileNotFoundError("no securities table in the history: run the build")
+    rows = table.to_pylist()
+    retyped = []
+    for row in rows:
+        kind = DELISTED_FUNDS.get(row["symbol"])
+        if row["type_assumed"] and kind is not None and row["security_type"] != kind.value:
+            row["security_type"] = kind.value
+            retyped.append(row["symbol"])
+    allowed = {str(t) for t in risk.universe.security_types}
+    outside = sorted(r["security"] for r in rows if r["security_type"] not in allowed)
+    if retyped:
+        put_table(store, table_key(SECURITIES), pa.Table.from_pylist(rows, SECURITY_SCHEMA))
+    for year in range(risk.history.start.year, through.year + 1):
+        members = get_table(store, membership_key(year))
+        if members is not None:
+            kept = _without(members, outside)
+            if kept.num_rows != members.num_rows:
+                put_table(store, membership_key(year), kept)
+    return sorted(retyped)
 
 
 def _year_filter(year: int) -> Any:

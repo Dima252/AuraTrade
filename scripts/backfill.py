@@ -3,7 +3,7 @@ last 2 years into Postgres. Free vendor calls only (Alpaca market data and news,
 CBOE); no orders.
 
     uv run python scripts/backfill.py all                 # discover -> bars -> build -> macro
-                                                          #   -> news -> edgar (hours; resumable)
+                                                          #   -> news -> edgar -> funds (hours)
     uv run python scripts/backfill.py bars build          # any stages, in this order
     uv run python -m auratrade.jobs.ingest --direct --session <last session>
     uv run python scripts/backfill.py postgres            # after that ingest run
@@ -32,7 +32,7 @@ from auratrade.data.macro import CboeClient
 from auratrade.data.nasdaq import NasdaqDirectoryClient
 from auratrade.data.news import AlpacaNewsClient
 from auratrade.db.engine import engine_from_settings
-from auratrade.history.build import build_history, fetch_bars
+from auratrade.history.build import build_history, fetch_bars, retype_funds
 from auratrade.history.discover import Discovery, discover
 from auratrade.history.edgar import edgar_history
 from auratrade.history.load import load_postgres
@@ -44,7 +44,7 @@ from auratrade.storage import make_store
 
 log = structlog.get_logger("backfill")
 
-STAGES = ("discover", "bars", "build", "macro", "news", "edgar", "postgres")
+STAGES = ("discover", "bars", "build", "macro", "news", "edgar", "funds", "postgres")
 ALL = STAGES[:-1]
 
 
@@ -129,6 +129,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 workers=risk.ingest.http_workers,
             )
             log.info("backfill_edgar", **edgar.details())
+        if "funds" in wanted:
+            log.info("backfill_funds", retyped=retype_funds(store, risk, through))
         if "postgres" in wanted:
             with engine.begin() as conn:
                 loaded = load_postgres(conn, store, calendar, risk, through)

@@ -19,7 +19,7 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from pathlib import Path
 
@@ -31,6 +31,9 @@ from auratrade.storage import ObjectStore
 from auratrade.strategies.registry import build_strategies
 from auratrade.strategies.watchlist import correction_spells
 from backtest import regime as bt
+from backtest.comparisons import Difference, compare
+from backtest.comparisons import Variant as CompareVariant
+from backtest.comparisons import variants as comparison_variants
 from backtest.history_scan import TUNING_END, History, TrackerRow, load_history, scan_pass, track
 from backtest.pool import (
     Listing,
@@ -262,25 +265,50 @@ def pool_inputs(
     return PoolInputs(h, results, loaded.calendar, risk), lists
 
 
+@dataclass(frozen=True, slots=True)
+class PoolRun:
+    reference: list[PoolTrade]
+    survivors: list[PoolTrade]
+    """The live rule for securities without report dates (rejected): survivors only."""
+    compared: list[tuple[CompareVariant, list[Difference], list[PoolTrade]]]
+
+
 def run_pool_step(
-    loaded: Loaded, risk: RiskConfig, variant: Variant, *, count_only: bool
-) -> list[PoolTrade]:
+    loaded: Loaded, risk: RiskConfig, variant: Variant, *, count_only: bool, compared: bool
+) -> PoolRun:
     from auratrade.jobs.simulate import _alpaca
 
     p, lists = pool_inputs(loaded, risk, variant)
     cache = MinuteCache(loaded.store, _alpaca(loaded.settings))
+    held: dict[date, dict[str, Minutes]] = {}
 
     def symbols_for(wanted: Mapping[date, set[str]]) -> Mapping[tuple[date, str], str]:
         return traded_symbols(loaded.store, wanted)
 
     def minutes_for(wanted: Mapping[date, set[str]]) -> Mapping[date, Mapping[str, Minutes]]:
-        pairs = sum(map(len, wanted.values()))
-        _log(f"minute bars wanted: {pairs} symbol-sessions over {len(wanted)} sessions")
-        if count_only:
-            raise SystemExit(0)
-        return prefetch(p, cache, wanted, log=_log)
+        missing = {d: s - held.get(d, {}).keys() for d, s in wanted.items()}
+        missing = {d: s for d, s in missing.items() if s}
+        if missing:
+            pairs = sum(map(len, missing.values()))
+            _log(f"minute bars wanted: {pairs} symbol-sessions over {len(missing)} sessions")
+            if count_only:
+                raise SystemExit(0)
+            for d, got in prefetch(p, cache, missing, log=_log).items():
+                held.setdefault(d, {}).update(got)
+        return {d: {x: held[d][x] for x in s if x in held.get(d, {})} for d, s in wanted.items()}
 
-    return run_pool(p, lists, minutes_for, symbols_for)
+    clock = time.monotonic()
+    reference = run_pool(p, lists, minutes_for, symbols_for)
+    _log(f"pool: {time.monotonic() - clock:.0f} s")
+    survivors = run_pool(replace(p, reject_without_reports=True), lists, minutes_for, symbols_for)
+    out = []
+    if compared:
+        for v in comparison_variants(risk):
+            clock = time.monotonic()
+            played = run_pool(replace(p, risk=v.change(risk)), lists, minutes_for, symbols_for)
+            out.append((v, compare(v, reference, played), played))
+            _log(f"{v.name}: {time.monotonic() - clock:.0f} s")
+    return PoolRun(reference, survivors, out)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -293,20 +321,37 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--count", action="store_true", help="pool: count the minute bars to fetch and stop"
     )
+    parser.add_argument(
+        "--no-compare", action="store_true", help="pool: the gate only, no comparisons"
+    )
     args = parser.parse_args(argv)
     clock = time.monotonic()
     risk = load_risk_config(load_runtime_settings().risk_config_path)
     loaded = _load(risk)
     h = loaded.h
     if args.step == "pool":
-        trades = run_pool_step(loaded, risk, variant_named(args.variant), count_only=args.count)
+        run = run_pool_step(
+            loaded,
+            risk,
+            variant_named(args.variant),
+            count_only=args.count,
+            compared=not args.no_compare,
+        )
         DETAIL.mkdir(parents=True, exist_ok=True)
         with (DETAIL / "pool.pickle").open("wb") as f:
-            pickle.dump(trades, f)
+            pickle.dump(run, f)
         report = args.report or POOL_REPORT
         reading = bt.kept_reading(report)
         report.write_text(
-            render_pool(trades, risk, args.variant, time.monotonic() - clock, reading),
+            render_pool(
+                run.reference,
+                risk,
+                args.variant,
+                time.monotonic() - clock,
+                reading,
+                survivors=run.survivors,
+                compared=[(v, d) for v, d, _ in run.compared],
+            ),
             encoding="utf-8",
         )
         _log(f"wrote {report}")

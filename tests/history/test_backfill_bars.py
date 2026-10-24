@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+import pyarrow as pa
 import pytest
 
 from auratrade.config import RiskConfig
@@ -13,14 +14,17 @@ from auratrade.data.macro import CboeHistory, CboeIndex
 from auratrade.data.nasdaq import Listing
 from auratrade.history.build import (
     CORRECTIONS,
+    MEMBER_SCHEMA,
     SECURITIES,
+    SECURITY_SCHEMA,
     StaleWorkError,
     build_history,
     fetch_bars,
+    retype_funds,
 )
 from auratrade.history.discover import discover, known_assets
 from auratrade.history.macro import MACRO, macro_history
-from auratrade.history.store import get_table, membership_key, read_bars, table_key
+from auratrade.history.store import get_table, membership_key, put_table, read_bars, table_key
 from auratrade.ingest.classify import SecurityType
 from auratrade.storage import LocalStore
 from tests.calendar_fixture import alpaca_times
@@ -192,3 +196,60 @@ def test_macro_history_keeps_sessions_only(tmp_path: Path) -> None:
         ("VIX3M", S[0]),
         ("VIX3M", S[1]),
     ]
+
+
+def test_retype_funds_fixes_a_history_built_before_the_list(tmp_path: Path) -> None:
+    store = LocalStore(tmp_path / "store")
+    base = {
+        "alpaca_asset_id": None,
+        "name": None,
+        "exchange": None,
+        "source": "ENUMERATED",
+        "first_session": date(2018, 1, 2),
+        "last_session": date(2020, 3, 31),
+        "active": False,
+        "bars": 100,
+        "relisted": False,
+        "listed_at": None,
+        "cik": None,
+        "sic": None,
+    }
+    rows = [
+        {
+            **base,
+            "security": "TVIX:2018",
+            "symbol": "TVIX",
+            "security_type": "COMMON",
+            "type_assumed": True,
+        },
+        {
+            **base,
+            "security": "ABC:2018",
+            "symbol": "ABC",
+            "security_type": "COMMON",
+            "type_assumed": True,
+        },
+        # A named security keeps the type its name gave it, even on a listed symbol.
+        {
+            **base,
+            "security": "a-xiv",
+            "symbol": "XIV",
+            "security_type": "COMMON",
+            "type_assumed": False,
+        },
+    ]
+    put_table(store, table_key(SECURITIES), pa.Table.from_pylist(rows, SECURITY_SCHEMA))
+    members = [
+        {"session_date": date(2019, 5, 1), "security": k}
+        for k in ("TVIX:2018", "ABC:2018", "a-xiv")
+    ]
+    put_table(store, membership_key(2019), pa.Table.from_pylist(members, MEMBER_SCHEMA))
+
+    assert retype_funds(store, RISK, date(2020, 12, 31)) == ["TVIX"]
+    types = {
+        r["symbol"]: r["security_type"] for r in get_table(store, table_key(SECURITIES)).to_pylist()
+    }
+    assert types == {"TVIX": "ETN", "ABC": "COMMON", "XIV": "COMMON"}
+    kept = get_table(store, membership_key(2019)).to_pydict()["security"]
+    assert sorted(kept) == ["ABC:2018", "a-xiv"]
+    assert retype_funds(store, RISK, date(2020, 12, 31)) == []  # idempotent

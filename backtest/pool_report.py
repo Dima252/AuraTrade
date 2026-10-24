@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 
 from auratrade.config import Regime, RiskConfig, Strategy
 from auratrade.guardrails.model import GuardrailRule, Outcome
+from backtest.comparisons import Difference, Variant, depth_buckets
 from backtest.pool import PoolTrade, Status, expectancy, rejections
 
 READING = "## Reading"
@@ -40,7 +41,14 @@ def _gate_row(name: str, trades: Iterable[PoolTrade]) -> str:
 
 
 def render_pool(
-    trades: Sequence[PoolTrade], risk: RiskConfig, variant: str, seconds: float, reading: str = ""
+    trades: Sequence[PoolTrade],
+    risk: RiskConfig,
+    variant: str,
+    seconds: float,
+    reading: str = "",
+    *,
+    survivors: Sequence[PoolTrade] = (),
+    compared: Sequence[tuple[Variant, Sequence[Difference]]] = (),
 ) -> str:
     by: dict[Strategy, list[PoolTrade]] = defaultdict(list)
     for t in trades:
@@ -86,6 +94,11 @@ def render_pool(
         _gate_row("**All**", trades),
         *(_gate_row(f"`{s.value}`", by[s]) for s in ORDER),
         "",
+        "**Survivors only** (the live rule: a security without report dates is rejected by "
+        "the earnings blackout, so almost every delisted name is out): "
+        + _survivors(survivors)
+        + ".",
+        "",
         "Open at the end: "
         + ", ".join(f"`{s.value}` {sum(t.status is Status.OPEN for t in by[s])}" for s in ORDER)
         + ".",
@@ -124,6 +137,7 @@ def render_pool(
             e = expectancy(t for t in by[s] if t.regime is g)
             cells.append(f"{_r(e.mean)} ({e.trades})")
         lines.append(f"| `{s.value}` | " + " | ".join(cells) + " |")
+    lines += ["", *_comparisons(compared), "", *_depth(trades)]
     lines += ["", *_diagnostics(trades, by)]
     lines += ["", reading.rstrip() if reading else f"{READING}\n\n(Not written yet.)", ""]
     return "\n".join(lines)
@@ -191,4 +205,75 @@ def _diagnostics(trades: Sequence[PoolTrade], by: dict[Strategy, list[PoolTrade]
         + ", ".join(f"`{s.value}` {missed[s]} of {reached[s]}" for s in ORDER)
         + ".",
     ]
+    return lines
+
+
+def _survivors(trades: Sequence[PoolTrade]) -> str:
+    if not trades:
+        return "not run"
+    e = expectancy(trades)
+    interval = "-" if e.interval is None else f"{e.interval.low:+.2f} to {e.interval.high:+.2f}"
+    return f"{_r(e.mean)} over {e.trades:,} trades ({interval})"
+
+
+def _comparisons(compared: Sequence[tuple[Variant, Sequence[Difference]]]) -> list[str]:
+    lines = [
+        "## Comparisons (tuning period only)",
+        "",
+        "Each variant changes one dimension against the reference (the defaults; for exits each "
+        "strategy's single-trader set) and re-plays the pool (`backtest/comparisons.py`). The "
+        "difference is the variant's expectancy minus the reference's, on the strategies it "
+        "changes; its 90% interval resamples whole entry sessions of both. **Beyond noise** = the "
+        "interval excludes zero. Nothing is adopted here: adoption also needs the same sign on "
+        "the holdout, which stays closed while the pool fails its gate. Cells under 30 trades "
+        "keep the default.",
+        "",
+    ]
+    if not compared:
+        return [*lines, "(Not run.)"]
+    lines += [
+        "| # | Variant | Strategies | Reference (R) | Variant (R) | Difference | 90% interval "
+        "| Beyond noise |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for v, diffs in compared:
+        for d in diffs:
+            who = "together" if d.strategy is None else f"`{d.strategy.value}`"
+            if d.strategy is None and len(diffs) == 2:
+                continue  # one strategy: its own row says it all
+            interval = (
+                "-" if d.interval is None else f"{d.interval.low:+.2f} to {d.interval.high:+.2f}"
+            )
+            noise = (
+                "too few trades"
+                if not d.enough
+                else ("**better**" if (d.difference or 0) > 0 else "**worse**")
+                if d.beyond_noise
+                else "no"
+            )
+            lines.append(
+                f"| {v.number} | {v.description} | {who} | {_r(d.reference)} "
+                f"({d.reference_trades}) | {_r(d.variant)} ({d.variant_trades}) | "
+                f"{_r(d.difference)} | {interval} | {noise} |"
+            )
+    lines += [
+        "",
+        "Not run: #1 (the code has no trigger that stays at the pivot on a gap open), #15 (the "
+        'code exempts `MomentumBreakout` from the 50-day rule, so "with" needs a code switch), '
+        "and the book-measured #9-#12, #14 and the book halves of #5 and #13 (the baseline "
+        "book's portfolio simulation isn't built).",
+    ]
+    return lines
+
+
+def _depth(trades: Sequence[PoolTrade]) -> list[str]:
+    lines = [
+        "### #19: momentum results by consolidation depth",
+        "",
+        "| Depth | Trades | Expectancy (R) |",
+        "|---|---|---|",
+    ]
+    for bucket, group in depth_buckets(trades).items():
+        e = expectancy(group)
+        lines.append(f"| {bucket} | {e.trades} | {_r(e.mean)} |")
     return lines

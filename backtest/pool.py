@@ -13,6 +13,11 @@ played under its strategy's default entry policy, exit plan and risk, for the ba
   position and cluster limits can't bind. The market's entry blocks (a half day, the crisis
   override) apply; the book's loss halts don't. The regime is the one computed the evening
   before the entry session.
+- **No report dates:** the history has EDGAR earnings dates only for securities still
+  trading (#130); live, every tracked ticker has a calendar. A security with none is read
+  as having no report within the blackout (``reject_without_reports`` False), not
+  rejected, or the pool would hold almost no delisted names. ``True`` keeps the live rule
+  (fail closed), the survivors-only figure the report shows beside it.
 - **Fills:** ``sim.trade.simulate_trade``. The entry session needs minute bars; they are
   fetched only where its daily high reaches the pivot (a stop-limit can't fill otherwise; such
   an attempt is ``NOT_REACHED``) and for every EP. Later sessions run on daily bars.
@@ -62,6 +67,8 @@ POOL_EQUITY = 5_000.0
 HORIZONS = (130, 520)
 """Sessions simulated after the entry; a trade still open is played again over the next span,
 then to the end of the data."""
+NO_REPORT_KNOWN = 10**6
+"""``next_report_in`` for a security without report dates: none falls in the blackout."""
 BOOTSTRAP_SAMPLES = 2_000
 BOOTSTRAP_CONFIDENCE = 0.90
 BOOTSTRAP_SEED = 38
@@ -159,6 +166,7 @@ class PoolInputs:
     results: Mapping[date, RegimeResult]
     calendar: Sequence[Session]
     risk: RiskConfig
+    reject_without_reports: bool = False
     days: list[date] = field(init=False)
     position: dict[date, int] = field(init=False)
     times: dict[date, Session] = field(init=False)
@@ -226,7 +234,11 @@ def facts(p: PoolInputs, listing: Listing, entry: date) -> SetupFacts:
     extension = feats.extension
     close = s.close[f.index]
     atr_value = p.atr_at(f.security, f.index)
-    next_in, last_ago = report_distances(reports(p.h, f.security), entry, p.days)
+    known = reports(p.h, f.security)
+    if known or p.reject_without_reports:
+        next_in, last_ago = report_distances(known, entry, p.days)
+    else:
+        next_in, last_ago = NO_REPORT_KNOWN, None
     return SetupFacts(
         symbol=f.setup.symbol,
         strategy=f.setup.strategy,
