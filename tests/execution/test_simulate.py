@@ -7,6 +7,7 @@ tranche 1 at 50.10 after 0.2% slippage)."""
 
 from __future__ import annotations
 
+import random
 from collections.abc import Iterable, Mapping
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -96,14 +97,22 @@ def daily(world: World, symbol: str, day: date, o: float, h: float, low: float, 
         )
 
 
-def listed(world: World, symbol: str, *, pivot: float, rank: int | None, day: date = PREV) -> None:
+def listed(
+    world: World,
+    symbol: str,
+    *,
+    pivot: float,
+    rank: int | None,
+    day: date = PREV,
+    strategy: str = "VCP_BREAKOUT",
+) -> None:
     with world.engine.begin() as conn:
         conn.execute(
             insert(WatchlistRow).values(
                 session_date=day,
                 ticker_id=world.tickers[symbol],
                 symbol=symbol,
-                strategy="VCP_BREAKOUT",
+                strategy=strategy,
                 pivot=pivot,
                 structural_stop=pivot * 0.94,
                 structure=pivot,
@@ -144,6 +153,18 @@ def market(world: World) -> World:
             )
         )
     return world
+
+
+def report(world: World, symbol: str, day: date) -> None:
+    with world.engine.begin() as conn:
+        conn.execute(
+            insert(EarningsEvent).values(
+                ticker_id=world.tickers[symbol],
+                report_date=day,
+                timing="BEFORE_OPEN",
+                source="FINNHUB",
+            )
+        )
 
 
 def cache(world: World, source: Source) -> MinuteCache:
@@ -252,6 +273,36 @@ class TestBaseline:
             "STOP_WIDTH",
         )
 
+    def test_eps_wait_for_the_morning_candidate_list(self, market: World) -> None:
+        listed(market, "NVDA", pivot=50.0, rank=1, strategy="EPISODIC_PIVOT")
+        assert run_book(market, T, Source({}))["listed"] == 0
+        assert book_rows(market) == []
+
+    def test_a_report_after_t_counts_the_sessions_ahead(self, market: World) -> None:
+        # 9 sessions after T: no blackout, and no cushion until the session before it.
+        report(market, "NVDA", date(2026, 11, 4))
+        listed(market, "NVDA", pivot=50.0, rank=1)
+        run_book(market, T, Source({T: {"NVDA": minutes("NVDA", T, BREAKOUT)}}))
+        [row] = book_rows(market)
+        assert (row.status, row.exit_rule) == ("OPEN", None)
+        report(market, "AMD", date(2026, 10, 27))  # 3 sessions after T: blacked out
+        listed(market, "AMD", pivot=100.0, rank=2)
+        run_book(market, T, Source({T: {"NVDA": minutes("NVDA", T, BREAKOUT)}}))
+        rows = {r.symbol: r for r in book_rows(market)}
+        assert rows["AMD"].findings[-1]["rule"] == "EARNINGS_BLACKOUT"
+
+    def test_uncorrelated_setups_are_not_a_cluster(self, market: World) -> None:
+        for i, symbol in enumerate(("AAPL", "META", "MSFT")):
+            rng = random.Random(i)  # noqa: S311 - test data
+            closes = [50.0]
+            for _ in range(299):
+                closes.append(closes[-1] * (1 + rng.gauss(0, 0.02)))
+            market.bars(symbol, closes, last=PREV)
+            report(market, symbol, date(2026, 9, 9))
+            listed(market, symbol, pivot=closes[-1] * 1.02, rank=i + 1)
+        out = run_book(market, T, Source({}))
+        assert out["approved"] == 3
+
     def test_no_regime_no_book(self, world: World) -> None:
         assert run_book(world, T, Source({})) == {"skipped": f"no computed regime for {PREV}"}
 
@@ -285,6 +336,43 @@ class TestScorecard:
         assert (row.verdict, row.verdict_session, row.reviews) == ("BUY", PREV, 5)
         assert (row.triggered, row.trigger_session, row.outcome) == (True, T, "OPEN")
         assert row.regime_at_trigger == "CONFIRMED_UPTREND"
+
+    def test_a_miss_is_an_attempt_and_a_trigger_is_followed_forward(self, market: World) -> None:
+        nxt = date(2026, 10, 23)
+        listed(market, "NVDA", pivot=52.0, rank=1)  # T's high of 51 doesn't reach it
+        listed(market, "NVDA", pivot=52.0, rank=1, day=T)
+        daily(market, "NVDA", nxt, 51.5, 53.0, 51.4, 52.8)
+        market.regime(nxt)
+        review = Review("NVDA", Strategy.VCP_BREAKOUT, 52.0, PREV, Verdict.SKIP, None, "v1", "m")
+        reviews = [TickerReview(market.tickers["NVDA"], review)]
+        breakout = {m: (o + 2, h + 2, lo + 2, c + 2) for m, (o, h, lo, c) in BREAKOUT.items()}
+        source = Source(
+            {
+                T: {"NVDA": minutes("NVDA", T, BREAKOUT)},
+                nxt: {"NVDA": minutes("NVDA", nxt, breakout)},
+            }
+        )
+
+        def score(day: date) -> dict[str, int]:
+            with market.engine.begin() as conn:
+                return score_verdicts(
+                    conn, load_calendar(conn), day, market.risk, cache(market, source), reviews
+                )
+
+        def unit() -> VerdictOutcomeRow:
+            with market.engine.connect() as conn:
+                [row] = objects(conn, select(VerdictOutcomeRow))
+            return row
+
+        assert score(T) == {"attempts": 1, "units": 1}
+        assert (unit().triggered, unit().outcome, unit().attempts) == (False, "MISSED", 1)
+        assert score(nxt) == {"triggered": 1, "units": 1}
+        assert (unit().triggered, unit().trigger_session, unit().verdict) == (True, nxt, "SKIP")
+        listed(market, "NVDA", pivot=52.0, rank=1, day=nxt)  # still listed: no new attempt
+        daily(market, "NVDA", date(2026, 10, 26), 52.8, 53.5, 52.5, 53.2)
+        market.regime(date(2026, 10, 26))
+        assert score(date(2026, 10, 26)) == {"followed": 1, "units": 1}
+        assert len(unit().details["result"]["marks"]) == 2
 
     def test_no_verdicts_nothing_to_score(self, market: World) -> None:
         with market.engine.begin() as conn:

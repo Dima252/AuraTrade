@@ -125,8 +125,3 @@ def result_from_json(data: dict[str, Any]) -> TradeResult:
         pnl=data["pnl"],
         marks=tuple(data["marks"]),
     )
-
-
-def shares_held(result: TradeResult) -> int:
-    bought = sum(f.shares for f in result.fills if f.kind in (FillKind.ENTRY, FillKind.TRANCHE_2))
-    return bought - sum(f.shares for f in result.fills if f.kind in (FillKind.SALE, FillKind.EXIT))

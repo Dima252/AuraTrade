@@ -59,7 +59,8 @@ class Market:
     """The calendar and the market-wide facts, the same for every symbol."""
 
     calendar: Sequence[CalendarDay]
-    """Every session the trades span, plus the evenings before them, oldest first."""
+    """Every session the trades span, the evenings before them and the sessions after them
+    that the earnings cushion looks ahead to, oldest first."""
     regimes: Mapping[date, Regime]
     """The computed regime written at each session's close."""
     crises: Mapping[date, bool]

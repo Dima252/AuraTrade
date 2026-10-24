@@ -89,9 +89,13 @@ def industries(conn: Connection, ticker_ids: Iterable[int]) -> dict[int, str]:
 
 
 def load_market(conn: Connection, calendar: MarketCalendar, start: date, last: date) -> Market:
+    """The market from ``start`` to ``last``; the calendar runs on past ``last`` (to the end
+    of the synced calendar, at most ``REPORT_HORIZON``), as the earnings cushion looks ahead."""
+    ahead = last + REPORT_HORIZON
+    end = ahead if calendar.last is None else min(calendar.last, ahead)
     days = [
         CalendarDay(s.day, s.open_at, s.close_at, s.is_early_close)
-        for s in calendar.sessions_between(start, last)
+        for s in calendar.sessions_between(start, max(end, last))
     ]
     rows = conn.execute(
         select(
@@ -472,17 +476,22 @@ def run_baseline(
     market = load_market(conn, calendar, start, session)
     calendar_days = [c.day for c in market.calendar]
 
+    # EPs come from the morning candidate list (task 5.6); until it exists the book has none.
     listed = objects(
         conn,
         select(WatchlistRow)
-        .where(WatchlistRow.session_date == prev, WatchlistRow.rank.is_not(None))
+        .where(
+            WatchlistRow.session_date == prev,
+            WatchlistRow.rank.is_not(None),
+            WatchlistRow.strategy != Strategy.EPISODIC_PIVOT.value,
+        )
         .order_by(WatchlistRow.rank),
     )
     ids = {r.ticker_id for r in rows} | {r.ticker_id for r in listed}
     days = load_days(conn, ids, start, session)
     groups = industries(conn, ids)
     replayer = Replayer(market, days, cache, risk)
-    correlation = risk.guardrails.cluster_correlation_sessions
+    correlation = risk.guardrails.cluster_correlation_sessions + 1  # closes for that many returns
 
     # The book as it stood at T-1's close.
     trades = _book_trades(rows, market)
