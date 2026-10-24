@@ -442,8 +442,9 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
         f"{_q([d.second_half_range / d.first_half_range for d in mom], 2, pct=False)}.",
         "",
         f"**`EpisodicPivot` (proxy):** gap {_q([d.gap for d in ep])}; volume "
-        f"{_q([d.volume_ratio for d in ep], 1, pct=False)} x; gap held into the close (close > "
-        f"open) on {sum(d.day_gain > d.gap for d in ep) / max(1, len(ep)):.0%}; prior 6-month move "
+        f"{_q([v for d in ep if (v := d.volume_ratio) is not None], 1, pct=False)} x; "
+        "gap held into the close (close > open) on "
+        f"{sum((d.day_gain or 0) > d.gap for d in ep) / max(1, len(ep)):.0%}; prior 6-month move "
         f"{_q([m for d in ep if (m := d.prior_moves.get(126)) is not None], 0)}.",
         "",
         "**`LeaderPullback`:** tested average "

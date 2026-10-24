@@ -34,12 +34,22 @@ from backtest import regime as bt
 from backtest.comparisons import Difference, compare
 from backtest.comparisons import Variant as CompareVariant
 from backtest.comparisons import variants as comparison_variants
-from backtest.history_scan import TUNING_END, History, TrackerRow, load_history, scan_pass, track
+from backtest.history_scan import (
+    TUNING_END,
+    Found,
+    History,
+    TrackerRow,
+    load_history,
+    scan_pass,
+    track,
+)
 from backtest.pool import (
     Listing,
+    OpeningCheck,
     PoolInputs,
     PoolTrade,
     capped_lists,
+    confirm_morning_eps,
     prefetch,
     run_pool,
     traded_symbols,
@@ -235,15 +245,28 @@ def variant_named(name: str) -> Variant:
     raise SystemExit(f"no variant {name!r}; one of {', '.join(v.name for v in VARIANTS)}")
 
 
+@dataclass(frozen=True, slots=True)
+class Candidates:
+    """The pool's setups before the lists: every strategy's, with the EPs in their morning
+    view (#143), and the regime each session computed."""
+
+    found: list[Found]
+    regimes: dict[date, Regime]
+
+
 def pool_inputs(
     loaded: Loaded, risk: RiskConfig, variant: Variant, log: Callable[[str], None] = _log
-) -> tuple[PoolInputs, dict[date, list[Listing]]]:
-    """The chosen variant's fixed point, the full scan with features and the capped lists."""
+) -> tuple[PoolInputs, Candidates]:
+    """The chosen variant's fixed point and the full scan with features. The after-close EP
+    scan feeds the breakout tracker (so the regime); the pool gets the morning EPs instead."""
     h = loaded.h
     clock = time.monotonic()
     strategies = build_strategies(risk)
     core = [s for k, s in strategies.items() if k is not Strategy.EMERGING_LEADER]
     (found,) = scan_pass(h, risk, core, [()], features=True)
+    (morning,) = scan_pass(
+        h, risk, [strategies[Strategy.EPISODIC_PIVOT]], [()], features=True, morning=True
+    )
     log(f"core scan with features: {time.monotonic() - clock:.0f} s")
     converged = fixed_points(
         h,
@@ -260,9 +283,55 @@ def pool_inputs(
         h, risk, [strategies[Strategy.EMERGING_LEADER]], [spells], features=True
     )
     results = {r.session: r for r in converged.results}
-    lists = capped_lists(h, found + emerging, regimes_of(converged.results), risk)
-    log(f"lists: {time.monotonic() - clock:.0f} s ({sum(map(len, lists.values()))} listings)")
-    return PoolInputs(h, results, loaded.calendar, risk), lists
+    pooled = [f for f in found if f.setup.strategy is not Strategy.EPISODIC_PIVOT]
+    return PoolInputs(h, results, loaded.calendar, risk), Candidates(
+        pooled + morning + emerging, regimes_of(converged.results)
+    )
+
+
+def pool_lists(
+    p: PoolInputs,
+    candidates: Candidates,
+    minutes_for: Callable[[Mapping[date, set[str]]], Mapping[date, Mapping[str, Minutes]]],
+    symbols_for: Callable[[Mapping[date, set[str]]], Mapping[tuple[date, str], str]],
+    log: Callable[[str], None] = _log,
+) -> tuple[dict[date, list[Listing]], OpeningCheck]:
+    """The morning EPs through the 09:36 volume check, then the capped lists."""
+    check = confirm_morning_eps(p, candidates.found, minutes_for, symbols_for)
+    log(
+        f"morning EPs: {check.passed} of {check.candidates} passed the opening volume "
+        f"({check.no_minutes} without minute bars)"
+    )
+    lists = capped_lists(p.h, check.kept, candidates.regimes, p.risk)
+    log(f"lists: {sum(map(len, lists.values()))} listings")
+    return lists, check
+
+
+def morning_notes(
+    p: PoolInputs, lists: Mapping[date, Sequence[Listing]], check: OpeningCheck
+) -> list[str]:
+    """The report's lines on the morning EPs (#143): the volume check and the known residual."""
+    eps = [
+        listing
+        for listings in lists.values()
+        for listing in listings
+        if listing.found.setup.strategy is Strategy.EPISODIC_PIVOT
+    ]
+    differ = 0
+    for listing in eps:
+        evening = p.previous_session(listing.scan_day)
+        before = p.results.get(evening) if evening is not None else None
+        now = p.results.get(listing.scan_day)
+        differ += before is not None and now is not None and before.regime is not now.regime
+    ratio = p.risk.strategies.EPISODIC_PIVOT.min_opening_volume_ratio
+    return [
+        f"**EPs at 09:36 (#143):** {check.candidates:,} gaps of 10% or more at the open; "
+        f"{check.passed:,} traded at least {ratio:.0%} of their prior average daily volume "
+        f"from the open to the entry, {check.no_minutes:,} had no minute bars. Their features, "
+        "price and ATR are read at the prior close. Known residual: of the "
+        f"{len(eps):,} EP listings, {differ:,} were chosen under a gap-session regime that "
+        "differs from the evening before's (the guardrails use the evening before's).",
+    ]
 
 
 @dataclass(frozen=True, slots=True)
@@ -271,6 +340,7 @@ class PoolRun:
     survivors: list[PoolTrade]
     """The live rule for securities without report dates (rejected): survivors only."""
     compared: list[tuple[CompareVariant, list[Difference], list[PoolTrade]]]
+    notes: list[str]
 
 
 def run_pool_step(
@@ -278,7 +348,7 @@ def run_pool_step(
 ) -> PoolRun:
     from auratrade.jobs.simulate import _alpaca
 
-    p, lists = pool_inputs(loaded, risk, variant)
+    p, candidates = pool_inputs(loaded, risk, variant)
     cache = MinuteCache(loaded.store, _alpaca(loaded.settings))
     held: dict[date, dict[str, Minutes]] = {}
 
@@ -297,6 +367,7 @@ def run_pool_step(
                 held.setdefault(d, {}).update(got)
         return {d: {x: held[d][x] for x in s if x in held.get(d, {})} for d, s in wanted.items()}
 
+    lists, check = pool_lists(p, candidates, minutes_for, symbols_for)
     clock = time.monotonic()
     reference = run_pool(p, lists, minutes_for, symbols_for)
     _log(f"pool: {time.monotonic() - clock:.0f} s")
@@ -308,7 +379,7 @@ def run_pool_step(
             played = run_pool(replace(p, risk=v.change(risk)), lists, minutes_for, symbols_for)
             out.append((v, compare(v, reference, played), played))
             _log(f"{v.name}: {time.monotonic() - clock:.0f} s")
-    return PoolRun(reference, survivors, out)
+    return PoolRun(reference, survivors, out, morning_notes(p, lists, check))
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -348,6 +419,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 reading,
                 survivors=run.survivors,
                 compared=[(v, d) for v, d, _ in run.compared],
+                notes=run.notes,
             ),
             encoding="utf-8",
         )

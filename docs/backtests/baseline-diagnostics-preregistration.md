@@ -40,6 +40,6 @@ The diagnostics found the EP proxy looks ahead (docs/backtests/baseline-diagnost
 - **Known residual.** EPs are still listed on the gap session's capped list, chosen under that session's computed regime; the guardrails use the regime of the evening before, as for every entry. The report counts the EP listings where the two differ.
 - **The run.** `uv run python -m backtest.baseline pool`, once, on the tuning period, with the comparisons. The gate is read as before, overall and per strategy. **The holdout stays closed.**
 - **How it is read.**
-  - If `EPISODIC_PIVOT`'s interval stays above zero... it can't have been above zero before (it was -0.03 to +0.55). So: **EPs pass** if the fixed proxy's interval excludes zero from above. Otherwise EPs fail like the other four.
+  - **EPs pass** if the fixed proxy's 90% interval excludes zero from above (before the fix it was -0.03 to +0.55, a fail). Otherwise EPs fail like the other four. *(Wording corrected after the commit; the rule is unchanged and was fixed before the run.)*
   - The fixed EP numbers replace the old ones everywhere. The old ones are kept in the report's history, labelled as looking ahead.
   - Nothing else is re-chosen from this run. The strategy discussion with the user comes after it.

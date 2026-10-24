@@ -62,6 +62,7 @@ from auratrade.regime.inputs import MacroSeries
 from auratrade.regime.pillars import TrackedBreakout
 from auratrade.storage import ObjectStore
 from auratrade.strategies.base import BaseStrategy, Setup, SymbolData
+from auratrade.strategies.episodic_pivot import EpisodicPivot
 from auratrade.strategies.ranking import Features, Fundamentals, candidate_features
 from auratrade.strategies.watchlist import corrections_for, reaction_sessions
 
@@ -219,9 +220,13 @@ def scan_pass(
     *,
     first: date = FIRST_SCANNED,
     features: bool,
+    morning: bool = False,
 ) -> list[list[Found]]:
     """``strategies`` on every member session from ``first``, once per spell set: one list of
-    setups per spell set. Each security's data is built once and shared by the spell sets."""
+    setups per spell set. Each security's data is built once and shared by the spell sets.
+
+    ``morning``: the `EpisodicPivot` view at the gap session's open (#143): ``morning`` instead
+    of ``scan``, and the features as of the prior close."""
     out: list[list[Found]] = [[] for _ in spell_sets]
     rules = BaseRules(**risk.bases.model_dump())
     for key in h.scanned:
@@ -248,8 +253,15 @@ def scan_pass(
         for found, spells in zip(out, spell_sets, strict=True):
             data = replace(base, corrections=corrections_for(s.dates, spells)) if spells else base
             for i in days:
+                at = i - 1 if morning else i
+                if at < 0:
+                    continue
                 for strategy in strategies:
-                    setup = strategy.scan(data, i)
+                    setup = (
+                        strategy.morning(data, i)
+                        if morning and isinstance(strategy, EpisodicPivot)
+                        else strategy.scan(data, i)
+                    )
                     if setup is None:
                         continue
                     found.append(
@@ -257,7 +269,7 @@ def scan_pass(
                             key,
                             i,
                             setup,
-                            _features(h, key, data, i, stages[i], risk) if features else None,
+                            _features(h, key, data, at, stages[at], risk) if features else None,
                         )
                     )
     return out

@@ -49,6 +49,7 @@ def render_pool(
     *,
     survivors: Sequence[PoolTrade] = (),
     compared: Sequence[tuple[Variant, Sequence[Difference]]] = (),
+    notes: Sequence[str] = (),
 ) -> str:
     by: dict[Strategy, list[PoolTrade]] = defaultdict(list)
     for t in trades:
@@ -80,6 +81,8 @@ def render_pool(
         lines.append(
             f"| `{strategy.value}` | " + " | ".join(f"{counts[s]:,}" for s in statuses) + " |"
         )
+    if notes:
+        lines += ["", *notes]
     lines += [
         "",
         "## The baseline gate (tuning period)",

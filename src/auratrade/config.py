@@ -1062,6 +1062,10 @@ class EpisodicPivotProxyConfig(_Strict):
 
     min_gap: Positive
     min_volume_ratio: Positive
+    """The after-close view (``scan``): the gap session's full-day volume."""
+    min_opening_volume_ratio: Positive
+    """The backtest pool's 09:36 view: the volume from the open to the entry, against the prior
+    average daily volume (#143)."""
     volume_sessions: PositiveInt
     rally_lookbacks: tuple[PositiveInt, ...] = Field(min_length=1)
     adr_sessions: PositiveInt

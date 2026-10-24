@@ -33,7 +33,7 @@ import statistics
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
-from datetime import date
+from datetime import date, timedelta
 from enum import StrEnum
 
 from auratrade.calendar.sessions import Session
@@ -220,6 +220,12 @@ def entry_day(p: PoolInputs, listing: Listing) -> date | None:
     return p.next_session(listing.scan_day)
 
 
+def known_at(f: Found) -> int:
+    """The session whose close the entry decision reads: the scan session, or for an EP, which
+    is decided at its gap session's open, the session before (#143)."""
+    return f.index - 1 if f.setup.strategy is Strategy.EPISODIC_PIVOT else f.index
+
+
 def facts(p: PoolInputs, listing: Listing, entry: date) -> SetupFacts:
     """The setup as the guardrails read it, in the entry session's traded units."""
     f = listing.found
@@ -232,8 +238,8 @@ def facts(p: PoolInputs, listing: Listing, entry: date) -> SetupFacts:
     if isinstance(f.setup.detail, EpisodicPivotDetail):
         adr = f.setup.detail.pre_gap_adr
     extension = feats.extension
-    close = s.close[f.index]
-    atr_value = p.atr_at(f.security, f.index)
+    close = s.close[known_at(f)]
+    atr_value = p.atr_at(f.security, known_at(f))
     known = reports(p.h, f.security)
     if known or p.reject_without_reports:
         next_in, last_ago = report_distances(known, entry, p.days)
@@ -346,6 +352,68 @@ def prefetch(
     return out
 
 
+def opening_volume(p: PoolInputs, day: date, minutes: Minutes) -> float:
+    """SIP volume from the open to the entry (``sim.entry_minutes``), in traded shares."""
+    open_at = p.times[day].open_at
+    end = open_at + timedelta(minutes=p.risk.sim.entry_minutes)
+    return sum(b.volume for b in minutes.sip if open_at <= b.start < end)
+
+
+def prior_average_volume(p: PoolInputs, f: Found) -> float | None:
+    """The average daily volume of the ``volume_sessions`` before the gap, in the gap session's
+    traded shares (the history is split-adjusted to today)."""
+    s = p.h.series[f.security]
+    n = p.risk.strategies.EPISODIC_PIVOT.volume_sessions
+    if f.index < n:
+        return None
+    k = scale(p.h, f.security, s.dates[f.index])
+    return statistics.fmean(s.volume[f.index - n : f.index]) / k
+
+
+@dataclass(frozen=True, slots=True)
+class OpeningCheck:
+    """The morning EPs through the 09:36 volume check (#143)."""
+
+    kept: list[Found]
+    candidates: int
+    passed: int
+    no_minutes: int
+
+
+def confirm_morning_eps(
+    p: PoolInputs,
+    found: Sequence[Found],
+    minutes_for: Callable[[Mapping[date, set[str]]], Mapping[date, Mapping[str, Minutes]]],
+    symbols_for: Callable[[Mapping[date, set[str]]], Mapping[tuple[date, str], str]],
+) -> OpeningCheck:
+    """``found`` with each `EpisodicPivot` kept only if its opening volume reaches
+    ``min_opening_volume_ratio`` x the prior average; the other strategies pass through."""
+    eps = [f for f in found if f.setup.strategy is Strategy.EPISODIC_PIVOT]
+    by_day: dict[date, set[str]] = defaultdict(set)
+    for f in eps:
+        by_day[p.h.series[f.security].dates[f.index]].add(f.security)
+    symbols = symbols_for(by_day)
+    wanted: dict[date, set[str]] = defaultdict(set)
+    for (day, _), symbol in symbols.items():
+        wanted[day].add(symbol)
+    minutes = minutes_for(wanted)
+    ratio = p.risk.strategies.EPISODIC_PIVOT.min_opening_volume_ratio
+    kept = [f for f in found if f.setup.strategy is not Strategy.EPISODIC_PIVOT]
+    passed = no_minutes = 0
+    for f in eps:
+        day = p.h.series[f.security].dates[f.index]
+        traded = symbols.get((day, f.security))
+        bars = minutes.get(day, {}).get(traded) if traded is not None else None
+        average = prior_average_volume(p, f)
+        if bars is None or average is None:
+            no_minutes += bars is None
+            continue
+        if reached(opening_volume(p, day, bars), ratio * average):
+            kept.append(f)
+            passed += 1
+    return OpeningCheck(kept, len(eps), passed, no_minutes)
+
+
 # --- Playing a trade --------------------------------------------------------------------------
 
 
@@ -377,13 +445,13 @@ def play(
     adr = feats.adr if feats is not None else None
     if isinstance(detail, EpisodicPivotDetail):
         adr = detail.pre_gap_adr
-    atr_value = p.atr_at(f.security, f.index)
+    atr_value = p.atr_at(f.security, known_at(f))
     setup = TradeSetup(
         entry=approved,
         code_pivot=f.setup.pivot * k,
         atr=None if atr_value is None else atr_value * k,
         adr=adr,
-        dollar_volume=p.dollar_volume_at(f.security, f.index),
+        dollar_volume=p.dollar_volume_at(f.security, known_at(f)),
         history=history,
     )
     symbol = SymbolDays(dates, bars, reports(p.h, f.security))

@@ -79,3 +79,23 @@ def test_no_prior_volume_rejects() -> None:
     silent = [Bar(open=20, high=20.2, low=19.8, close=20, volume=0) for _ in range(60)]
     assert EpisodicPivot(RISK).scan(data([*silent, GAP])) is None
     assert EpisodicPivot(RISK).scan(data([GAP])) is None
+
+
+def test_the_morning_view_has_the_gap_and_nothing_after_the_open() -> None:
+    light = Bar(open=22.5, high=24, low=22, close=23.5, volume=100)  # under 3x for the day
+    setup = EpisodicPivot(RISK).morning(data([*QUIET, light]))
+    assert setup is not None
+    assert (setup.pivot, setup.structural_stop, setup.session) == (22.5, 20, T)
+    detail = setup.detail
+    assert isinstance(detail, EpisodicPivotDetail)
+    assert detail.gap == pytest.approx(0.125)
+    assert (detail.volume_ratio, detail.day_gain) == (None, None)
+    assert EpisodicPivot(RISK).scan(data([*QUIET, light])) is None
+    facts = EpisodicPivot(RISK).build_llm_context(setup)
+    assert (facts["volume_ratio"], facts["day_gain"]) == (None, None)
+
+
+def test_the_morning_view_still_needs_the_gap_and_the_history() -> None:
+    small = Bar(open=21.8, high=24, low=21.5, close=23.5, volume=4000)
+    assert EpisodicPivot(RISK).morning(data([*QUIET, small])) is None
+    assert EpisodicPivot(RISK).morning(data([GAP])) is None

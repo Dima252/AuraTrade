@@ -15,10 +15,11 @@ from auratrade.sim.minutes import Bar, MinuteCache
 from auratrade.sim.trade import TradeOutcome, TradeResult
 from auratrade.storage import LocalStore
 from backtest import pool as bp
-from backtest.baseline import Loaded, pool_inputs
+from backtest.baseline import Loaded, morning_notes, pool_inputs, pool_lists
 from backtest.history_scan import load_history
 from backtest.regime_search import Variant
 from tests.ingest.fakes import RISK
+from tests.strategies.scan_data import with_strategy
 from tests.test_baseline_backtest import _session, found, history, series
 from tests.test_scan_real_data import build_synthetic
 from tests.test_smoke_real_data import SESSIONS, weekdays
@@ -73,8 +74,8 @@ def test_expectancy_of_closed_trades_with_its_interval() -> None:
 
 class DailyMinutes:
     """Each symbol's minute bars made from its raw daily bar: a 0.5% dip for 3 minutes, the open
-    to minute 30, a rise to
-    the high by noon, the low at 14:00, then the close."""
+    to minute 30, a rise to the high by noon, the low at 14:00, then the close. The first 6
+    minutes trade heavily, as a gap's open does (the morning EPs' 09:36 volume check)."""
 
     def __init__(self, bars: Mapping[tuple[str, date], tuple[float, float, float, float]]) -> None:
         self.bars = bars
@@ -96,7 +97,8 @@ class DailyMinutes:
             path += [hi + (lo - hi) * k / 120 for k in range(1, 121)]
             path += [lo + (c - lo) * k / 120 for k in range(1, 121)]
             out[symbol] = [
-                Bar(start + timedelta(minutes=m), p, p, p, p, 10_000) for m, p in enumerate(path)
+                Bar(start + timedelta(minutes=m), p, p, p, p, 1_000_000 if m < 6 else 10_000)
+                for m, p in enumerate(path)
             ]
         return out
 
@@ -110,8 +112,8 @@ def test_the_pool_end_to_end_on_a_synthetic_history(tmp_path: Path) -> None:
     reports = [(d, EarningsTiming.AFTER_CLOSE) for d in SESSIONS[20::63]]
     hist.earnings = dict.fromkeys(hist.series, reports)
     loaded = Loaded(hist, days, store, None)  # type: ignore[arg-type]
-    p, lists = pool_inputs(loaded, risk, Variant(2, -2, 2, 8), log=lambda _: None)
-    assert lists
+    p, candidates = pool_inputs(loaded, risk, Variant(2, -2, 2, 8), log=lambda _: None)
+    assert candidates.found
     raw = {
         (hist.symbol(k), d): (s.open[i], s.high[i], s.low[i], s.raw_close[i])
         for k, s in hist.series.items()
@@ -126,6 +128,10 @@ def test_the_pool_end_to_end_on_a_synthetic_history(tmp_path: Path) -> None:
     def minutes_for(wanted: Mapping[date, set[str]]) -> Mapping[date, Mapping[str, bp.Minutes]]:
         return bp.prefetch(p, cache, wanted)
 
+    lists, check = pool_lists(p, candidates, minutes_for, symbols_for, log=lambda _: None)
+    assert lists
+    assert check.passed == check.candidates == 1  # the synthetic gap opens on heavy volume
+    assert morning_notes(p, lists, check)[0].startswith("**EPs at 09:36")
     trades = bp.run_pool(p, lists, minutes_for, symbols_for)
     assert trades
     statuses = Counter(t.status for t in trades)
@@ -139,9 +145,70 @@ def test_the_pool_end_to_end_on_a_synthetic_history(tmp_path: Path) -> None:
             assert t.result is not None
             assert t.result.risk > 0
     fetched = {d for d, _, _ in source.calls}
-    assert fetched <= {t.entry_day for t in trades}
+    gap_days = {
+        hist.series[f.security].dates[f.index]
+        for f in candidates.found
+        if f.setup.strategy is Strategy.EPISODIC_PIVOT
+    }
+    assert fetched <= {t.entry_day for t in trades} | gap_days
     # A re-run reads every bar from the cache.
     calls = len(source.calls)
     again = bp.run_pool(p, lists, minutes_for, symbols_for)
     assert len(source.calls) == calls
     assert [t.status for t in again] == [t.status for t in trades]
+
+
+def minute_bars(day: date, volumes: Sequence[float]) -> bp.Minutes:
+    open_at = _session(day).open_at
+    sip = [Bar(open_at + timedelta(minutes=m), 10, 10, 10, 10, v) for m, v in enumerate(volumes)]
+    return bp.Minutes(sip, None)
+
+
+def test_an_ep_reads_the_close_before_its_gap_the_rest_their_scan_session() -> None:
+    assert bp.known_at(found("X", 5, 10.0, Strategy.EPISODIC_PIVOT)) == 4
+    assert bp.known_at(found("X", 5, 10.0)) == 5
+
+
+def test_the_opening_volume_counts_the_open_to_the_entry() -> None:
+    p = bp.PoolInputs(history(DAYS, {}), {}, [_session(d) for d in DAYS], RISK)
+    assert RISK.sim.entry_minutes == 6
+    # Minutes 0-5 count (09:30-09:35); the 09:36 bar and later don't.
+    bars = minute_bars(DAYS[0], [100] * 6 + [1_000_000] * 3)
+    assert bp.opening_volume(p, DAYS[0], bars) == 600
+
+
+def test_the_prior_average_volume_in_traded_shares() -> None:
+    risk = with_strategy(RISK, "EPISODIC_PIVOT", volume_sessions=3)
+    s = series("X", DAYS, [10.0] * 10, [10.5] * 10)
+    s.volume[2:5] = s.volume.__class__("d", [3e6, 6e6, 9e6])
+    s.raw_close[5:] = s.raw_close[5:].__class__("d", [20.0] * 5)  # traded 2x the adjusted price
+    p = bp.PoolInputs(history(DAYS, {"X": s}), {}, [_session(d) for d in DAYS], risk)
+    ep = found("X", 5, 10.0, Strategy.EPISODIC_PIVOT)
+    assert bp.prior_average_volume(p, ep) == 3e6  # (3 + 6 + 9) / 3 million, halved
+    assert bp.prior_average_volume(p, found("X", 2, 10.0, Strategy.EPISODIC_PIVOT)) is None
+
+
+def test_morning_eps_pass_on_their_opening_volume_only() -> None:
+    risk = with_strategy(RISK, "EPISODIC_PIVOT", volume_sessions=3)
+    data = {k: series(k, DAYS, [10.0] * 10, [10.5] * 10) for k in ("A", "B", "C")}
+    p = bp.PoolInputs(history(DAYS, data), {}, [_session(d) for d in DAYS], risk)
+    loud = found("A", 5, 10.0, Strategy.EPISODIC_PIVOT)
+    quiet = found("B", 5, 10.0, Strategy.EPISODIC_PIVOT)
+    missing = found("C", 5, 10.0, Strategy.EPISODIC_PIVOT)
+    vcp = found("C", 5, 10.0)
+    day = DAYS[5]
+    bars = {
+        "A": minute_bars(day, [50_000] * 6),  # 300k = 30% of the 1M average
+        "B": minute_bars(day, [30_000] * 6),  # 180k = 18%
+    }
+
+    def symbols_for(wanted: Mapping[date, set[str]]) -> Mapping[tuple[date, str], str]:
+        assert wanted == {day: {"A", "B", "C"}}
+        return {(day, k): k for k in ("A", "B", "C")}
+
+    def minutes_for(wanted: Mapping[date, set[str]]) -> Mapping[date, Mapping[str, bp.Minutes]]:
+        return {day: bars}
+
+    check = bp.confirm_morning_eps(p, [loud, quiet, missing, vcp], minutes_for, symbols_for)
+    assert check.kept == [vcp, loud]
+    assert (check.candidates, check.passed, check.no_minutes) == (3, 1, 1)

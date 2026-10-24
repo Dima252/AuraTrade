@@ -25,7 +25,7 @@ from auratrade.sim.minutes import MinuteCache
 from auratrade.sim.sessions import Minutes
 from auratrade.sim.trade import FillKind
 from backtest import regime as bt
-from backtest.baseline import CHOSEN, Loaded, _load, pool_inputs, variant_named
+from backtest.baseline import CHOSEN, Loaded, _load, pool_inputs, pool_lists, variant_named
 from backtest.comparisons import MIN_CELL_TRADES, Difference, difference
 from backtest.pool import (
     PoolInputs,
@@ -547,7 +547,7 @@ def main() -> int:
     clock = time.monotonic()
     risk = load_risk_config(load_runtime_settings().risk_config_path)
     loaded: Loaded = _load(risk)
-    p, lists = pool_inputs(loaded, risk, variant_named(CHOSEN))
+    p, candidates = pool_inputs(loaded, risk, variant_named(CHOSEN))
     cache = MinuteCache(loaded.store, _alpaca(loaded.settings))
     held: dict[date, dict[str, Minutes]] = {}
 
@@ -562,6 +562,7 @@ def main() -> int:
                 held.setdefault(d, {}).update(got)
         return {d: {x: held[d][x] for x in s if x in held.get(d, {})} for d, s in wanted.items()}
 
+    lists, _ = pool_lists(p, candidates, minutes_for, symbols_for)
     reference = run_pool(p, lists, minutes_for, symbols_for)
     _log(f"reference: {time.monotonic() - clock:.0f} s")
     free = run_pool(replace(p, risk=zero_cost(risk)), lists, minutes_for, symbols_for)
