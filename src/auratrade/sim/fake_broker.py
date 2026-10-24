@@ -23,8 +23,9 @@ its answer (a dropped connection), or kill the process after it returns (`Proces
 `BaseException`, so no `except Exception` in the order code swallows it). An order can be
 deleted behind the order layer's back.
 
-There is no fill model: tests fill orders with `fill`. Task 3.6 extends this module into the
-simulator (README §5.12: one simulator, one fake broker).
+Orders fill two ways: by hand with `fill`, or through the fill model with `play`, which runs
+one bar (minute or daily) over the symbol's open orders with `sim.fills`, the same functions the
+trade simulator uses (README §5.12: one simulator, one fake broker).
 """
 
 from __future__ import annotations
@@ -61,6 +62,13 @@ from auratrade.execution.broker import (
     TimeInForce,
     WashTradeError,
 )
+from auratrade.sim.fills import (
+    PriceBar,
+    entry_on_bar,
+    sell_fill,
+    sell_limit_on_bar,
+    stop_on_bar,
+)
 
 # Open sell orders in these statuses hold their shares.
 _RESERVING = frozenset(
@@ -74,9 +82,18 @@ _RESERVING = frozenset(
     }
 )
 _REPLACEABLE = frozenset({OrderStatus.NEW, OrderStatus.HELD, OrderStatus.PARTIALLY_FILLED})
+# Orders working in the market: what a bar can fill.
+_WORKING = frozenset({OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED})
 
 PartialCancelLeg = Literal["cancel", "activate"]
 FaultKind = Literal["fail", "drop", "kill"]
+
+
+def _level(price: float | None) -> float:
+    """An order's limit or stop price, which every order of its type has."""
+    if price is None:  # pragma: no cover - the broker refuses such orders on submit
+        raise AssertionError("order without its price level")
+    return price
 
 
 class ProcessKilled(BaseException):
@@ -125,6 +142,8 @@ class FakeBroker:
         self._prices: dict[str, float | None] = {}
         self._faults: list[_Fault] = []
         self._ids = itertools.count(1)
+        self._resting: set[str] = set()
+        """Buys that jumped past their limit and now rest as limit orders."""
 
     # --- test controls -----------------------------------------------------------------
 
@@ -167,6 +186,48 @@ class FakeBroker:
             for leg_id in self._orders[order_id].leg_ids:
                 if self._orders[leg_id].order.status is OrderStatus.HELD:
                     self._set(leg_id, status=self._resting_status())
+
+    def play(self, symbol: str, bar: PriceBar, *, slip: float = 0.0) -> list[str]:
+        """One bar through the fill model: entries first, then stops (so a leg the bar
+        activated can stop out on it: the pessimistic order), then sells. The symbol's price
+        becomes the bar's close. Returns the ids of the orders filled."""
+        filled: list[str] = []
+
+        def working(match: Callable[[BrokerOrder], bool]) -> list[BrokerOrder]:
+            return [
+                o
+                for o in self.all_orders()
+                if o.symbol == symbol and o.status in _WORKING and match(o)
+            ]
+
+        for o in working(lambda o: o.side is Side.BUY):
+            trigger = o.stop_price if o.type is OrderType.STOP_LIMIT else None
+            step = entry_on_bar(
+                bar,
+                trigger=trigger,
+                limit=_level(o.limit_price),
+                slip=slip,
+                resting=o.id in self._resting,
+            )
+            if step.resting:
+                self._resting.add(o.id)
+            if step.price is not None:
+                self.fill(o.id, price=step.price)
+                filled.append(o.id)
+        for o in working(lambda o: o.is_sell_stop):
+            if (price := stop_on_bar(bar, stop=_level(o.stop_price), slip=slip)) is not None:
+                self.fill(o.id, price=price)
+                filled.append(o.id)
+        for o in working(lambda o: o.side is Side.SELL and not o.is_sell_stop):
+            if o.type is OrderType.MARKET:
+                price = sell_fill(bar.open, slip)
+            else:
+                price = sell_limit_on_bar(bar, limit=_level(o.limit_price), slip=slip)
+            if price is not None:
+                self.fill(o.id, price=price)
+                filled.append(o.id)
+        self._prices[symbol] = bar.close
+        return filled
 
     def open_market(self) -> None:
         self.market_open = True

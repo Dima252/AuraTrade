@@ -447,6 +447,7 @@ class RiskConfig(_Strict):
     strategies: StrategiesConfig
     ranking: RankingConfig
     charts: ChartsConfig
+    sim: SimConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1144,6 +1145,35 @@ class ChartsConfig(_Strict):
     weekly_height: PositiveInt
     weekly_averages: dict[str, TrailSpec] = Field(min_length=1)
     dpi: PositiveInt
+
+
+class SlippageTier(_Strict):
+    min_dollar_volume: Annotated[float, Field(ge=0.0)]
+    fraction: Fraction
+
+
+class SimConfig(_Strict):
+    """The fill simulator (README §5.12; task 3.6); see ``auratrade.sim``."""
+
+    # Highest dollar volume first; the last tier (from 0) catches everything below.
+    slippage: tuple[SlippageTier, ...] = Field(min_length=1)
+    # Minutes after the open that entries go in: 09:36, or 09:51 on the delayed-SIP opening
+    # range when IEX printed nothing in the first minutes (#109).
+    entry_minutes: PositiveInt
+    delayed_entry_minutes: PositiveInt
+    volume_sessions: PositiveInt
+    long_average_sessions: PositiveInt
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        floors = [tier.min_dollar_volume for tier in self.slippage]
+        if floors != sorted(floors, reverse=True) or len(set(floors)) != len(floors):
+            raise ValueError("slippage tiers must go from the highest dollar volume down")
+        if floors[-1] != 0:
+            raise ValueError("the last slippage tier must start at 0")
+        if self.delayed_entry_minutes <= self.entry_minutes:
+            raise ValueError("delayed_entry_minutes must be after entry_minutes")
+        return self
 
 
 class StrategiesConfig(_Strict):
