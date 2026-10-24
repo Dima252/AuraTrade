@@ -7,10 +7,11 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from auratrade.config import Strategy
+from auratrade.config import RiskConfig, Strategy
 from auratrade.data.alpaca_data import DailyBar
 from auratrade.history.build import build_history, fetch_bars
 from auratrade.history.macro import MACRO, MACRO_SCHEMA
+from auratrade.history.read import known_on
 from auratrade.history.securities import KnownAsset
 from auratrade.history.store import put_table, table_key
 from auratrade.indicators.earnings import EarningsTiming
@@ -34,7 +35,9 @@ def gapper(fake: FakeBars) -> None:
         series[day] = DailyBar("GAPR", day, p, p * 1.01, p * 0.99, p, volume)
 
 
-def test_scan_run_on_a_synthetic_history(tmp_path: Path) -> None:
+def build_synthetic(tmp_path: Path) -> tuple[LocalStore, RiskConfig]:
+    """Five waves, a gapper and the two index ETFs through the backfill's own stages, with flat
+    VIX and VIX3M."""
     fake = FakeBars()
     for i, drift in enumerate((0.003, 0.002, 0.001, 0.0, -0.001)):
         wave(fake, f"S{i}", drift, 9 + i)
@@ -65,7 +68,11 @@ def test_scan_run_on_a_synthetic_history(tmp_path: Path) -> None:
         for series, value in (("VIX", 15.0), ("VIX3M", 17.0))
     ]
     put_table(store, table_key(MACRO), pa.Table.from_pylist(macro, MACRO_SCHEMA))
+    return store, risk
 
+
+def test_scan_run_on_a_synthetic_history(tmp_path: Path) -> None:
+    store, risk = build_synthetic(tmp_path)
     run = scans.run_scans(store, SESSIONS, dict.fromkeys(SESSIONS, 390), risk)
     assert len(run.regimes) == len(SESSIONS) - 1
     assert run.exceptions == []
@@ -99,6 +106,6 @@ def test_reaction_sessions_and_point_in_time_fundamentals() -> None:
     assert scans.reaction_sessions(days, reports) == frozenset({1, 3, 5})
     q1, q2 = Fundamentals(0.3, None), Fundamentals(0.5, 0.2)
     quarters = [(date(2021, 2, 2), q1), (date(2021, 2, 5), q2)]
-    assert scans.known_on(quarters, date(2021, 2, 2)) is None  # filed that day: not yet
-    assert scans.known_on(quarters, date(2021, 2, 3)) == q1
-    assert scans.known_on(quarters, date(2021, 2, 8)) == q2
+    assert known_on(quarters, date(2021, 2, 2)) is None  # filed that day: not yet
+    assert known_on(quarters, date(2021, 2, 3)) == q1
+    assert known_on(quarters, date(2021, 2, 8)) == q2

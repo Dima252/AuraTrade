@@ -30,7 +30,8 @@ reverses up by ``swing_reversal``).
   then a lower bound, and the caller treats it conservatively.
 """
 
-from collections.abc import Sequence
+from collections import deque
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Self
@@ -261,22 +262,13 @@ def _as_base(
     )
 
 
-def detect_bases(
-    bars: Sequence[OHLCV], rules: BaseRules, state: BaseCountState | None = None
-) -> BaseScan:
-    """Detect and count bases over ``bars`` (split-adjusted, oldest first).
-
-    ``state`` carries the count from earlier history. Without it the first base is stage 1 with
-    an unreliable count; pass ``BaseCountState.at_listing()`` when the bars start at the IPO.
-    A completed base depends only on bars up to its end, so any prefix of the history yields the
-    same completed bases.
-    """
-    state = state or BaseCountState()
-    if not bars:
-        return BaseScan(bases=(), forming=None, state=state)
-
-    found: list[PriceBase] = []
+def _walk(
+    bars: Sequence[OHLCV], rules: BaseRules, state: BaseCountState, found: list[PriceBase]
+) -> Iterator[tuple[_Candidate, BaseCountState]]:
+    """The one forward pass: after each bar, the open candidate and the counting state outside
+    it. Completed bases and long-enough failed candidates go to ``found``."""
     cand = _Candidate(0, bars[0], rules.swing_reversal)
+    yield cand, state
     for t in range(1, len(bars)):
         bar = bars[t]
         pivot = cand.pivot(rules.pivot_min_position)
@@ -301,6 +293,7 @@ def detect_bases(
                     high_since_last=_higher(state.high_since_last, cand.high),
                 )
             cand = _Candidate(t, bar, rules.swing_reversal)
+            yield cand, state
             continue
 
         cand.add(t, bar)
@@ -326,7 +319,25 @@ def detect_bases(
                 reset_pending=True,
             )
             cand = _Candidate(t, bar, rules.swing_reversal)
+        yield cand, state
 
+
+def detect_bases(
+    bars: Sequence[OHLCV], rules: BaseRules, state: BaseCountState | None = None
+) -> BaseScan:
+    """Detect and count bases over ``bars`` (split-adjusted, oldest first).
+
+    ``state`` carries the count from earlier history. Without it the first base is stage 1 with
+    an unreliable count; pass ``BaseCountState.at_listing()`` when the bars start at the IPO.
+    A completed base depends only on bars up to its end, so any prefix of the history yields the
+    same completed bases.
+    """
+    state = state or BaseCountState()
+    if not bars:
+        return BaseScan(bases=(), forming=None, state=state)
+
+    found: list[PriceBase] = []
+    ((cand, state),) = deque(_walk(bars, rules, state, found), maxlen=1)
     forming = _as_base(
         cand,
         end=None,
@@ -339,3 +350,18 @@ def detect_bases(
     if forming.sessions >= rules.min_sessions:
         found.append(forming)
     return BaseScan(bases=tuple(found), forming=forming, state=state)
+
+
+def forming_stages(
+    bars: Sequence[OHLCV], rules: BaseRules, state: BaseCountState | None = None
+) -> list[tuple[int, bool]]:
+    """The forming base's stage and count reliability at each bar, as ``detect_bases`` over
+    ``bars[: t + 1]`` gives them in ``forming``, in one pass: the base count a setup on session
+    ``t`` reads (point in time)."""
+    if not bars:
+        return []
+    out = []
+    for cand, at in _walk(bars, rules, state or BaseCountState(), []):
+        stage, reliable, _, _ = _count(cand, at, rules)
+        out.append((stage, reliable))
+    return out
