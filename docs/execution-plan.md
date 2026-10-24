@@ -57,7 +57,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 3.5a Position plans engine *(built out of plan order with the user's approval)*
 - [x] 3.5b Guardrails, sizing, triggers, risk multiplier (pure; the 3.8 backtest needs them) *(`guardrails/` (`evaluate`, the 09:36 `orders` check and one module per rule family, 100% branch coverage enforced in CI), `execution/triggers.py`, `execution/sizing.py`, `journal/risk_multiplier.py`, `journal/numbers.py`; `risk.yaml` `entries:` and the per-strategy stop widths. Readings #140. Nothing live calls them yet: Phase 5 wires them; the skeleton keeps its own sizing)*
 - [x] 3.6 Simulator and fake broker (`sim/`) *(`sim/fills.py` (the fill model), `sim/trade.py` (one approved entry played forward through the live order check, plans and tranche-2 code; R, marks, fills), the fake broker's `play`; `risk.yaml` `sim:` (liquidity-tiered slippage). Pure, 100% branch coverage on the new modules. Readings #141. Nothing calls it yet: 3.7 builds the baseline book and the scorecard on it)*
-- [ ] 3.7 Watchlist, baseline book, breakout tracker, verdict scorecard
+- [x] 3.7 Watchlist, baseline book, breakout tracker, verdict scorecard *(migration 0007; `scan` writes the full scan to `daily_watchlist` (`strategies/watchlist.py`); `simulate` (`journal/evening.py`) runs the breakout tracker, the baseline book (decided from T-1's list through the guardrails, re-played each evening from minute bars cached in S3) and the scorecard plumbing; `regime` reads the tracker. Checked on real `dev` data inside a rolled-back transaction. Readings #142)*
 - [ ] 3.8 Baseline backtest (choose defaults) + re-run 2.4 with leadership health
 
 **Phase 4: LLM layer**

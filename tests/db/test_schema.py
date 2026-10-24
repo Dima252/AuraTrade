@@ -49,6 +49,10 @@ TABLES = {
     "orders",
     "trade_journal",
     "account_snapshots",
+    "daily_watchlist",
+    "baseline_signals",
+    "breakout_tracker",
+    "verdict_outcomes",
 }
 
 

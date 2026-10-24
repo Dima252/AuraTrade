@@ -144,7 +144,7 @@ def test_every_function_reads_only_its_parameter_path(template: Any) -> None:
 def test_only_storage_jobs_reach_the_bucket(template: Any) -> None:
     for spec in FUNCTIONS:
         assert ("s3:PutObject" in policy_text(template, spec.job)) is spec.storage, spec.job
-    assert {f.job for f in FUNCTIONS if f.storage} == {"post_market", "ingest"}
+    assert {f.job for f in FUNCTIONS if f.storage} == {"post_market", "ingest", "simulate"}
 
 
 def test_the_bucket_is_private_and_kept(template: Any) -> None:

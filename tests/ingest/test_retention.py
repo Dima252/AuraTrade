@@ -16,6 +16,10 @@ from tests.ingest.fakes import add_ticker, small_risk, sync_calendar
 THU = date(2026, 10, 15)
 
 
+# A stand-in for the output tables (the real ones need every column filled).
+OUTPUT = (("scan_output", "session_date"), ("llm_decisions", "session_date"))
+
+
 def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
     aaa_id = "00000000-0000-0000-0000-000000000001"
     calendar = sync_calendar(pg_engine)
@@ -38,9 +42,9 @@ def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
                 for d in days
             ],
         )
-        conn.execute(text("CREATE TABLE daily_watchlist (session_date date, symbol text)"))
+        conn.execute(text("CREATE TABLE scan_output (session_date date, symbol text)"))
         conn.execute(
-            text("INSERT INTO daily_watchlist VALUES ('2026-06-01', 'OLD'), ('2026-10-14', 'NEW')")
+            text("INSERT INTO scan_output VALUES ('2026-06-01', 'OLD'), ('2026-10-14', 'NEW')")
         )
     storage = LocalStore(tmp_path)
     # The backfill already wrote the first session, with a security Postgres never held.
@@ -62,7 +66,7 @@ def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
     risk = small_risk(archive_after_sessions=63, db_size_limit_mb=1)
     try:
         with pg_engine.begin() as conn:
-            report = run_retention(conn, storage, calendar, risk, THU)
+            report = run_retention(conn, storage, calendar, risk, THU, output_tables=OUTPUT)
         window = days[-20:]
         assert report.bars_before == window[0]
         assert report.bars_pruned == len(days) - 20
@@ -73,9 +77,9 @@ def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
                 .all()
             )
             assert kept == window
-            left = conn.execute(text("SELECT symbol FROM daily_watchlist")).scalars().all()
+            left = conn.execute(text("SELECT symbol FROM scan_output")).scalars().all()
         assert left == ["NEW"]
-        assert report.archived == {"daily_watchlist": 1}  # the other output tables don't exist yet
+        assert report.archived == {"scan_output": 1}  # llm_decisions doesn't exist yet
         assert report.over_alert  # any real database is over a 1 MB limit
         first = days[0]
         archived = pq.read_table(
@@ -96,12 +100,10 @@ def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
             },
             delisted,
         ]
-        assert storage.list("parquet/daily_watchlist/") == [
-            "parquet/daily_watchlist/2026-10-15.parquet"
-        ]
+        assert storage.list("parquet/scan_output/") == ["parquet/scan_output/2026-10-15.parquet"]
         with pg_engine.begin() as conn:
-            again = run_retention(conn, storage, calendar, risk, THU)
-        assert (again.bars_pruned, again.archived) == (0, {"daily_watchlist": 0})
+            again = run_retention(conn, storage, calendar, risk, THU, output_tables=OUTPUT)
+        assert (again.bars_pruned, again.archived) == (0, {"scan_output": 0})
     finally:
         with pg_engine.begin() as conn:
-            conn.execute(text("DROP TABLE daily_watchlist"))
+            conn.execute(text("DROP TABLE scan_output"))

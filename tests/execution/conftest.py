@@ -14,12 +14,20 @@ import pytest
 import structlog
 from sqlalchemy import Engine, insert, update
 
-from auratrade.config import RiskConfig, Settings, TradingMode, load_risk_config
+from auratrade.config import Regime, RiskConfig, Settings, TradingMode, load_risk_config
 from auratrade.db.flags import TRADING_ENABLED
-from auratrade.db.models import DailyBar, MarketSession, Signal, SystemFlag, Ticker
+from auratrade.db.models import (
+    DailyBar,
+    MarketRegimeRow,
+    MarketSession,
+    Signal,
+    SystemFlag,
+    Ticker,
+)
 from auratrade.execution.lock import OrderLock
 from auratrade.execution.runtime import ExecutionDeps
 from auratrade.jobs.base import NY, JobContext, JobSpec
+from auratrade.regime.state import RegimeState
 from auratrade.sim.fake_broker import FakeBroker
 from auratrade.storage import LocalStore
 
@@ -156,6 +164,30 @@ class World:
         ]
         with self.engine.begin() as conn:
             conn.execute(insert(DailyBar).values(rows))
+
+    def regime(self, day: date, label: str = "CONFIRMED_UPTREND") -> None:
+        """A computed regime row for ``day`` (the scan selects tonight's list by it)."""
+        with self.engine.begin() as conn:
+            conn.execute(
+                insert(MarketRegimeRow).values(
+                    session_date=day,
+                    index_trend=1,
+                    breadth=1,
+                    volatility=0,
+                    distribution=0,
+                    leadership=0,
+                    score=2,
+                    computed_regime=label,
+                    effective_regime=label,
+                    crisis=False,
+                    follow_through_day=False,
+                    no_ftd=False,
+                    sessions_in_state=5,
+                    expiration_session=False,
+                    state=RegimeState(Regime(label), seq=10, entered_seq=5).to_json(),
+                    risk_hash=self.risk.config_hash,
+                )
+            )
 
     def set_flag(self, name: str, value: bool) -> None:
         with self.engine.begin() as conn:
