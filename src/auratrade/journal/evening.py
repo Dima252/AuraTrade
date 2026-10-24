@@ -588,7 +588,7 @@ def run_baseline(
 
     conn.execute(delete(BaselineSignalRow).where(BaselineSignalRow.session_date == session))
     new: list[tuple[int, Stored]] = []
-    convictions = baseline.convictions(items)
+    convictions = baseline.convictions([item.score for item in items])
     for w, conviction, decision in zip(listed, convictions, evaluation.decisions, strict=True):
         approved = decision.approved if isinstance(decision.approved, ApprovedEntry) else None
         stored = (

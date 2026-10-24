@@ -41,12 +41,12 @@ class Listed:
     score: float
 
 
-def convictions(listed: Sequence[Listed]) -> list[int]:
+def convictions(scores: Sequence[float]) -> list[int]:
     """The top quarter by quality score (rounded up) at 4, the rest at 3."""
-    top = math.ceil(len(listed) / 4)
-    order = sorted(range(len(listed)), key=lambda i: -listed[i].score)
+    top = math.ceil(len(scores) / 4)
+    order = sorted(range(len(scores)), key=lambda i: -scores[i])
     best = set(order[:top])
-    return [TOP_CONVICTION if i in best else OTHER_CONVICTION for i in range(len(listed))]
+    return [TOP_CONVICTION if i in best else OTHER_CONVICTION for i in range(len(scores))]
 
 
 def proposals(listed: Sequence[Listed]) -> list[Entry]:
@@ -59,7 +59,9 @@ def proposals(listed: Sequence[Listed]) -> list[Entry]:
             risk=None,
             conviction=conviction,
         )
-        for item, conviction in zip(listed, convictions(listed), strict=True)
+        for item, conviction in zip(
+            listed, convictions([item.score for item in listed]), strict=True
+        )
     ]
 
 
