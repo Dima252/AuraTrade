@@ -337,9 +337,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             count_only=args.count,
             compared=not args.no_compare,
         )
-        DETAIL.mkdir(parents=True, exist_ok=True)
-        with (DETAIL / "pool.pickle").open("wb") as f:
-            pickle.dump(run, f)
         report = args.report or POOL_REPORT
         reading = bt.kept_reading(report)
         report.write_text(
@@ -355,6 +352,15 @@ def main(argv: Sequence[str] | None = None) -> int:
             encoding="utf-8",
         )
         _log(f"wrote {report}")
+        # The variants' changes are closures: keep their names with the trades.
+        DETAIL.mkdir(parents=True, exist_ok=True)
+        saved = {
+            "reference": run.reference,
+            "survivors": run.survivors,
+            "compared": {v.name: played for v, _, played in run.compared},
+        }
+        with (DETAIL / "pool.pickle").open("wb") as f:
+            pickle.dump(saved, f)
         return 0
     report = args.report or REGIME_REPORT
     converged, summaries, chosen, _ = run_regime(h, risk)

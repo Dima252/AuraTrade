@@ -70,14 +70,22 @@ Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~
 
 The user chose (2026-10-24): **3.8 before deploying 3.7**: `paper` stays on the 1.8 build until the acceptance's 10 sessions are in (early November), then `alembic upgrade head` on `paper` and `cdk deploy`. The **base count** is computed inside 3.8 from the whole Parquet history; keeping the live `bases` table current is a follow-up task. Step 1 done: the pre-registration, `docs/backtests/baseline-preregistration.md`, committed before any 3.8 code ran on real data (the order of work, the definitions, the gate, the 19 comparisons, the regime re-run's search space and targets).
 
-**Steps 1-4 run (2026-10-24). STOPPED at the gate; waiting on the user.**
-- **Regime** (`python -m backtest.baseline regime`, docs/backtests/regime-5-pillar.md): the pre-registered rule chose `cu+2_corr-2_c2_dist8` (`risk.yaml` plus `correction_2`). It passes 3 of the 5 targets; the misses are 14 switches in the worst year and 54% `CONFIRMED_UPTREND` in 2019. Not frozen.
-- **The pool fails the baseline gate on the tuning period** (`python -m backtest.baseline pool`, docs/backtests/baseline.md): -0.03R a trade, 90% interval -0.12 to +0.08. It is -0.11R without the assumed-type securities. Only EPs pass, on outliers that include two ETNs. **The holdout is not opened.** The comparisons and the book haven't been run.
-- **Found on the way:**
-  - The pullback gate's tested-EMA bug (fixed, c5856aa).
-  - Dead ETNs typed `COMMON` (`type_assumed`) in the history universe.
-  - The earnings blackout rejects every security without EDGAR dates, so the pool is nearly survivors-only.
-- **For the user:** what to change or test before Phase 4 (README §15 gate; plan 3.8 "If it doesn't [pass], Phase 4 doesn't start until the user has decided").
+**Steps 1-4 run (2026-10-24). STOPPED at the gate; waiting on the user.** Branch `phase-3/baseline-backtest` (pushed, no PR).
+- **Regime** (`uv run python -m backtest.baseline regime`, about 6 min; docs/backtests/regime-5-pillar.md): the pre-registered rule chose `cu+2_corr-2_c2_dist8` (`risk.yaml` plus `correction_2`). It passes 3 of the 5 targets; the misses are 14 switches in the worst year and 54% `CONFIRMED_UPTREND` in 2019. Not frozen in `risk.yaml`.
+- **Data fixes** (7e3fc62):
+  - Dead ETNs and ETFs typed `COMMON` are retyped (`DELISTED_FUNDS`; `scripts/backfill.py funds`, already applied to the local history).
+  - Securities without EDGAR report dates are no longer rejected by the blackout in the pool; the live rule is kept as the "survivors only" figure.
+- **Pool and comparisons** (`uv run python -m backtest.baseline pool`, about 30 min on cached minute bars; docs/backtests/baseline.md):
+  - **The gate fails:** -0.10R a trade (90% -0.16 to -0.03) over 4,154 trades, and every strategy fails. EPs are +0.23R (-0.03 to +0.55); survivors only, -0.07R.
+  - **No comparison turns the pool positive.** Exit and plan changes move it by hundredths of an R. Momentum improves most with climax sales (-0.51 -> -0.22).
+  - Not run: #1, #15 and the book-measured comparisons (no portfolio simulator yet).
+  - **The holdout is still closed.**
+- **Fixed on the way:** the pullback gate's tested-EMA bug (c5856aa, live 3.7 code).
+- **Next (the user's call):** what to change or test before Phase 4. Options to discuss:
+  - rethink the entries (the losses are in the entries, not the exits);
+  - build the book simulator for the drawdown comparisons;
+  - investigate EPs alone with a cleaner proxy;
+  - or pause the build.
 
 ### Task 3.7: done (2026-10-24, #142)
 
