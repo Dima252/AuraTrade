@@ -1,23 +1,100 @@
-"""`simulate` (evening chain, after `ingest`; README §3, §5.12): a placeholder until task 3.7.
+"""`simulate` (evening chain, after `ingest`, before `regime`; README §3, §5.12).
 
-The baseline book, the breakout tracker and the verdict scorecard arrive with the simulator
-(3.6-3.7). Until then this link only keeps the chain whole, so `regime` and the skeleton's `scan`
-run after `ingest` (the chain needs every predecessor to succeed).
+    uv run python -m auratrade.jobs.simulate --session 2026-10-23 --dry-run
+
+On session T's bars:
+1. **Breakout tracker:** T's triggers of T-1's full scan (every setup, ungated) and every
+   5-session result that is now complete, so `regime`'s leadership-health pillar sees results
+   through T.
+2. **Baseline book:** decides T's entries from T-1's capped list (rank order, through the
+   guardrails), then simulates them and every open baseline trade through T from minute bars
+   fetched for its symbols only (cached in the object store).
+3. **Verdict scorecard:** plays every Analyst verdict forward under the default plan. Verdicts
+   arrive in Phase 4 (`setups`); until then there are none to score.
+
+Nothing is written when T's data isn't COMPLETE (fail closed). The job places no orders, so
+`--dry-run` changes nothing here.
 """
 
 from __future__ import annotations
 
 import sys
+import time
+from collections.abc import Callable, Sequence
+from datetime import date
 
+from sqlalchemy import Connection, Engine
+
+from auratrade.calendar.sessions import MarketCalendar, load_calendar
+from auratrade.config import Settings
+from auratrade.db.engine import engine_from_settings
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
+from auratrade.journal.evening import TickerReview, run_baseline, score_verdicts, track_breakouts
+from auratrade.sim.minutes import MinuteCache, MinuteSource
+from auratrade.storage import ObjectStore, make_store
+
+type Reviews = Callable[[Connection, MarketCalendar, date], Sequence[TickerReview]]
 
 
-def run(ctx: JobContext) -> JobOutput:
-    ctx.log.info("simulate_placeholder", built_in="task 3.7")
-    return {"placeholder": "nothing to simulate until task 3.7"}
+def _no_reviews(_conn: Connection, _calendar: MarketCalendar, _day: date) -> list[TickerReview]:
+    # The Analyst's verdicts (`setups`) arrive in Phase 4 (task 4.4).
+    return []
 
 
-JOB = JobSpec(name="simulate", policy=GuardPolicy.EVENING, run=run)
+def _alpaca(settings: Settings) -> MinuteSource:
+    from auratrade.data.alpaca_data import AlpacaDataClient, alpaca_http
+
+    if settings.alpaca_api_key is None or settings.alpaca_secret_key is None:
+        raise RuntimeError("ALPACA_API_KEY / ALPACA_SECRET_KEY not set")
+    return AlpacaDataClient(
+        alpaca_http(
+            settings.alpaca_api_key.get_secret_value(),
+            settings.alpaca_secret_key.get_secret_value(),
+        )
+    )
+
+
+def make_job(
+    *,
+    engine_factory: Callable[[Settings], Engine] = engine_from_settings,
+    store_factory: Callable[[Settings], ObjectStore] = make_store,
+    source_factory: Callable[[Settings], MinuteSource] = _alpaca,
+    reviews: Reviews = _no_reviews,
+) -> JobSpec:
+    def run(ctx: JobContext) -> JobOutput:
+        engine = engine_factory(ctx.settings)
+        started = time.monotonic()
+        with engine.connect() as conn:
+            calendar = load_calendar(conn)
+        session = calendar.session_for(ctx.session_date)
+        if session is None or session.data_status != "COMPLETE":
+            status = None if session is None else session.data_status
+            ctx.log.warning("simulate_skipped", data_status=status)
+            return {"skipped": f"data status {status}"}
+        cache = MinuteCache(store_factory(ctx.settings), source_factory(ctx.settings))
+        seconds: dict[str, float] = {}
+        with engine.begin() as conn:
+            tracker = track_breakouts(conn, calendar, ctx.session_date, ctx.risk)
+        seconds["tracker"] = round(time.monotonic() - started, 1)
+        with engine.begin() as conn:
+            book = run_baseline(conn, calendar, ctx.session_date, ctx.risk, cache)
+        seconds["baseline"] = round(time.monotonic() - started - sum(seconds.values()), 1)
+        with engine.begin() as conn:
+            scored = score_verdicts(
+                conn,
+                calendar,
+                ctx.session_date,
+                ctx.risk,
+                cache,
+                reviews(conn, calendar, ctx.session_date),
+            )
+        seconds["scorecard"] = round(time.monotonic() - started - sum(seconds.values()), 1)
+        return {"tracker": tracker, "baseline": book, "scorecard": scored, "seconds": seconds}
+
+    return JobSpec(name="simulate", policy=GuardPolicy.EVENING, run=run)
+
+
+JOB = make_job()
 handler = lambda_handler(JOB)
 
 if __name__ == "__main__":

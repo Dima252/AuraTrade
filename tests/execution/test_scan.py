@@ -5,13 +5,15 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
+import pytest
 from sqlalchemy import insert, select
 
-from auratrade.db.models import Mismatch, Signal
+from auratrade.db.models import Mismatch, Signal, WatchlistRow
 from auratrade.execution.signals import History, expire_signals, lookback_sessions, scan
 from auratrade.indicators.bars import Bar
-from auratrade.jobs import analyst_submit, simulate
+from auratrade.jobs import analyst_submit
 from auratrade.jobs import scan as scan_job
+from auratrade.regime.inputs import MissingDataError
 from tests.execution.conftest import World
 
 RISING = {"NVDA": 0.004, "AMD": 0.003, "MSFT": 0.002, "AAPL": 0.0, "META": -0.002}
@@ -65,6 +67,7 @@ def run_scan(world: World, session: date) -> dict[str, object]:
 def test_the_scan_job_writes_tomorrows_signals(world: World) -> None:
     for symbol, step in RISING.items():
         world.bars(symbol, closes(step))
+    world.regime(date(2026, 10, 21))
     with world.engine.begin() as conn:
         conn.execute(insert(Mismatch).values(kind="RECONCILIATION", symbol="AMD"))
     out = run_scan(world, date(2026, 10, 21))
@@ -75,6 +78,33 @@ def test_the_scan_job_writes_tomorrows_signals(world: World) -> None:
         row = conn.execute(select(Signal.symbol, Signal.session_date, Signal.rank)).one()
     assert tuple(row) == ("NVDA", date(2026, 10, 22), 1)
     assert run_scan(world, date(2026, 10, 21))["signals"] == 0  # a re-run adds nothing
+
+
+def test_the_full_scan_writes_the_watchlist(world: World) -> None:
+    for symbol, step in RISING.items():
+        world.bars(symbol, closes(step))
+    world.regime(date(2026, 10, 21))
+    out = run_scan(world, date(2026, 10, 21))
+    watchlist = out["watchlist"]
+    assert isinstance(watchlist, dict)
+    assert watchlist["regime"] == "CONFIRMED_UPTREND"
+    with world.engine.connect() as conn:
+        rows = conn.execute(select(WatchlistRow.symbol, WatchlistRow.rank)).all()
+    assert len(rows) == watchlist["setups"]
+    assert sum(r.rank is not None for r in rows) == watchlist["ranked_count"]
+    run_scan(world, date(2026, 10, 21))  # a re-run replaces the session's rows
+    with world.engine.connect() as conn:
+        assert len(conn.execute(select(WatchlistRow.id)).all()) == len(rows)
+
+
+def test_without_a_regime_the_full_scan_fails_after_the_skeletons_signals(world: World) -> None:
+    for symbol, step in RISING.items():
+        world.bars(symbol, closes(step))
+    with pytest.raises(MissingDataError, match="no computed regime"):
+        run_scan(world, date(2026, 10, 21))
+    with world.engine.connect() as conn:
+        assert conn.execute(select(Signal.symbol)).scalars().all() == ["NVDA", "AMD"]
+        assert conn.execute(select(WatchlistRow.id)).all() == []
 
 
 def test_the_scan_job_writes_nothing_on_incomplete_data(world: World) -> None:
@@ -92,6 +122,6 @@ def test_old_pending_signals_expire(world: World) -> None:
     assert statuses == {"NVDA": "EXPIRED", "AMD": "PENDING"}
 
 
-def test_the_chain_placeholders_succeed(world: World) -> None:
-    for job in (simulate.JOB, analyst_submit.JOB):
-        assert "placeholder" in dict(job.run(world.context(job.name)) or {})
+def test_the_chain_placeholder_succeeds(world: World) -> None:
+    job = analyst_submit.JOB
+    assert "placeholder" in dict(job.run(world.context(job.name)) or {})

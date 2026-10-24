@@ -17,7 +17,7 @@ Breakouts = Callable[[date], Sequence[TrackedBreakout]]
 
 
 def _no_breakouts(_: date) -> Sequence[TrackedBreakout]:
-    # The breakout tracker arrives in task 3.7; until then leadership health scores 0.
+    # Replays and tests without a tracker: leadership health scores 0.
     return ()
 
 

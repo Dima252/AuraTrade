@@ -61,10 +61,12 @@ FUNCTIONS: tuple[Function, ...] = (
     Function("post_market", 1024, 900, retries=2, storage=True),
     Function("stop_guard", 1024, 300),
     Function("ingest", 3008, 900, storage=True),
-    Function("simulate", 512, 60),
+    # Minute bars for its symbols only (cached in S3), then every open simulated trade re-played.
+    Function("simulate", 1024, 600, storage=True),
     Function("regime", 1024, 300),
-    # The scan holds about two years of bars for the whole universe in memory.
-    Function("scan", 3008, 300),
+    # The scan holds about two years of bars for the whole universe in memory; since 3.7 it
+    # also runs every strategy scan over them (the full watchlist).
+    Function("scan", 3008, 900),
     Function("analyst_submit", 512, 60),
     Function("watchdog", 512, 120),
 )
