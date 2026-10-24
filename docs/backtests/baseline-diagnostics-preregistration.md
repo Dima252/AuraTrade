@@ -27,3 +27,19 @@ Everything runs on the reference pool of docs/backtests/baseline.md (same regime
 3. **A candidate fix** must come from an informative split, have a source behind it (Minervini, O'Neil or Kullamägi apply that filter, or README §15's liquidity reasoning), and on its own make the pool's tuning interval exclude zero from above. At most two are proposed. None is adopted here: each goes to the user, and if approved it is pre-registered as a variant, the pool re-run, and it is checked on the holdout when the holdout is opened once.
 4. **A bug** (D9, or anything in D2-D8 that the code shouldn't be able to produce) is fixed first, with a test, then the pool and this diagnostic are re-run before anything else is read.
 5. **Built in:** if costs are ruled out, no split is informative and D9 finds the setups faithful, the report says so plainly: the setups as specified don't pay in this universe after costs, and the decision goes back to the user.
+
+## Addendum (2026-10-24): the EP proxy fix, fixed before it runs
+
+The diagnostics found the EP proxy looks ahead (docs/backtests/baseline-diagnostics.md, Reading 2). The user approved option A the same day. Written before the fixed pool runs:
+
+- **What changes, for the pool only.** An EP candidate is what is known at 09:36 on the gap session:
+  - the gap at the open (open >= 10% above the prior close, as before);
+  - the opening volume: the SIP minute bars from the open to the entry (09:30-09:35, `sim.entry_minutes`) must reach **25%** of the prior 50 sessions' average daily volume (`strategies.EPISODIC_PIVOT.min_opening_volume_ratio: 0.25`). The full-day 3x volume rule is no longer applied to the pool's candidates;
+  - its ranking features, price and ATR from the **prior close**, not the gap session's.
+- **What doesn't change.** The evening scan (the gap session on 3x full-day volume) stays for the breakout tracker and the evening watchlist, which read it after the close; so the regime run and its chosen variant don't change. Every other strategy's candidates are unchanged.
+- **Known residual.** EPs are still listed on the gap session's capped list, chosen under that session's computed regime; the guardrails use the regime of the evening before, as for every entry. The report counts the EP listings where the two differ.
+- **The run.** `uv run python -m backtest.baseline pool`, once, on the tuning period, with the comparisons. The gate is read as before, overall and per strategy. **The holdout stays closed.**
+- **How it is read.**
+  - If `EPISODIC_PIVOT`'s interval stays above zero... it can't have been above zero before (it was -0.03 to +0.55). So: **EPs pass** if the fixed proxy's interval excludes zero from above. Otherwise EPs fail like the other four.
+  - The fixed EP numbers replace the old ones everywhere. The old ones are kept in the report's history, labelled as looking ahead.
+  - Nothing else is re-chosen from this run. The strategy discussion with the user comes after it.
