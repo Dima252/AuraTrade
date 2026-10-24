@@ -750,3 +750,180 @@ class AccountSnapshot(Base):
     risk_multiplier: Mapped[float | None] = mapped_column(Double)
     details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
     created_at: Mapped[datetime] = _created()
+
+
+# --- Watchlist, baseline book, breakout tracker, scorecard (task 3.7, README §5.12, §10) -------
+
+TRADE_OUTCOMES = ("SKIPPED", "MISSED", "OPEN", "CLOSED")
+BASELINE_STATUSES = ("REJECTED", *TRADE_OUTCOMES)
+VERDICTS = ("BUY", "WATCH", "SKIP")
+
+
+class WatchlistRow(Base):
+    """Session T's full, uncapped scan (README §5.3): every setup with its score; ``rank`` is
+    its place in the capped list (None: not selected). The breakout tracker reads every row,
+    the baseline book the ranked ones. 90 days in Postgres, then Parquet (README §10)."""
+
+    __tablename__ = "daily_watchlist"
+    __table_args__ = (
+        UniqueConstraint("session_date", "ticker_id", "strategy"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(_in("regime", REGIMES), name="regime"),
+        CheckConstraint("0 < structural_stop AND structural_stop < pivot", name="levels"),
+        CheckConstraint("rank IS NULL OR rank >= 1", name="rank"),
+        Index("ix_daily_watchlist_session_rank", "session_date", "rank"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    session_date: Mapped[date] = mapped_column(Date)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    pivot: Mapped[float] = mapped_column(Double)
+    structural_stop: Mapped[float] = mapped_column(Double)
+    # What a re-review is keyed on (`strategies.verdict_cache.structure`).
+    structure: Mapped[float] = mapped_column(Double)
+    score: Mapped[float] = mapped_column(Double)
+    rank: Mapped[int | None] = mapped_column(SmallInteger)
+    # The computed regime the selection used (it governs session T+1).
+    regime: Mapped[str] = mapped_column(Text)
+    # What the guardrails and the simulator read, as of session T.
+    close: Mapped[float] = mapped_column(Double)
+    atr: Mapped[float | None] = mapped_column(Double)
+    adr: Mapped[float | None] = mapped_column(Double)
+    sma_50: Mapped[float | None] = mapped_column(Double)
+    dollar_volume: Mapped[float | None] = mapped_column(Double)
+    base_stage: Mapped[int | None] = mapped_column(SmallInteger)
+    base_reliable: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    industry: Mapped[str | None] = mapped_column(Text)
+    components: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    # The features and the strategy's own facts (the Analyst's compact context, 4.3).
+    facts: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    chart_keys: Mapped[list[str]] = mapped_column(JSONB, server_default=text("'[]'"))
+    risk_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _created()
+
+
+class BreakoutRow(Base):
+    """A trigger of the full scan, ungated, and its result 5 sessions later (README §5.12);
+    the leadership-health pillar reads the complete ones. 90 days in Postgres (README §10)."""
+
+    __tablename__ = "breakout_tracker"
+    __table_args__ = (
+        UniqueConstraint("ticker_id", "strategy", "trigger_session"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(
+            "(result_session IS NULL) = (above_trigger IS NULL) "
+            "AND (result_session IS NULL) = (result_close IS NULL)",
+            name="result",
+        ),
+        CheckConstraint("pivot > 0 AND trigger_close > 0", name="prices"),
+        Index("ix_breakout_tracker_trigger_session", "trigger_session"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    # The scan that listed it (T-1) and the session that triggered it (T).
+    watchlist_session: Mapped[date] = mapped_column(Date)
+    trigger_session: Mapped[date] = mapped_column(Date)
+    pivot: Mapped[float] = mapped_column(Double)
+    trigger_close: Mapped[float] = mapped_column(Double)
+    result_session: Mapped[date | None] = mapped_column(Date)
+    result_close: Mapped[float | None] = mapped_column(Double)
+    above_trigger: Mapped[bool | None] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class BaselineSignalRow(Base):
+    """One shadow-book proposal (README §5.12): rejected by the guardrails, or approved and
+    simulated from its entry session through ``sim/``, re-played each evening. Kept forever."""
+
+    __tablename__ = "baseline_signals"
+    __table_args__ = (
+        UniqueConstraint("session_date", "ticker_id"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(_in("regime", REGIMES), name="regime"),
+        CheckConstraint(_in("status", BASELINE_STATUSES), name="status"),
+        CheckConstraint("(status = 'REJECTED') = (risk_amount IS NULL)", name="approved"),
+        CheckConstraint(f"exit_rule IS NULL OR {_in('exit_rule', PLAN_RULES)}", name="exit_rule"),
+        Index("ix_baseline_signals_status", "status"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    # The scan session whose list it came from (T-1) and its entry session (T).
+    decided_session: Mapped[date] = mapped_column(Date)
+    session_date: Mapped[date] = mapped_column(Date)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    rank: Mapped[int] = mapped_column(SmallInteger)
+    conviction: Mapped[int] = mapped_column(SmallInteger)
+    regime: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(Text)
+    # The guardrails' findings (clips, or the rejection), then the 09:36 check's.
+    findings: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, server_default=text("'[]'"))
+    pivot: Mapped[float] = mapped_column(Double)
+    stop: Mapped[float] = mapped_column(Double)
+    risk_amount: Mapped[float | None] = mapped_column(Double)
+    # The approved entry (`guardrails.evaluate.ApprovedEntry`) and the simulator's inputs.
+    entry: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    # The simulation so far (`sim.trade.TradeResult`).
+    sessions_simulated: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    shares: Mapped[int | None] = mapped_column(Integer)
+    risk_dollars: Mapped[float | None] = mapped_column(Double)
+    pnl: Mapped[float | None] = mapped_column(Double)
+    r_multiple: Mapped[float | None] = mapped_column(Double)
+    exit_session: Mapped[date | None] = mapped_column(Date)
+    exit_rule: Mapped[str | None] = mapped_column(Text)
+    result: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    risk_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()
+
+
+class VerdictOutcomeRow(Base):
+    """One scorecard unit (README §5.12): a setup (ticker, strategy, structure) labelled with
+    the verdict in force at its trigger, or its last verdict, played forward under the default
+    plan. Small, kept forever."""
+
+    __tablename__ = "verdict_outcomes"
+    __table_args__ = (
+        UniqueConstraint("ticker_id", "strategy", "structure"),
+        CheckConstraint(_in("strategy", STRATEGIES), name="strategy"),
+        CheckConstraint(_in("verdict", VERDICTS), name="verdict"),
+        CheckConstraint(f"outcome IS NULL OR {_in('outcome', TRADE_OUTCOMES)}", name="outcome"),
+        CheckConstraint("triggered = (trigger_session IS NOT NULL)", name="triggered"),
+        CheckConstraint("reviews >= 1", name="reviews"),
+        CheckConstraint(f"exit_rule IS NULL OR {_in('exit_rule', PLAN_RULES)}", name="exit_rule"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"))
+    symbol: Mapped[str] = mapped_column(Text)
+    strategy: Mapped[str] = mapped_column(Text)
+    structure: Mapped[float] = mapped_column(Double)
+    # The labelling verdict and its tags.
+    verdict: Mapped[str] = mapped_column(Text)
+    conviction: Mapped[int | None] = mapped_column(SmallInteger)
+    verdict_session: Mapped[date] = mapped_column(Date)
+    prompt_version: Mapped[str] = mapped_column(Text)
+    model: Mapped[str] = mapped_column(Text)
+    reviews: Mapped[int] = mapped_column(SmallInteger)
+    first_review_session: Mapped[date] = mapped_column(Date)
+    last_review_session: Mapped[date] = mapped_column(Date)
+    triggered: Mapped[bool] = mapped_column(Boolean, server_default=text("false"))
+    trigger_session: Mapped[date | None] = mapped_column(Date)
+    regime_at_trigger: Mapped[str | None] = mapped_column(Text)
+    # The last attempt's outcome: SKIPPED or MISSED before a fill, OPEN or CLOSED after.
+    outcome: Mapped[str | None] = mapped_column(Text)
+    attempts: Mapped[int] = mapped_column(SmallInteger, server_default=text("0"))
+    # R after each scorecard horizon, keyed by its sessions ("5", "10", "20").
+    r_after: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    r_final: Mapped[float | None] = mapped_column(Double)
+    exit_rule: Mapped[str | None] = mapped_column(Text)
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()

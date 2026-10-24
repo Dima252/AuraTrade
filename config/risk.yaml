@@ -475,6 +475,9 @@ sim:  # README §5.12 fill model (task 3.6); see auratrade.sim. Provisional unti
   volume_sessions: 50                # the average volume the plan rules compare with
   long_average_sessions: 200         # the climax "far above the 200-day" signal
 
+watchlist:  # README §5.3 the evening's full scan (task 3.7); see auratrade.strategies.watchlist
+  atr_sessions: 14                   # the ATR stored with each setup (stop-width floor and caps)
+
 baseline:  # README §5.12 shadow baseline book (task 3.7); see auratrade.journal.baseline
   start_equity: 5000                 # the paper account's capital (#122)
 

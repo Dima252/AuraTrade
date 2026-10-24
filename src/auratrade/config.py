@@ -448,6 +448,7 @@ class RiskConfig(_Strict):
     ranking: RankingConfig
     charts: ChartsConfig
     sim: SimConfig
+    watchlist: WatchlistConfig
     baseline: BaselineConfig
     scorecard: ScorecardConfig
 
@@ -1184,6 +1185,13 @@ class StrategiesConfig(_Strict):
     EPISODIC_PIVOT: EpisodicPivotProxyConfig
     LEADER_PULLBACK: LeaderPullbackConfig
     EMERGING_LEADER: EmergingLeaderConfig
+
+
+class WatchlistConfig(_Strict):
+    """The evening's full scan (README §5.3; task 3.7); see ``strategies.watchlist``."""
+
+    # The ATR stored with each setup: the guardrails' stop-width floor and ATR caps read it.
+    atr_sessions: PositiveInt
 
 
 class BaselineConfig(_Strict):

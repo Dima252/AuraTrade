@@ -48,13 +48,13 @@ from auratrade.history.read import (
     load_series,
 )
 from auratrade.history.store import get_table, table_key
-from auratrade.indicators.earnings import EarningsTiming, reaction_session
+from auratrade.indicators.earnings import EarningsTiming
 from auratrade.indicators.relative_strength import percentile_ranks
 from auratrade.regime.classifier import classify
 from auratrade.regime.inputs import LoadedData, MacroSeries, build_inputs
 from auratrade.regime.state import RegimeState
 from auratrade.storage import ObjectStore
-from auratrade.strategies.base import Correction, Setup, SymbolData
+from auratrade.strategies.base import Setup, SymbolData
 from auratrade.strategies.emerging_leader import EmergingDetail
 from auratrade.strategies.episodic_pivot import EpisodicPivotDetail
 from auratrade.strategies.leader_pullback import PullbackDetail
@@ -71,6 +71,7 @@ from auratrade.strategies.registry import build_strategies
 from auratrade.strategies.trend_template import rs_scores
 from auratrade.strategies.vcp_breakout import VcpDetail
 from auratrade.strategies.verdict_cache import CachedVerdict, needs_review, structure
+from auratrade.strategies.watchlist import correction_spells, corrections_for, reaction_sessions
 
 REPORT = REPO_ROOT / "docs" / "backtests" / "scans.md"
 DETAIL = REPO_ROOT / "var" / "scans"
@@ -182,39 +183,6 @@ def replay_regime(
     return out
 
 
-def correction_spells(regimes: Mapping[date, Regime]) -> list[tuple[date, date | None]]:
-    """Each `CORRECTION` spell's first and last session (``None`` if still open at the end)."""
-    spells: list[tuple[date, date | None]] = []
-    start: date | None = None
-    previous: date | None = None
-    for day in sorted(regimes):
-        if regimes[day] is Regime.CORRECTION:
-            start = start or day
-        elif start is not None:
-            spells.append((start, previous))
-            start = None
-        previous = day
-    if start is not None:
-        spells.append((start, None))
-    return spells
-
-
-def corrections_for(
-    dates: Sequence[date], spells: Sequence[tuple[date, date | None]]
-) -> tuple[Correction, ...]:
-    """The spells in one security's bar positions (spells outside its bars are dropped)."""
-    out = []
-    for start, end in spells:
-        first = bisect.bisect_left(dates, start)
-        if first == len(dates):
-            continue
-        last = None if end is None else bisect.bisect_right(dates, end) - 1
-        if last is not None and last < first:
-            continue
-        out.append(Correction(first, last))
-    return tuple(out)
-
-
 def earnings_by_security(store: ObjectStore) -> dict[str, list[tuple[date, EarningsTiming]]]:
     table = get_table(store, table_key(EARNINGS))
     rows = [] if table is None else table.select(["security", "report_date", "timing"]).to_pylist()
@@ -223,21 +191,6 @@ def earnings_by_security(store: ObjectStore) -> dict[str, list[tuple[date, Earni
         if row["timing"]:
             out[row["security"]].append((row["report_date"], EarningsTiming(row["timing"].lower())))
     return out
-
-
-def reaction_sessions(
-    dates: Sequence[date], reports: Sequence[tuple[date, EarningsTiming]]
-) -> frozenset[int]:
-    """Bar positions of the sessions that react to each report; a report on a day without a
-    bar reacts on the next session, like one after the close."""
-    out = set()
-    for day, timing in reports:
-        i = bisect.bisect_left(dates, day)
-        on_session = i < len(dates) and dates[i] == day
-        j = reaction_session(i, timing) if on_session else i
-        if j < len(dates):
-            out.add(j)
-    return frozenset(out)
 
 
 def fundamentals_by_security(store: ObjectStore) -> dict[str, list[tuple[date, Fundamentals]]]:

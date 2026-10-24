@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pyarrow as pa
 
-from auratrade.config import Regime, Strategy
+from auratrade.config import Strategy
 from auratrade.data.alpaca_data import DailyBar
 from auratrade.history.build import build_history, fetch_bars
 from auratrade.history.macro import MACRO, MACRO_SCHEMA
@@ -16,7 +16,6 @@ from auratrade.history.store import put_table, table_key
 from auratrade.indicators.earnings import EarningsTiming
 from auratrade.ingest.classify import SecurityType
 from auratrade.storage import LocalStore
-from auratrade.strategies.base import Correction
 from auratrade.strategies.ranking import Fundamentals
 from scripts import scan_real_data as scans
 from tests.ingest.fakes import RISK, FakeBars
@@ -86,20 +85,6 @@ def test_scan_run_on_a_synthetic_history(tmp_path: Path) -> None:
     assert (tmp_path / "detail" / "setups.csv").read_text(encoding="utf-8").count("\n") == len(
         run.found
     ) + 1
-
-
-def test_correction_spells_and_their_positions() -> None:
-    days = [date(2020, 3, d) for d in range(2, 14)]
-    labels = [Regime.CONFIRMED_UPTREND] * 2 + [Regime.CORRECTION] * 3 + [Regime.EARLY_UPTREND] * 4
-    labels += [Regime.CORRECTION] * 3
-    spells = scans.correction_spells(dict(zip(days, labels, strict=True)))
-    assert spells == [(days[2], days[4]), (days[9], None)]
-    # A security listed from the 4th session: the first spell is cut to its bars.
-    assert scans.corrections_for(days[3:], spells) == (Correction(0, 1), Correction(6, None))
-    # One that stopped trading before the second spell keeps only the first.
-    assert scans.corrections_for(days[:6], spells) == (Correction(2, 4),)
-    # One that starts after a spell ended drops it.
-    assert scans.corrections_for(days[6:], spells) == (Correction(3, None),)
 
 
 def test_reaction_sessions_and_point_in_time_fundamentals() -> None:
