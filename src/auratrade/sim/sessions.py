@@ -14,6 +14,7 @@
   no known next report, before the window estimated from the last one.
 - **RS line:** close / SPY, at a 50-session low (faltering RS) or near its 52-week high (the
   tranche-2 gate), from the symbol's own history before the trade.
+- **Pullback gate:** the tested EMA's level at the previous close.
 - **Not modelled:** the 15:40 volume projection (the day's full volume stands in) and the
   base count of a new breakout (no base table yet).
 """
@@ -25,6 +26,7 @@ from datetime import date, datetime, timedelta
 
 from auratrade.config import Regime, RiskConfig, Strategy
 from auratrade.indicators.bars import OHLCV
+from auratrade.indicators.moving_averages import ema
 from auratrade.indicators.relative_strength import RsLineState, rs_line_states
 from auratrade.plans.cushion import EarningsTiming, cushion_session, estimated_cushion_session
 from auratrade.regime.ladder import rank
@@ -127,19 +129,24 @@ def sim_sessions(
     minutes: Mapping[date, Minutes],
     market: Market,
     risk: RiskConfig,
-    tested_ma: float | None = None,
+    tested_ema: int | None = None,
 ) -> list[SimSession]:
     """The trade's sessions ``days`` (from its entry session), each with its daily bar; days
-    the symbol has no bar on end the list (halted or delisted: the trade is marked there)."""
+    the symbol has no bar on end the list (halted or delisted: the trade is marked there).
+    ``tested_ema`` is the window of the EMA a pullback turned off; each session's gate reads
+    its level at the previous close."""
     calendar = [c.day for c in market.calendar]
     times = {c.day: c for c in market.calendar}
-    bars = dict(zip(symbol.dates, symbol.bars, strict=True))
+    position = {d: j for j, d in enumerate(symbol.dates)}
+    levels = ema([b.close for b in symbol.bars], tested_ema) if tested_ema else None
     rs = rs_states(symbol, market, risk)
     out: list[SimSession] = []
     for n, day in enumerate(days, start=1):
-        bar = bars.get(day)
-        if bar is None:
+        j = position.get(day)
+        if j is None:
             break
+        bar = symbol.bars[j]
+        tested = levels[j - 1] if levels is not None and j >= 1 else None
         i = bisect_left(calendar, day)
         evening = market.regimes.get(calendar[i - 1]) if i >= 1 else None
         before = market.regimes.get(calendar[i - 2]) if i >= 2 else None
@@ -166,7 +173,7 @@ def sim_sessions(
                 iex=found.iex if found else None,
                 rs_line_at_low=state.at_low if state else False,
                 rs_line_near_high=state.near_high if state else False,
-                tested_ma=tested_ma,
+                tested_ma=tested,
                 regime_downgrade=downgraded,
                 earnings_cushion_due=cushion_due(day, symbol.reports, calendar, risk),
                 tranche2_allowed=allowed,

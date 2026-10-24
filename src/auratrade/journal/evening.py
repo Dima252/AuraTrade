@@ -217,7 +217,7 @@ class Replayer:
             minutes=minutes,
             market=self.market,
             risk=self.risk,
-            tested_ma=s.tested_ma,
+            tested_ema=s.tested_ema,
         )
         if not sessions:
             return TradeResult(TradeOutcome.SKIPPED)
@@ -439,18 +439,18 @@ def _blocks(
     return frozenset(blocks)
 
 
-def _sessions_to(days: Sequence[date], start: date, end: date) -> int:
+def sessions_to(days: Sequence[date], start: date, end: date) -> int:
     """Sessions from ``start`` to ``end``: 0 on the same session, negative when before."""
     return bisect_left(days, end) - bisect_left(days, start)
 
 
-def _report_distances(
+def report_distances(
     reports: Sequence[tuple[date, EarningsTiming]], session: date, days: Sequence[date]
 ) -> tuple[int | None, int | None]:
     upcoming = [d for d, _ in reports if d >= session]
     past = [d for d, _ in reports if d < session]
-    next_in = _sessions_to(days, session, min(upcoming)) if upcoming else None
-    last_ago = _sessions_to(days, max(past), session) if past else None
+    next_in = sessions_to(days, session, min(upcoming)) if upcoming else None
+    last_ago = sessions_to(days, max(past), session) if past else None
     return next_in, last_ago
 
 
@@ -515,7 +515,7 @@ def run_baseline(
         at_prev = replayer.replay(Stored(r.ticker_id, r.symbol, r.session_date, r.stored), prev)
         if at_prev.outcome is not TradeOutcome.OPEN or at_prev.plan is None:
             continue
-        held_days = _sessions_to(calendar_days, r.session_date, prev) + 1
+        held_days = sessions_to(calendar_days, r.session_date, prev) + 1
         holdings.append(
             Holding(
                 symbol=r.symbol,
@@ -551,7 +551,7 @@ def run_baseline(
     items = []
     for w in listed:
         sd = days.get(w.ticker_id, SymbolDays([], []))
-        next_in, last_ago = _report_distances(sd.reports, session, calendar_days)
+        next_in, last_ago = report_distances(sd.reports, session, calendar_days)
         f = SetupFacts(
             symbol=w.symbol,
             strategy=Strategy(w.strategy),
@@ -600,7 +600,7 @@ def run_baseline(
                 dollar_volume=w.dollar_volume,
                 equity=equity,
                 record=records.get(approved.strategy),
-                tested_ma=_tested_ma(w),
+                tested_ema=_tested_ema(w),
             )
             if approved is not None
             else None
@@ -666,9 +666,9 @@ def _close_on(days: SymbolDays, day: date) -> float:
     return days.bars[max(i - 1, 0)].close
 
 
-def _tested_ma(w: WatchlistRow) -> float | None:
+def _tested_ema(w: WatchlistRow) -> int | None:
     value = w.facts.get("tested_ema") if w.facts else None
-    return float(value) if isinstance(value, (int, float)) else None
+    return int(value) if isinstance(value, (int, float)) else None
 
 
 def _exit_after(r: BookRow, market: Market, day: date) -> bool:
@@ -753,7 +753,7 @@ def score_verdicts(
         if row is not None and row.triggered and row.trigger_session is not None:
             done = (
                 row.outcome == "CLOSED"
-                or _sessions_to(calendar_days, row.trigger_session, session) >= horizon
+                or sessions_to(calendar_days, row.trigger_session, session) >= horizon
             )
             if not done:
                 stored = StoredEntry.from_json(row.details["entry"])
@@ -786,7 +786,7 @@ def score_verdicts(
             dollar_volume=w.dollar_volume,
             equity=card.notional_equity,
             record=None,
-            tested_ma=_tested_ma(w),
+            tested_ema=_tested_ema(w),
         )
         plays.append((key, Stored(ticker_id, unit[0], session, stored), verdict))
     replayer.prefetch([p for _, p, _ in plays], session)
