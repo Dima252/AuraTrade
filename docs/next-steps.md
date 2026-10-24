@@ -1,4 +1,4 @@
-# What's left: status at 2026-10-23 10:00 ET (task 1.8: `AuraTradePaper` live on AWS; Friday 10-23 is the first paper session, two entries resting, no fills yet)
+# What's left: status at 2026-10-24 (task 3.8: the baseline gate failed; the strategy decision is next, see [strategy-decision.md](strategy-decision.md); `AuraTradePaper` keeps running the 1.8 acceptance)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
@@ -64,28 +64,23 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~2.4~~ regime backtest (done, below) → ~~3.2a~~, ~~3.2b~~, ~~3.3~~, ~~3.4~~, ~~3.5b~~ (done, below) → ~~3.6~~ simulator (done, below) → **3.7** watchlist, baseline book, breakout tracker, scorecard (done, below) → **3.8** baseline backtest.
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~2.4~~, ~~3.2a~~, ~~3.2b~~, ~~3.3~~, ~~3.4~~, ~~3.5b~~, ~~3.6~~, ~~3.7~~ (done, below) → **3.8** baseline backtest (stopped at the gate; the strategy decision is next).
 
-### Task 3.8: in progress on `phase-3/baseline-backtest` (2026-10-24)
+### Task 3.8: stopped at the gate; the strategy decision is next (2026-10-24)
 
-The user chose (2026-10-24): **3.8 before deploying 3.7**: `paper` stays on the 1.8 build until the acceptance's 10 sessions are in (early November), then `alembic upgrade head` on `paper` and `cdk deploy`. The **base count** is computed inside 3.8 from the whole Parquet history; keeping the live `bases` table current is a follow-up task. Step 1 done: the pre-registration, `docs/backtests/baseline-preregistration.md`, committed before any 3.8 code ran on real data (the order of work, the definitions, the gate, the 19 comparisons, the regime re-run's search space and targets).
+**Start with [strategy-decision.md](strategy-decision.md):** what was found, the outside evidence, the options, the recommended plan and a prompt for the next session. Phase 4 doesn't start until the user decides.
 
-**Steps 1-4 run (2026-10-24). STOPPED at the gate; waiting on the user.** Branch `phase-3/baseline-backtest` (pushed, no PR).
-- **Regime** (`uv run python -m backtest.baseline regime`, about 6 min; docs/backtests/regime-5-pillar.md): the pre-registered rule chose `cu+2_corr-2_c2_dist8` (`risk.yaml` plus `correction_2`). It passes 3 of the 5 targets; the misses are 14 switches in the worst year and 54% `CONFIRMED_UPTREND` in 2019. Not frozen in `risk.yaml`.
-- **Data fixes** (7e3fc62):
-  - Dead ETNs and ETFs typed `COMMON` are retyped (`DELISTED_FUNDS`; `scripts/backfill.py funds`, already applied to the local history).
-  - Securities without EDGAR report dates are no longer rejected by the blackout in the pool; the live rule is kept as the "survivors only" figure.
-- **Pool and comparisons** (`uv run python -m backtest.baseline pool`, about 30 min on cached minute bars; docs/backtests/baseline.md):
-  - **The gate fails:** -0.10R a trade (90% -0.16 to -0.03) over 4,154 trades, and every strategy fails. EPs are +0.23R (-0.03 to +0.55); survivors only, -0.07R.
-  - **No comparison turns the pool positive.** Exit and plan changes move it by hundredths of an R. Momentum improves most with climax sales (-0.51 -> -0.22).
-  - Not run: #1, #15 and the book-measured comparisons (no portfolio simulator yet).
-  - **The holdout is still closed.**
+The user chose (2026-10-24): **3.8 before deploying 3.7**: `paper` stays on the 1.8 build until the acceptance's 10 sessions are in (early November), then `alembic upgrade head` on `paper` and `cdk deploy`. The **base count** is computed inside 3.8 from the whole Parquet history; keeping the live `bases` table current is a follow-up task.
+
+Done on `phase-3/baseline-backtest`, in order:
+- **Pre-registration** (`docs/backtests/baseline-preregistration.md`), before any 3.8 code ran on real data.
+- **Regime re-run on 5 pillars** (`uv run python -m backtest.baseline regime`, about 6 min; `docs/backtests/regime-5-pillar.md`): the pre-registered rule chose `cu+2_corr-2_c2_dist8`; 3 of 5 targets. **Not frozen in `risk.yaml`** (that happens only once a pool passes).
+- **Data fixes** (7e3fc62): dead ETNs/ETFs typed `COMMON` are retyped (`scripts/backfill.py funds`); securities without EDGAR report dates aren't rejected by the blackout in the pool (the live rule is kept as the "survivors only" figure).
+- **The pool, the gate and the comparisons** (`uv run python -m backtest.baseline pool`, about 30-40 min on cached minute bars; `docs/backtests/baseline.md`): **the gate fails.** No comparison turns it positive.
+- **Diagnostics** (pre-registered in `docs/backtests/baseline-diagnostics-preregistration.md`; `uv run python -m backtest.diagnostics`; `docs/backtests/baseline-diagnostics.md`): costs +0.13R a trade, early failures, tight 09:36 stops; the non-EP setups are found correctly and lose -0.17R; the EP proxy looked ahead.
+- **The EP fix (#143, approved):** the pool trades the proxy's 09:36 view; re-run in `docs/backtests/baseline.md`.
 - **Fixed on the way:** the pullback gate's tested-EMA bug (c5856aa, live 3.7 code).
-- **Next (the user's call):** what to change or test before Phase 4. Options to discuss:
-  - rethink the entries (the losses are in the entries, not the exits);
-  - build the book simulator for the drawdown comparisons;
-  - investigate EPs alone with a cleaner proxy;
-  - or pause the build.
+- **The holdout (2023 on) is still closed.**
 
 ### Task 3.7: done (2026-10-24, #142)
 
@@ -121,7 +116,8 @@ Migration 0007 (`daily_watchlist`, `baseline_signals`, `breakout_tracker`, `verd
 
 ## How to resume in a new chat
 
-- "continue" resumes task 1.8's acceptance (step 5 of "Left to do") on `main`; check Friday's session first: `job_runs` on `paper` (Neon SQL Editor or the HTTPS endpoint), Alpaca orders and stops, Telegram.
-- **Where the 10-22 session stopped:** everything deployed, merged (`main` = `67cd79f` + this note) and running; kill switch off; nothing pending locally. The `AuraTrade-live` worktree is removed (its logs are in `var/local-scheduler-logs/`). From 10-23 the "Session log" table above records each session.
-- **First steps:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then read `job_runs` on `paper` and the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
+- **The strategy decision:** paste the prompt in [strategy-decision.md §8](strategy-decision.md#8-a-prompt-for-the-next-session). Build nothing until the user approves a plan.
+- **The 1.8 acceptance** keeps running on AWS (`paper`): check each session's `job_runs` (Neon SQL Editor or the HTTPS endpoint), Alpaca orders and stops, Telegram, and record them in the "Session log" above. The 10-23 evening chain and the sessions from 10-26 are not recorded yet. The stop hand check still waits for a first fill (needs the user's OK at the time).
+- **First steps for AWS:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
 - The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432). If it is gone: `docker run -d --name auratrade-test-pg -e POSTGRES_USER=auratrade -e POSTGRES_PASSWORD=auratrade -e POSTGRES_DB=auratrade -p 5434:5432 postgres:16`. Run the tests with `TEST_DATABASE_URL=postgresql+psycopg://auratrade:auratrade@localhost:5434/auratrade AURATRADE_REQUIRE_DB=1 uv run pytest`. Stop it with `docker stop auratrade-test-pg` when not testing.
+- **The backtest runs** need the local Parquet history (`var/storage`) and the cached minute bars; they load the calendar from Neon `dev` (port 5432 must be reachable from the network).

@@ -87,6 +87,9 @@ uv run python scripts/backfill.py postgres   # the 2-year window's earnings, fun
 uv run python scripts/smoke_real_data.py  # the early modules over the whole history -> docs/backtests/smoke.md
 uv run python backtest/regime.py         # the regime backtest, 2016-2022 only (holdout closed) -> docs/backtests/regime.md
 uv run python scripts/scan_real_data.py   # every strategy scan over 2017-2022 (holdout closed) -> docs/backtests/scans.md
+uv run python -m backtest.baseline regime   # 3.8: the 5-pillar regime re-run (tuning only) -> docs/backtests/regime-5-pillar.md
+uv run python -m backtest.baseline pool     # 3.8: the setup pool, the gate and the comparisons -> docs/backtests/baseline.md
+uv run python -m backtest.diagnostics       # 3.8: why the pool loses (pre-registered splits) -> docs/backtests/baseline-diagnostics.md
 uv run auratrade kill on|off|status       # the kill switch (entries only); also: auratrade mismatches / resolve <id> --note
 uv run --env-file .env.paper auratrade kill status   # any command against `paper` (its file's values override .env)
 TRADING_MODE=paper uv run python scripts/local_session.py --until YYYY-MM-DD   # the skeleton's jobs on schedule (dev paper)
