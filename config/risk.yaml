@@ -474,3 +474,14 @@ sim:  # README §5.12 fill model (task 3.6); see auratrade.sim. Provisional unti
   delayed_entry_minutes: 21          # ... or 09:51 on the delayed-SIP opening range (#109)
   volume_sessions: 50                # the average volume the plan rules compare with
   long_average_sessions: 200         # the climax "far above the 200-day" signal
+
+baseline:  # README §5.12 shadow baseline book (task 3.7); see auratrade.journal.baseline
+  start_equity: 5000                 # the paper account's capital (#122)
+
+scorecard:  # README §5.12 Analyst verdict scorecard (task 3.7); see auratrade.journal.scorecard
+  horizons: [5, 10, 20]              # R after 5, 10 and 20 sessions (the entry session is 1)
+  notional_equity: 100000            # every verdict sized as if taken on a notional account ...
+  risk_per_trade: 0.01               # ... at 1%: whole shares don't distort R
+  bootstrap_samples: 2000            # session-block bootstrap
+  confidence: 0.9                    # 90% intervals (README §15)
+  seed: 37

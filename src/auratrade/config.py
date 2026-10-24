@@ -448,6 +448,8 @@ class RiskConfig(_Strict):
     ranking: RankingConfig
     charts: ChartsConfig
     sim: SimConfig
+    baseline: BaselineConfig
+    scorecard: ScorecardConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1182,6 +1184,33 @@ class StrategiesConfig(_Strict):
     EPISODIC_PIVOT: EpisodicPivotProxyConfig
     LEADER_PULLBACK: LeaderPullbackConfig
     EMERGING_LEADER: EmergingLeaderConfig
+
+
+class BaselineConfig(_Strict):
+    """The shadow baseline book (README §5.12; task 3.7); see ``journal.baseline``."""
+
+    # Its own account starts at the paper account's capital (#122).
+    start_equity: Positive
+
+
+class ScorecardConfig(_Strict):
+    """The Analyst verdict scorecard (README §5.12; task 3.7); see ``journal.scorecard``."""
+
+    # R after each horizon, in sessions from the entry session (the entry session is 1).
+    horizons: tuple[PositiveInt, ...] = Field(min_length=1)
+    # Every verdict is played as if taken, sized on a notional account large enough that whole
+    # shares don't distort R; R doesn't depend on the size otherwise.
+    notional_equity: Positive
+    risk_per_trade: Fraction
+    bootstrap_samples: PositiveInt
+    confidence: Fraction
+    seed: int
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if list(self.horizons) != sorted(set(self.horizons)):
+            raise ValueError("scorecard horizons must be distinct and ascending")
+        return self
 
 
 RiskConfig.model_rebuild()
