@@ -39,7 +39,7 @@ def listed(n: int, **kw: object) -> list[Listed]:
 class TestDecide:
     def test_the_top_quarter_by_score_gets_conviction_4(self) -> None:
         items = [Listed(setup(f"S{i}"), score=s) for i, s in enumerate([0.5, 0.9, 0.7, 0.6, 0.8])]
-        assert convictions(items) == [3, 4, 3, 3, 4]
+        assert convictions([i.score for i in items]) == [3, 4, 3, 3, 4]
         assert convictions([]) == []
 
     def test_proposals_take_the_code_levels_and_default_risk(self) -> None:

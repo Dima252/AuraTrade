@@ -4,7 +4,7 @@
   and many after (26 of 48 known delistings were missing, spike 0.3a), but the bars endpoint
   still serves them. So every 1-4 letter ticker is also tried over a few sessions every
   `enumeration_every_sessions`; a symbol found only this way has no name, and its type is
-  assumed to be common stock.
+  assumed to be common stock, unless it is a known delisted fund (`DELISTED_FUNDS`).
 - **Keys:** bars come back by ticker, and tickers get reused. A ticker's bars split into separate
   securities wherever it didn't trade for more than `max_gap_sessions` sessions, and wherever its
   split-adjusted close moved `max_jump` times or more in one bar: a bankruptcy reorganization, a
@@ -31,6 +31,23 @@ from auratrade.ingest.classify import SecurityType
 # and renames some delisted assets `<SYM>_DELISTED` (spike 0.3a).
 VALID_SYMBOL = re.compile(r"[A-Z]{1,5}(\.[A-Z]{1,2})?")
 DELISTED_SUFFIX = "_DELISTED"
+
+# Exchange-traded products the ticker sweep finds without a name (delisted, so in no asset
+# list): their assumed type would put them in the stock universe. Picked by hand from every
+# assumed-type symbol in the 2016-2026 universe (task 3.8, 2026-10-24); the leveraged notes
+# among them were the pool's best "EPs" (TVIX, DGAZ).
+_ETNS = "AMJ DGAZ FBGX FIHD TVIX UGAZ XIV ZIV"
+_ETFS = (
+    "BSCL BSCM BSCN BSCO BSCP BSJM BSJN BSJP CIU CLRG CLY CSJ FIVG GBF HEWG IBDN IBDO IBDP IBDQ "
+    "IBTD IBTE IBTF IPE ITE JAGG JKE JKH NUSI PHB POTX PXMG RHS RSX RTM RYE RYT SCPB SLY SPLG "
+    "THCX TLO"
+)
+_FUNDS = "BIGZ"
+DELISTED_FUNDS: Mapping[str, SecurityType] = {
+    **dict.fromkeys(_ETNS.split(), SecurityType.ETN),
+    **dict.fromkeys(_ETFS.split(), SecurityType.ETF),
+    **dict.fromkeys(_FUNDS.split(), SecurityType.FUND),
+}
 
 
 class Source(StrEnum):
@@ -154,7 +171,7 @@ def securities_for(
                     alpaca_asset_id=None,
                     name=None,
                     exchange=None,
-                    security_type=SecurityType.COMMON,
+                    security_type=DELISTED_FUNDS.get(symbol, SecurityType.COMMON),
                     type_assumed=True,
                     source=Source.ENUMERATED,
                     first_session=first,

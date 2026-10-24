@@ -34,7 +34,8 @@ class StoredEntry:
     equity: float
     """The equity it was sized and checked on at 09:36."""
     record: StrategyRecord | None
-    tested_ma: float | None = None
+    tested_ema: int | None = None
+    """The window of the EMA a pullback turned off (the pullback gate)."""
 
     def to_json(self) -> dict[str, Any]:
         entry = asdict(self.entry)
@@ -48,7 +49,7 @@ class StoredEntry:
             "dollar_volume": self.dollar_volume,
             "equity": self.equity,
             "record": None if self.record is None else asdict(self.record),
-            "tested_ma": self.tested_ma,
+            "tested_ema": self.tested_ema,
         }
 
     @classmethod
@@ -65,7 +66,8 @@ class StoredEntry:
             dollar_volume=data["dollar_volume"],
             equity=data["equity"],
             record=None if record is None else StrategyRecord(**record),
-            tested_ma=data.get("tested_ma"),
+            # Rows from before 2026-10-24 stored the same window as "tested_ma".
+            tested_ema=data.get("tested_ema", data.get("tested_ma")),
         )
 
 

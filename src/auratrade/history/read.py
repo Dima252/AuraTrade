@@ -7,7 +7,9 @@ and the dates are references to one shared list of sessions.
 
 from __future__ import annotations
 
+import bisect
 from array import array
+from collections import defaultdict
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date
@@ -16,7 +18,9 @@ from typing import Any
 import pyarrow as pa
 import pyarrow.compute as pc
 
+from auratrade.config import RiskConfig
 from auratrade.history.build import SECURITIES
+from auratrade.history.edgar import EARNINGS, FUNDAMENTALS
 from auratrade.history.macro import MACRO
 from auratrade.history.store import (
     BAR_COLUMNS,
@@ -28,9 +32,13 @@ from auratrade.history.store import (
     membership_key,
     table_key,
 )
+from auratrade.indicators.earnings import EarningsTiming
+from auratrade.indicators.relative_strength import percentile_ranks
 from auratrade.regime.breadth import TickerHistory
 from auratrade.regime.inputs import MacroSeries
 from auratrade.storage import ObjectStore
+from auratrade.strategies.ranking import Fundamentals
+from auratrade.strategies.trend_template import rs_scores
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,3 +163,68 @@ def index_securities(
     if missing:
         raise KeyError(f"index ETFs not in the history: {missing}")
     return out
+
+
+def ranks_by_security(
+    series: Mapping[str, SecuritySeries], members: Mapping[date, set[str]], risk: RiskConfig
+) -> tuple[dict[str, list[float | None]], dict[str, list[float | None]]]:
+    """Each security's RS rating and best momentum rank per bar, ranked within the session's
+    universe (README §5.3). Non-members get None: they are never scanned."""
+    lookbacks = risk.strategies.MOMENTUM_BREAKOUT.rank_lookbacks
+    rs: dict[date, dict[str, float]] = defaultdict(dict)
+    returns: dict[tuple[date, int], dict[str, float]] = defaultdict(dict)
+    for key, s in series.items():
+        closes = s.close
+        for i, (d, score) in enumerate(
+            zip(s.dates, rs_scores(closes, risk.trend_template), strict=True)
+        ):
+            if key not in members.get(d, ()):
+                continue
+            if score is not None:
+                rs[d][key] = score
+            for n in lookbacks:
+                if i >= n:
+                    returns[d, n][key] = closes[i] / closes[i - n] - 1
+    rs_pct = {d: percentile_ranks(v) for d, v in rs.items()}
+    mom_pct = {k: percentile_ranks(v) for k, v in returns.items()}
+    rs_out: dict[str, list[float | None]] = {}
+    mom_out: dict[str, list[float | None]] = {}
+    for key, s in series.items():
+        rs_out[key] = [rs_pct.get(d, {}).get(key) for d in s.dates]
+        best: list[float | None] = []
+        for d in s.dates:
+            values = [r for n in lookbacks if (r := mom_pct.get((d, n), {}).get(key)) is not None]
+            best.append(max(values) if values else None)
+        mom_out[key] = best
+    return rs_out, mom_out
+
+
+def earnings_by_security(store: ObjectStore) -> dict[str, list[tuple[date, EarningsTiming]]]:
+    table = get_table(store, table_key(EARNINGS))
+    rows = [] if table is None else table.select(["security", "report_date", "timing"]).to_pylist()
+    out: dict[str, list[tuple[date, EarningsTiming]]] = defaultdict(list)
+    for row in rows:
+        if row["timing"]:
+            out[row["security"]].append((row["report_date"], EarningsTiming(row["timing"].lower())))
+    return out
+
+
+def fundamentals_by_security(store: ObjectStore) -> dict[str, list[tuple[date, Fundamentals]]]:
+    """Each security's quarters by `filed` date, oldest first."""
+    table = get_table(store, table_key(FUNDAMENTALS))
+    columns = ["security", "filed_date", "eps_growth", "eps_acceleration"]
+    rows = [] if table is None else table.select(columns).to_pylist()
+    out: dict[str, list[tuple[date, Fundamentals]]] = defaultdict(list)
+    for row in rows:
+        out[row["security"]].append(
+            (row["filed_date"], Fundamentals(row["eps_growth"], row["eps_acceleration"]))
+        )
+    for quarters in out.values():
+        quarters.sort(key=lambda q: q[0])
+    return out
+
+
+def known_on(quarters: Sequence[tuple[date, Fundamentals]], day: date) -> Fundamentals | None:
+    """The latest quarter filed before ``day`` (README §15: readable from the next session)."""
+    i = bisect.bisect_left([q[0] for q in quarters], day)
+    return quarters[i - 1][1] if i > 0 else None

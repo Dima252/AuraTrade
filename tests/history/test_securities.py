@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 from auratrade.history.securities import (
+    DELISTED_FUNDS,
     KnownAsset,
     Source,
     clean_symbol,
@@ -94,3 +95,11 @@ def test_inactive_only_and_unknown_symbols() -> None:
     assert (sec.key, sec.source, sec.active) == ("old", Source.INACTIVE, False)
     [swept] = securities_for("ABC", [(D[3], D[4])], [], trading_since=D[0])
     assert (swept.key, swept.source, swept.name) == ("ABC:2026-01-04", Source.ENUMERATED, None)
+
+
+def test_a_known_delisted_fund_found_by_the_sweep_is_not_common_stock() -> None:
+    [etn] = securities_for("TVIX", [(D[0], D[9])], [], trading_since=D[5])
+    [stock] = securities_for("ZZZZ", [(D[0], D[9])], [], trading_since=D[5])
+    assert (etn.security_type, etn.type_assumed) == (SecurityType.ETN, True)
+    assert stock.security_type is SecurityType.COMMON
+    assert DELISTED_FUNDS["SPLG"] is SecurityType.ETF

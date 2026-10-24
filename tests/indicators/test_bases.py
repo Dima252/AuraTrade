@@ -13,6 +13,7 @@ from auratrade.indicators.bases import (
     Contraction,
     PriceBase,
     detect_bases,
+    forming_stages,
 )
 
 # The production values except a 5-session minimum, so hand-built paths stay short.
@@ -440,3 +441,20 @@ class TestProperties:
                 assert c.depth >= RULES.swing_reversal - 1e-12
         ends = [b.end for b in scan.bases if b.end is not None]
         assert ends == sorted(ends)
+
+    @settings(max_examples=100, deadline=None)
+    @given(random_bars(), st.booleans())
+    def test_forming_stages_match_detection_on_each_prefix(
+        self, data: list[Bar], listed: bool
+    ) -> None:
+        state = BaseCountState.at_listing() if listed else None
+        stages = forming_stages(data, RULES, state)
+        assert len(stages) == len(data)
+        for t, (stage, reliable) in enumerate(stages):
+            forming = detect_bases(data[: t + 1], RULES, state).forming
+            assert forming is not None
+            assert (stage, reliable) == (forming.stage, forming.count_reliable)
+
+
+def test_forming_stages_of_no_bars() -> None:
+    assert forming_stages([], RULES) == []

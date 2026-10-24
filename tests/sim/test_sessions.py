@@ -4,6 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 
 from auratrade.config import Regime, Strategy, load_risk_config
 from auratrade.indicators.bars import Bar
+from auratrade.indicators.moving_averages import ema
 from auratrade.plans.cushion import EarningsTiming
 from auratrade.sim.sessions import (
     CalendarDay,
@@ -115,3 +116,25 @@ def test_the_cushion_before_an_estimated_report() -> None:
     assert cushion_due(due, last, DAYS, RISK)
     assert not cushion_due(DAYS[60], last, DAYS, RISK)
     assert not cushion_due(DAYS[60], [], DAYS, RISK)
+
+
+def test_the_pullback_gate_reads_the_tested_emas_level_at_the_previous_close() -> None:
+    # Regression: the EMA's window (10 or 21) was passed as its price level, so any stock
+    # above $21 passed the "above the tested average" check.
+    closes = [40.0 + i * 0.1 for i in range(len(DAYS))]
+    symbol = SymbolDays(DAYS, [Bar(c, c + 1, c - 1, c, 1e6) for c in closes])
+    level = ema(closes, 10)[149]
+    [s] = sim_sessions(
+        Strategy.LEADER_PULLBACK,
+        [DAYS[150]],
+        symbol=symbol,
+        minutes={},
+        market=market(),
+        risk=RISK,
+        tested_ema=10,
+    )
+    assert level is not None
+    assert s.tested_ma == level
+    assert 40 < level < closes[150]
+    [s] = sessions([DAYS[150]], symbol=symbol)
+    assert s.tested_ma is None

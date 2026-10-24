@@ -1,8 +1,14 @@
 """`EpisodicPivot`: Kullamägi's episodic pivot, as the **backtest proxy** (README §5.3, §7.1).
 
 Live, an EP is detected in the morning from the pre-market gap, the news and the earnings beat
-(task 5.6). On daily bars the proxy is a gap of at least ``min_gap`` on at least
-``min_volume_ratio`` times the prior average volume, evaluated on the gap session itself.
+(task 5.6). On daily bars the proxy comes in two views of the gap session:
+
+- ``scan``, **after the close:** a gap of at least ``min_gap`` on at least ``min_volume_ratio``
+  times the prior average volume. The breakout tracker and the evening watchlist read it.
+- ``morning``, **at the open:** the gap alone, with nothing from the gap session but its open.
+  The backtest pool trades these; it checks the opening volume from minute bars at 09:36
+  (``min_opening_volume_ratio``, ``backtest.pool``) and reads the features at the prior close.
+  The full-day volume of ``scan`` isn't known when the entry goes in (#143).
 
 What the proxy can't check, and the report notes (README §5.3): the earnings **beat** and
 growth (no free surprise history back to 2016), and the news behind a non-earnings gap. The two
@@ -17,7 +23,7 @@ ADR below the trigger. EPs are exempt from the Trend Template and the 50-day rul
 """
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from auratrade.config import Strategy
 from auratrade.strategies.base import (
@@ -33,9 +39,12 @@ from auratrade.strategies.base import (
 class EpisodicPivotDetail:
     gap: float
     """Open / prior close - 1."""
-    volume_ratio: float
-    day_gain: float
-    """Close / prior close - 1 on the gap session (known only after the close)."""
+    volume_ratio: float | None
+    """The gap session's volume / the prior average (known only after the close; None in the
+    ``morning`` view)."""
+    day_gain: float | None
+    """Close / prior close - 1 on the gap session (known only after the close; None in the
+    ``morning`` view)."""
     earnings: bool
     """The gap session is an earnings reaction session."""
     prior_moves: Mapping[int, float | None]
@@ -45,8 +54,8 @@ class EpisodicPivotDetail:
     def facts(self) -> Mapping[str, Fact]:
         return {
             "gap": fraction_fact(self.gap),
-            "volume_ratio": round(self.volume_ratio, 2),
-            "day_gain": fraction_fact(self.day_gain),
+            "volume_ratio": None if self.volume_ratio is None else round(self.volume_ratio, 2),
+            "day_gain": None if self.day_gain is None else fraction_fact(self.day_gain),
             "earnings_gap": self.earnings,
             **{
                 f"prior_move_{n}": None if move is None else fraction_fact(move)
@@ -68,7 +77,30 @@ class EpisodicPivot(BaseStrategy):
     )
 
     def scan(self, data: SymbolData, at: int | None = None) -> Setup | None:
+        """The gap session on heavy full-day volume, read after its close."""
         t = data.last if at is None else at
+        gap = self._gap(data, t)
+        if gap is None:
+            return None
+        detail, average = gap
+        bar, prior = data.bars[t], data.bars[t - 1].close
+        volume_ratio = bar.volume / average
+        if volume_ratio < self.risk.strategies.EPISODIC_PIVOT.min_volume_ratio:
+            return None
+        return self._setup(
+            data,
+            t,
+            replace(detail, volume_ratio=volume_ratio, day_gain=bar.close / prior - 1),
+        )
+
+    def morning(self, data: SymbolData, at: int | None = None) -> Setup | None:
+        """The gap session as its open shows it: the gap, and nothing later in the session."""
+        t = data.last if at is None else at
+        gap = self._gap(data, t)
+        return None if gap is None else self._setup(data, t, gap[0])
+
+    def _gap(self, data: SymbolData, t: int) -> tuple[EpisodicPivotDetail, float] | None:
+        """The gap's detail without the after-close facts, and the prior average volume."""
         cfg = self.risk.strategies.EPISODIC_PIVOT
         bars = data.bars
         # The average of the sessions before the gap (as `indicators.earnings.earnings_gap`),
@@ -77,26 +109,29 @@ class EpisodicPivot(BaseStrategy):
         if average is None or average <= 0:
             return None
         prior = bars[t - 1].close
-        bar = bars[t]
-        gap, volume_ratio = bar.open / prior - 1, bar.volume / average
-        if gap < cfg.min_gap or volume_ratio < cfg.min_volume_ratio:
+        gap = bars[t].open / prior - 1
+        if gap < cfg.min_gap:
             return None
         moves = {
             n: prior / bars[t - 1 - n].close - 1 if t - 1 - n >= 0 else None
             for n in cfg.rally_lookbacks
         }
+        detail = EpisodicPivotDetail(
+            gap=gap,
+            volume_ratio=None,
+            day_gain=None,
+            earnings=t in data.earnings_sessions,
+            prior_moves=moves,
+            pre_gap_adr=data.adr(cfg.adr_sessions)[t - 1],
+        )
+        return detail, average
+
+    def _setup(self, data: SymbolData, t: int, detail: EpisodicPivotDetail) -> Setup:
         return Setup(
             symbol=data.symbol,
             strategy=self.strategy,
             session=t,
-            pivot=bars[t].open,
-            structural_stop=prior,
-            detail=EpisodicPivotDetail(
-                gap=gap,
-                volume_ratio=volume_ratio,
-                day_gain=bar.close / prior - 1,
-                earnings=t in data.earnings_sessions,
-                prior_moves=moves,
-                pre_gap_adr=data.adr(cfg.adr_sessions)[t - 1],
-            ),
+            pivot=data.bars[t].open,
+            structural_stop=data.bars[t - 1].close,
+            detail=detail,
         )

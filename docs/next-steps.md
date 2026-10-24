@@ -1,11 +1,11 @@
-# What's left: status at 2026-10-23 10:00 ET (task 1.8: `AuraTradePaper` live on AWS; Friday 10-23 is the first paper session, two entries resting, no fills yet)
+# What's left: status at 2026-10-24 (task 3.8: the baseline gate failed; the strategy decision is next, see [strategy-decision.md](strategy-decision.md); `AuraTradePaper` keeps running the 1.8 acceptance)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
 ## Where things stand
 
 - **Build:** Phase 0 is complete. Phase 1 tasks 1.1–1.6; Phase 2 tasks 2.1–2.4; Phase 3 tasks 3.1, 3.2a (#136), 3.2b (#137), 3.3 (#138), 3.4 (#139), 3.5a and 3.5b (#140); 3.6 (#141); 3.7 (#142). Tasks 1.7 and 1.8 are **built, merged and deployed** (PRs #30, #31); their acceptance runs on AWS (below). On `main` 1,267 tests pass, coverage 97%, ruff and mypy clean.
-- **Decisions:** README §16 runs to **#142** (#142: the 3.7 watchlist, baseline, tracker and scorecard readings, approved; #141: the 3.6 simulator readings, approved; #140: the 3.5b guardrail, sizing and multiplier readings, approved; #139: the chart readings; #138: the 3.3 ranking choices; #137: the 3.2b scan choices; #136: the strategy-scan readings from 3.2a, approved; #135: the regime thresholds from 2.4; #132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
+- **Decisions:** README §16 runs to **#143** (#143: the EP proxy at 09:36, from the 3.8 diagnostics, approved; #142: the 3.7 watchlist, baseline, tracker and scorecard readings, approved; #141: the 3.6 simulator readings, approved; #140: the 3.5b guardrail, sizing and multiplier readings, approved; #139: the chart readings; #138: the 3.3 ranking choices; #137: the 3.2b scan choices; #136: the strategy-scan readings from 3.2a, approved; #135: the regime thresholds from 2.4; #132: 1.7's live acceptance moved to AWS; #133: the 1.8 build readings, approved 2026-10-22; #134: the public site, simple now and a designed showcase at 5.7). The design is frozen (#105).
 - **Accounts:** both Alpaca paper accounts are active and flat (no positions, no open orders, checked 2026-10-22 14:40 ET): `dev` ...JG3C in `.env`, `paper` ...CDFD in `.env.paper` ($5,000). Neon `dev` (endpoint `ep-autumn-sea-…`) is migrated to head (**0006**), holds the last 2 years of data (about 151 MB of 512), its regime rows are seeded from 2026-09-01, and its kill switch is **off**. Neon `paper` (endpoint `ep-summer-math-…`) is a full copy of `dev` made 2026-10-22, also at 0006.
 - **Env files (2026-10-22):** `.env` and `.env.paper` have the same keys in the layout of `.env.example` (including `ENVIRONMENT`); every key in both passes `scripts/check_keys.py` (`--env-file .env.paper` for `paper`). Any local command runs against `paper` with `uv run --env-file .env.paper ...` (checked: it resolves to the `paper` database).
 - **AWS:** account 391732005061; CLI profile `auratrade` (us-east-1) is an IAM user with `AdministratorAccess`, signed in with `aws login` (not Identity Center; equivalent for this). Budgets `auratrade-monthly-10` and `-25`. `cdk bootstrap` done; the 10 secrets are SecureStrings under `/auratrade/paper/`; **`AuraTradePaper` deployed 2026-10-22 15:48 ET** with `trading_mode=paper` (11 functions, 18 schedules in the group `auratrade-paper`). The `paper` branch was reset just before: no trading rows, **kill switch on**.
@@ -64,7 +64,23 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (in progress, above) → ~~2.4~~ regime backtest (done, below) → ~~3.2a~~, ~~3.2b~~, ~~3.3~~, ~~3.4~~, ~~3.5b~~ (done, below) → ~~3.6~~ simulator (done, below) → **3.7** watchlist, baseline book, breakout tracker, scorecard (done, below) → **3.8** baseline backtest.
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~2.4~~, ~~3.2a~~, ~~3.2b~~, ~~3.3~~, ~~3.4~~, ~~3.5b~~, ~~3.6~~, ~~3.7~~ (done, below) → **3.8** baseline backtest (stopped at the gate; the strategy decision is next).
+
+### Task 3.8: stopped at the gate; the strategy decision is next (2026-10-24)
+
+**Start with [strategy-decision.md](strategy-decision.md):** what was found, the outside evidence, the options, the recommended plan and a prompt for the next session. Phase 4 doesn't start until the user decides.
+
+The user chose (2026-10-24): **3.8 before deploying 3.7**: `paper` stays on the 1.8 build until the acceptance's 10 sessions are in (early November), then `alembic upgrade head` on `paper` and `cdk deploy`. The **base count** is computed inside 3.8 from the whole Parquet history; keeping the live `bases` table current is a follow-up task.
+
+Done on `phase-3/baseline-backtest`, in order:
+- **Pre-registration** (`docs/backtests/baseline-preregistration.md`), before any 3.8 code ran on real data.
+- **Regime re-run on 5 pillars** (`uv run python -m backtest.baseline regime`, about 6 min; `docs/backtests/regime-5-pillar.md`): the pre-registered rule chose `cu+2_corr-2_c2_dist8`; 3 of 5 targets. **Not frozen in `risk.yaml`** (that happens only once a pool passes).
+- **Data fixes** (7e3fc62): dead ETNs/ETFs typed `COMMON` are retyped (`scripts/backfill.py funds`); securities without EDGAR report dates aren't rejected by the blackout in the pool (the live rule is kept as the "survivors only" figure).
+- **The pool, the gate and the comparisons** (`uv run python -m backtest.baseline pool`, about 30-40 min on cached minute bars; `docs/backtests/baseline.md`): **the gate fails.** No comparison turns it positive.
+- **Diagnostics** (pre-registered in `docs/backtests/baseline-diagnostics-preregistration.md`; `uv run python -m backtest.diagnostics`; `docs/backtests/baseline-diagnostics.md`): costs +0.13R a trade, early failures, tight 09:36 stops; the non-EP setups are found correctly and lose -0.17R; the EP proxy looked ahead.
+- **The EP fix (#143, approved):** the pool trades the proxy's 09:36 view; re-run in `docs/backtests/baseline.md`.
+- **Fixed on the way:** the pullback gate's tested-EMA bug (c5856aa, live 3.7 code).
+- **The holdout (2023 on) is still closed.**
 
 ### Task 3.7: done (2026-10-24, #142)
 
@@ -100,7 +116,8 @@ Migration 0007 (`daily_watchlist`, `baseline_signals`, `breakout_tracker`, `verd
 
 ## How to resume in a new chat
 
-- "continue" resumes task 1.8's acceptance (step 5 of "Left to do") on `main`; check Friday's session first: `job_runs` on `paper` (Neon SQL Editor or the HTTPS endpoint), Alpaca orders and stops, Telegram.
-- **Where the 10-22 session stopped:** everything deployed, merged (`main` = `67cd79f` + this note) and running; kill switch off; nothing pending locally. The `AuraTrade-live` worktree is removed (its logs are in `var/local-scheduler-logs/`). From 10-23 the "Session log" table above records each session.
-- **First steps:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then read `job_runs` on `paper` and the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
+- **The strategy decision:** paste the prompt in [strategy-decision.md §8](strategy-decision.md#8-a-prompt-for-the-next-session). Build nothing until the user approves a plan.
+- **The 1.8 acceptance** keeps running on AWS (`paper`): check each session's `job_runs` (Neon SQL Editor or the HTTPS endpoint), Alpaca orders and stops, Telegram, and record them in the "Session log" above. The 10-23 evening chain and the sessions from 10-26 are not recorded yet. The stop hand check still waits for a first fill (needs the user's OK at the time).
+- **First steps for AWS:** `aws sts get-caller-identity --profile auratrade` (if it fails: `aws login --profile auratrade`), then the CloudWatch logs (`aws logs filter-log-events --log-group-name /aws/lambda/auratrade-paper-<job>`; in Git Bash prefix `MSYS_NO_PATHCONV=1` so paths starting with `/` aren't rewritten).
 - The test database for local runs is the Docker container `auratrade-test-pg` on port 5434 (another project's Postgres holds 5432). If it is gone: `docker run -d --name auratrade-test-pg -e POSTGRES_USER=auratrade -e POSTGRES_PASSWORD=auratrade -e POSTGRES_DB=auratrade -p 5434:5432 postgres:16`. Run the tests with `TEST_DATABASE_URL=postgresql+psycopg://auratrade:auratrade@localhost:5434/auratrade AURATRADE_REQUIRE_DB=1 uv run pytest`. Stop it with `docker stop auratrade-test-pg` when not testing.
+- **The backtest runs** need the local Parquet history (`var/storage`) and the cached minute bars; they load the calendar from Neon `dev` (port 5432 must be reachable from the network).
