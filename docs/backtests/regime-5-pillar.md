@@ -186,4 +186,8 @@ The crisis override was active on 102 of 1510 sessions.
 
 ## Reading
 
-(Not written yet.)
+*Written 2026-10-24.* By the pre-registered rule the choice is `cu+2_corr-2_c2_dist8`: `risk.yaml`'s provisional thresholds (#135) with `correction_2` on. It passes 3 of the 5 targets: declines are caught early, the 2020 recovery is picked up, and there are no false `CORRECTION` spells. No variant passes more than 3, and two misses are left:
+- **Switches:** at most 14 in a year, besides failed follow-through days (target 12). It is the lowest of the 16 variants.
+- **`CONFIRMED_UPTREND` coverage of 2019:** 54% (target 60%). 2017 is at 86% and H2 2020-2021 at 61%.
+
+Leadership health helps a little against the same thresholds on 4 pillars: H2 2020-21 coverage rises from 56% to 61%, false spells fall from 1 to 0, and the worst year's switches from 16 to 14. The pillar scores +1 on 42% of sessions and -1 on 8%. **Not frozen in `risk.yaml` and the holdout not opened:** the baseline gate failed on the tuning period first (docs/backtests/baseline.md), so step 5 waits for the user.

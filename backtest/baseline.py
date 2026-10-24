@@ -304,8 +304,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         with (DETAIL / "pool.pickle").open("wb") as f:
             pickle.dump(trades, f)
         report = args.report or POOL_REPORT
+        reading = bt.kept_reading(report)
         report.write_text(
-            render_pool(trades, risk, args.variant, time.monotonic() - clock), encoding="utf-8"
+            render_pool(trades, risk, args.variant, time.monotonic() - clock, reading),
+            encoding="utf-8",
         )
         _log(f"wrote {report}")
         return 0
