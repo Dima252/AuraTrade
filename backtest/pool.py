@@ -18,9 +18,11 @@ played under its strategy's default entry policy, exit plan and risk, for the ba
   as having no report within the blackout (``reject_without_reports`` False), not
   rejected, or the pool would hold almost no delisted names. ``True`` keeps the live rule
   (fail closed), the survivors-only figure the report shows beside it.
-- **Fills:** ``sim.trade.simulate_trade``. The entry session needs minute bars; they are
+- **Fills:** ``sim.trade.simulate_trade``. A 09:36 entry session needs minute bars; they are
   fetched only where its daily high reaches the pivot (a stop-limit can't fill otherwise; such
-  an attempt is ``NOT_REACHED``) and for every EP. Later sessions run on daily bars.
+  an attempt is ``NOT_REACHED``) and for every EP. A close entry (the #144 candidate) needs
+  none: its gate reads the entry session's daily bar, the close standing in for the decision
+  price (an attempt whose gate fails is ``NOT_CONFIRMED``). Later sessions run on daily bars.
 - **Units of price:** the history is split-adjusted to today and minute bars are as traded, so
   each trade runs in its entry session's traded units: the adjusted bars and levels times the
   session's raw / adjusted close. Whole shares are then counted at the real prices.
@@ -37,7 +39,7 @@ from datetime import date, timedelta
 from enum import StrEnum
 
 from auratrade.calendar.sessions import Session
-from auratrade.config import Regime, RiskConfig, Strategy
+from auratrade.config import Regime, RiskConfig, Strategy, TriggerKind
 from auratrade.guardrails.blocks import EntryBlock
 from auratrade.guardrails.evaluate import ApprovedEntry, Context, SetupFacts, evaluate
 from auratrade.guardrails.model import Finding, GuardrailRule, Outcome
@@ -121,6 +123,8 @@ class Status(StrEnum):
     """The entry session's high never reached the pivot."""
     NO_MINUTES = "NO_MINUTES"
     """The vendor has no minute bars for the entry session."""
+    NOT_CONFIRMED = "NOT_CONFIRMED"
+    """A close entry whose gate failed at the decision time."""
     SKIPPED = "SKIPPED"
     MISSED = "MISSED"
     CLOSED = "CLOSED"
@@ -310,10 +314,16 @@ def decide(
     return result.regime, decision.findings, approved
 
 
+def at_close(risk: RiskConfig, strategy: Strategy) -> bool:
+    """The strategy enters at the close (the #144 candidate): no minute bars needed."""
+    return risk.plans.entry[strategy].trigger is TriggerKind.CLOSE
+
+
 def reachable(p: PoolInputs, listing: Listing, entry: date) -> bool:
-    """The entry session's daily high reaches the pivot (every EP is played)."""
+    """The entry session's daily high reaches the pivot (every EP and every close entry is
+    played: the gate decides)."""
     f = listing.found
-    if f.setup.strategy is Strategy.EPISODIC_PIVOT:
+    if f.setup.strategy is Strategy.EPISODIC_PIVOT or at_close(p.risk, f.setup.strategy):
         return True
     s = p.h.series[f.security]
     i = bisect.bisect_left(s.dates, entry)
@@ -426,7 +436,7 @@ def play(
     listing: Listing,
     entry: date,
     approved: ApprovedEntry,
-    minutes: Minutes,
+    minutes: Minutes | None,
     market: Market,
 ) -> TradeResult:
     """``simulate_trade`` from the entry session, in its traded units, over a growing span."""
@@ -464,7 +474,7 @@ def play(
             f.setup.strategy,
             days,
             symbol=symbol,
-            minutes={entry: minutes},
+            minutes={} if minutes is None else {entry: minutes},
             market=market,
             risk=p.risk,
             tested_ema=detail.tested_ema if isinstance(detail, PullbackDetail) else None,
@@ -481,6 +491,7 @@ def play(
 
 _STATUS = {
     TradeOutcome.SKIPPED: Status.SKIPPED,
+    TradeOutcome.NOT_CONFIRMED: Status.NOT_CONFIRMED,
     TradeOutcome.MISSED: Status.MISSED,
     TradeOutcome.CLOSED: Status.CLOSED,
     TradeOutcome.OPEN: Status.OPEN,
@@ -505,7 +516,7 @@ def run_pool(
     reach = {(id(listing), entry): reachable(p, listing, entry) for listing, entry in attempts}
     by_entry: dict[date, set[str]] = defaultdict(set)
     for listing, entry in attempts:
-        if reach[id(listing), entry]:
+        if reach[id(listing), entry] and not at_close(p.risk, listing.found.setup.strategy):
             by_entry[entry].add(listing.found.security)
     symbols = symbols_for(by_entry)
     wanted: dict[date, set[str]] = defaultdict(set)
@@ -530,7 +541,7 @@ def run_pool(
             continue
         traded = symbols.get((entry, listing.found.security))
         bars = minutes.get(entry, {}).get(traded) if traded is not None else None
-        if bars is None:
+        if bars is None and not at_close(p.risk, listing.found.setup.strategy):
             trades.append(PoolTrade(listing, entry, regime, Status.NO_MINUTES, findings, approved))
             continue
         result = play(p, listing, entry, approved, bars, market)

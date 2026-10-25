@@ -212,3 +212,41 @@ def test_morning_eps_pass_on_their_opening_volume_only() -> None:
     check = bp.confirm_morning_eps(p, [loud, quiet, missing, vcp], minutes_for, symbols_for)
     assert check.kept == [vcp, loud]
     assert (check.candidates, check.passed, check.no_minutes) == (3, 1, 1)
+
+
+def test_close_entries_are_played_without_minute_bars(tmp_path: Path) -> None:
+    store, risk = build_synthetic(tmp_path)
+    days = [_session(d) for d in SESSIONS]
+    hist = load_history(store, days, risk, last=SESSIONS[-1])
+    reports = [(d, EarningsTiming.AFTER_CLOSE) for d in SESSIONS[20::63]]
+    hist.earnings = dict.fromkeys(hist.series, reports)
+    loaded = Loaded(hist, days, store, None)  # type: ignore[arg-type]
+    close = risk.with_candidate("CLOSE")
+    p, candidates = pool_inputs(loaded, close, Variant(2, -2, 2, 8), log=lambda _: None)
+    lists = bp.capped_lists(p.h, candidates.found, candidates.regimes, close)
+    assert lists
+    for strategy in Strategy:
+        assert bp.at_close(close, strategy)
+        assert not bp.at_close(risk, strategy)
+
+    def no_minutes(wanted: Mapping[date, set[str]]) -> Mapping[date, Mapping[str, bp.Minutes]]:
+        assert not any(wanted.values()), "a close entry fetched minute bars"
+        return {}
+
+    def symbols_for(wanted: Mapping[date, set[str]]) -> Mapping[tuple[date, str], str]:
+        return bp.traded_symbols(store, wanted)
+
+    trades = bp.run_pool(p, lists, no_minutes, symbols_for)
+    statuses = Counter(t.status for t in trades)
+    assert not statuses[bp.Status.NOT_REACHED]
+    assert not statuses[bp.Status.NO_MINUTES]
+    assert statuses[bp.Status.NOT_CONFIRMED] + statuses[bp.Status.CLOSED] >= 1
+    filled = [bp.unit(t.listing) for t in trades if t.triggered]
+    assert len(filled) == len(set(filled))
+    for t in trades:
+        if t.triggered:
+            assert t.result is not None
+            assert t.result.gate is not None
+            assert t.result.gate.passed
+            assert t.result.order is not None
+            assert t.result.order.tranches.second == 0
