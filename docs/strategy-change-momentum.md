@@ -1,6 +1,6 @@
 # The strategy change: from chart-pattern setups to a momentum book (#146)
 
-**Status 2026-10-25: decided by the user, not yet planned or built.** The plan (the rules, the pre-registration, the build order) is written in a separate chat; this page is its input. It records what was decided, why, what carries over, and the questions the plan must answer. Nothing below is a rule yet unless it says "decided".
+**Status 2026-10-25: decided by the user, not yet built.** The plan (the rules, the pre-registration, the build order) is proposed in [momentum-plan.md](momentum-plan.md), awaiting the user's approval; this page is its input. It records what was decided, why, what carries over, and the questions the plan must answer. Nothing below is a rule yet unless it says "decided".
 
 ## 1. The decision
 
