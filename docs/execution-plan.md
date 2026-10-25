@@ -58,7 +58,12 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 3.5b Guardrails, sizing, triggers, risk multiplier (pure; the 3.8 backtest needs them) *(`guardrails/` (`evaluate`, the 09:36 `orders` check and one module per rule family, 100% branch coverage enforced in CI), `execution/triggers.py`, `execution/sizing.py`, `journal/risk_multiplier.py`, `journal/numbers.py`; `risk.yaml` `entries:` and the per-strategy stop widths. Readings #140. Nothing live calls them yet: Phase 5 wires them; the skeleton keeps its own sizing)*
 - [x] 3.6 Simulator and fake broker (`sim/`) *(`sim/fills.py` (the fill model), `sim/trade.py` (one approved entry played forward through the live order check, plans and tranche-2 code; R, marks, fills), the fake broker's `play`; `risk.yaml` `sim:` (liquidity-tiered slippage). Pure, 100% branch coverage on the new modules. Readings #141. Nothing calls it yet: 3.7 builds the baseline book and the scorecard on it)*
 - [x] 3.7 Watchlist, baseline book, breakout tracker, verdict scorecard *(migration 0007; `scan` writes the full scan to `daily_watchlist` (`strategies/watchlist.py`); `simulate` (`journal/evening.py`) runs the breakout tracker, the baseline book (decided from T-1's list through the guardrails, re-played each evening from minute bars cached in S3) and the scorecard plumbing; `regime` reads the tracker. Checked on real `dev` data inside a rolled-back transaction. Readings #142)*
-- [ ] 3.8 Baseline backtest (choose defaults) + re-run 2.4 with leadership health *(in progress: the 5-pillar regime run is done (not frozen); **the pool fails the gate** on 2017-2022 and no comparison fixes it; diagnostics found costs, early failures and an EP look-ahead (fixed, #143). Phase 4 waits on the strategy decision: `docs/strategy-decision.md`. The holdout is still closed)*
+- [ ] 3.8 Baseline backtest (choose defaults) + re-run 2.4 with leadership health *(in progress: the 5-pillar regime run is done (not frozen); **the pool fails the gate** on 2017-2022 and no comparison fixes it; diagnostics found costs, early failures and an EP look-ahead (fixed, #143). The strategy decision is #144: two close-entry candidates, run once (3.8a-e below). The holdout is still closed)*
+- [x] 3.8a 👤 Strategy decision: the review's questions answered, fallback F chosen *(2026-10-25; `docs/strategy-review-2026-10-25.md`, `docs/strategy-execution-2026-10-25.md`; decisions #144, #145)*
+- [ ] 3.8b 👤 Pre-register the close entry (`docs/backtests/close-entry-preregistration.md`), approved and committed before any code reads real data
+- [ ] 3.8c Build the close entry: pure layer, simulator entry, pool, report; known-answer tests; the blind mechanics check and the decision-price sample
+- [ ] 3.8d The one scored run on 2017-2022 and its pre-registered reading
+- [ ] 3.8e (on a pass only) Freeze, open the holdout once, finish 3.8
 
 **Phase 4: LLM layer**
 - [ ] 4.1 LLM client and batch
@@ -604,6 +609,8 @@ Each comparison changes **one** dimension against the source-default reference, 
 
 **Goal:** the full evening and morning decision pipeline in `dry_run`, with every decision logged and costed, within the token budget.
 
+**Runs alongside 3.8a-e (#145).** Phase 4 no longer waits for the baseline gate: it touches no capital. Build it on `phase-4/...` branches. When a close-entry PR (3.8c) is open at the same time, merge that first, since both touch `config.py` and `risk.yaml`. 4.5 and 4.6 each need the user's OK with a cost estimate.
+
 ### 4.1 LLM client and batch (M)
 
 - `llm/client.py`:
@@ -860,4 +867,4 @@ flowchart LR
     P8 --> P9[9 Extensions]
 ```
 
-The spike-grade edge check (0.3h) gives an early warning on the core setups before the data layer is built, using only daily bars; the formal gate is still 3.8. The live `EpisodicPivot` path (5.6) comes after the core execution loop works, but before the AWS deploy and the paper trial, so the trial trades every strategy. The pure guardrails, sizing, triggers and risk multiplier (3.5b) come before the simulator and the baseline backtest, because 3.8 compares them on vs off. The baseline gate in 3.8 is a go / no-go point: Phase 4 starts only if the setup pool has positive expectancy. Phase 5 only wires them into the live path. The order layer (5.3–5.4) grows from the skeleton's core (1.7), and the simulator (3.6) is shared by everything that replays or backtests. The evening pipeline (4.6) runs from the end of Phase 4, so the scorecard has months of data before the trial.
+The spike-grade edge check (0.3h) gives an early warning on the core setups before the data layer is built, using only daily bars; the formal gate is still 3.8. The live `EpisodicPivot` path (5.6) comes after the core execution loop works, but before the AWS deploy and the paper trial, so the trial trades every strategy. The pure guardrails, sizing, triggers and risk multiplier (3.5b) come before the simulator and the baseline backtest, because 3.8 compares them on vs off. The baseline gate in 3.8 is a go / no-go point for capital (#145): Phase 4 runs in `dry_run` while the close entry is tested (3.8a-e), but Phase 5's live entries and the paper trial wait for a pool with positive expectancy (or, under fallback F, for the scorecard's pre-registered bar). Phase 5 only wires them into the live path. The order layer (5.3–5.4) grows from the skeleton's core (1.7), and the simulator (3.6) is shared by everything that replays or backtests. The evening pipeline (4.6) runs from the end of Phase 4, so the scorecard has months of data before the trial.
