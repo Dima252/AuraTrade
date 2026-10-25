@@ -23,6 +23,10 @@ class EntryBlock(StrEnum):
     EARLY_CLOSE = "EARLY_CLOSE"
     DATA_INTEGRITY = "DATA_INTEGRITY"
     """An `INCOMPLETE` session or a calendar disagreement."""
+    CORRECTION = "CORRECTION"
+    """The momentum book's overlay: the effective regime is `CORRECTION`, or unknown (#147)."""
+    INDEX_TREND = "INDEX_TREND"
+    """The momentum book's comparison C4: SPY at or below its long SMA, or unknown."""
 
 
 def loss_halts(
