@@ -508,3 +508,32 @@ scorecard:  # README §5.12 Analyst verdict scorecard (task 3.7); see auratrade.
   bootstrap_samples: 2000            # session-block bootstrap
   confidence: 0.9                    # 90% intervals (README §15)
   seed: 37
+
+book:  # README §5.3, §7, §8: the momentum book (#147); docs/backtests/momentum-preregistration.md
+  holdings: 8                        # equal slots of equity x max_exposure / 8
+  candidates: 16                     # the LLM picks from the first 16 eligible names (2N)
+  review_candidates: 40              # the Book Analyst reviews 40, for the scorecard
+  universe_size: 1000                # the most liquid by 50-session average raw dollar volume
+  formation_sessions: 252            # 12-1: close 21 bars back / close 252 bars back - 1
+  skip_sessions: 21
+  hold_percentile: 90                # kept while in the top decile; sold at the rebalance below it
+  stop_fraction: 0.20                # GTC stop 20% below the entry, raised at each rebalance
+  max_exposure: 1.0                  # no margin
+  buy_retry_sessions: 1              # buys blocked by a loss halt or no price: one retry
+  overlay: REGIME                    # CORRECTION or the crisis override blocks buys
+  overlay_sma_sessions: 200          # comparison C4: SPY above its 200-session SMA
+  drawdown_halt: 0.30                # buys only, manual re-enable (#148; the setups' halts.drawdown stays)
+  start_slot_fraction: 0.5           # half slots at the start of the trial and of live trading
+  event_report_sessions: 5           # position event: a report within 5 sessions
+  event_drop: 0.10                   # position event: a one-session fall of 10% or more
+  earnings_cushion_min_gain: 0.10    # comparison C5 only: sell before a report below +10%
+  backtest:
+    start_equity: 5000               # the paper account's capital (#122)
+    notional_equity: 100000          # the no-price-skips diagnostic
+    bootstrap_block_sessions: 63     # non-overlapping blocks of daily excess returns
+    bootstrap_samples: 2000
+    confidence: 0.9
+    seed: 39
+    min_positive_years: 3            # G3: of the 6 tuning years
+    max_drawdown: 0.45               # G4
+    timing_offsets: [1, 6, 11, 16]   # the rebalance-timing-luck diagnostic

@@ -1,4 +1,6 @@
-# What's left: status at 2026-10-24 (task 3.8: the baseline gate failed; the strategy decision is next, see [strategy-decision.md](strategy-decision.md); `AuraTradePaper` keeps running the 1.8 acceptance)
+# What's left: status at 2026-10-25 (the momentum book: task 3.9 done, the backtest build 3.10-3.16 next; `AuraTradePaper` keeps running the 1.8 acceptance)
+
+> **Now (2026-10-25):** the strategy is a momentum book (#146-#149). The plan is [momentum-plan.md](momentum-plan.md), the pre-registration [backtests/momentum-preregistration.md](backtests/momentum-preregistration.md). Next in the tracker: **3.10** (the ranking, pure). Phase 4 waits for the tuning gate (3.15). Sections below dated 10-24 and earlier describe the setup system's work, kept as the record. Before the next `paper` deploy: `alembic upgrade head` on the `paper` branch (0007).
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 

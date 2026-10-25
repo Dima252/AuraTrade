@@ -451,6 +451,7 @@ class RiskConfig(_Strict):
     watchlist: WatchlistConfig
     baseline: BaselineConfig
     scorecard: ScorecardConfig
+    book: BookConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1258,6 +1259,73 @@ class ScorecardConfig(_Strict):
     def _check(self) -> Self:
         if list(self.horizons) != sorted(set(self.horizons)):
             raise ValueError("scorecard horizons must be distinct and ascending")
+        return self
+
+
+class BookOverlay(StrEnum):
+    """What blocks new buys in the momentum book (README §6): the computed regime and the crisis
+    override (the primary), SPY at or below its long SMA with the crisis override (comparison
+    C4), or nothing (C3)."""
+
+    REGIME = "REGIME"
+    SPY_SMA = "SPY_SMA"
+    OFF = "OFF"
+
+
+class BookBacktestConfig(_Strict):
+    """The momentum book's backtest (`docs/backtests/momentum-preregistration.md`)."""
+
+    start_equity: Positive
+    # The no-price-skips diagnostic: the same book on an account large enough for any price.
+    notional_equity: Positive
+    bootstrap_block_sessions: PositiveInt
+    bootstrap_samples: PositiveInt
+    confidence: Fraction
+    seed: int
+    # The gate (G3, G4): positive excess years, and the deepest drawdown accepted.
+    min_positive_years: PositiveInt
+    max_drawdown: Fraction
+    # The timing-luck diagnostic: the rebalance moved to these sessions of the month (1 = first).
+    timing_offsets: tuple[PositiveInt, ...] = Field(min_length=1)
+
+
+class BookConfig(_Strict):
+    """The momentum book (README §5.3, §7, §8; decisions #147-#148)."""
+
+    holdings: PositiveInt
+    # The LLM picks from the first `candidates` eligible names; the Analyst reviews
+    # `review_candidates` of them so the scorecard has enough names.
+    candidates: PositiveInt
+    review_candidates: PositiveInt
+    universe_size: PositiveInt
+    # 12-1: the return from `formation_sessions` to `skip_sessions` bars before the ranking close.
+    formation_sessions: PositiveInt
+    skip_sessions: PositiveInt
+    hold_percentile: Annotated[float, Field(ge=0.0, le=100.0)]
+    stop_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    max_exposure: Fraction
+    buy_retry_sessions: Annotated[int, Field(ge=0)]
+    overlay: BookOverlay
+    overlay_sma_sessions: PositiveInt
+    # Buys only; live it waits for a manual re-enable.
+    drawdown_halt: Fraction
+    # "Prove it first": slot size at the start of the paper trial and of live trading.
+    start_slot_fraction: Annotated[float, Field(gt=0.0, le=1.0)]
+    # Position events for the Portfolio Manager.
+    event_report_sessions: PositiveInt
+    event_drop: Fraction
+    # Comparison C5's cushion: sell before a report if the gain since entry is below this.
+    earnings_cushion_min_gain: Annotated[float, Field(ge=0.0)]
+    backtest: BookBacktestConfig
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        if self.skip_sessions >= self.formation_sessions:
+            raise ValueError("book skip_sessions must be below formation_sessions")
+        if not self.holdings <= self.candidates <= self.review_candidates:
+            raise ValueError("book needs holdings <= candidates <= review_candidates")
+        if self.candidates > self.universe_size:
+            raise ValueError("book candidates can't exceed universe_size")
         return self
 
 
