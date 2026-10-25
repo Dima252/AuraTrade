@@ -1,6 +1,6 @@
 # The momentum book: the plan (#146)
 
-**Status 2026-10-25: proposed, awaiting the user's approval.** Nothing here is a rule yet. This plan answers `docs/strategy-change-momentum.md` (its §7 prompt). It proposes the strategy's rules, the pre-registration for its backtest, the README changes and a re-planned execution plan from 3.8 on. Nothing was run to write it, and the 2023+ holdout is still closed. Once approved, the decisions go into the README log (proposed #147-#149), the rules into `config/risk.yaml`, and the pre-registration into its own file before any code reads real data.
+**Status 2026-10-25: approved.** The user delegated the decisions in §10 ("decide for me; as profitable as you can") and Claude took them; they are recorded under §10. Recorded as decisions #147-#149 in task 3.9. This plan answers `docs/strategy-change-momentum.md` (its §7 prompt). It proposes the strategy's rules, the pre-registration for its backtest, the README changes and a re-planned execution plan from 3.8 on. Nothing was run to write it, and the 2023+ holdout is still closed. Once approved, the decisions go into the README log (proposed #147-#149), the rules into `config/risk.yaml`, and the pre-registration into its own file before any code reads real data.
 
 Where a source disagrees with another, the plan picks one as the **primary** and makes the other a **pre-registered comparison** (C1-C7, §5.5). The literature citations are from the published papers and books as known when this was written. Their exact numbers are checked when the pre-registration is written (task 3.9).
 
@@ -61,7 +61,7 @@ The setup-era limits assume small R-based risks with tight stops. A momentum boo
 | Stop | Per-strategy widths, structural | GTC, full quantity, at the plan level, raised only (§2). The invariant, sell sequence and lock are unchanged |
 | Progressive-exposure multiplier | R-based tiers | Retired: R means little with a 20% catastrophe stop. "Prove it first" survives as **half slots** at the start of the paper trial and of live trading |
 | Daily / weekly loss halts | −2% / −5%, block entries | Kept: they block buys only, so they matter only on rebalance days (the buys retry the next session) |
-| **Drawdown halt** | −15%, manual re-enable | **Your call (§10 Q1).** A momentum book often draws down 25-40%. At −15% the halt would stop the strategy in most bad years |
+| **Drawdown halt** | −15%, manual re-enable | **−30%**, manual re-enable, buys only (§10, decision 1). A momentum book often draws down 25-40%. At −15% the halt would stop the strategy in most bad years |
 | Price levels from code | Pivot ±3%, tighter stops | The LLM never supplies a price. It may only raise a stop |
 | Removed for the book | Pivot tolerance, max chase, 50-day extension, base count, tranche 2, stop-width caps, "keep losses small" | — |
 
@@ -102,7 +102,7 @@ Reported for every configuration, for the whole period and per calendar year: CA
 - **G1:** excess CAGR over SPY total return > 0, after costs.
 - **G2:** excess CAGR over MTUM total return ≥ 0 (§10 Q2).
 - **G3:** excess over SPY positive in ≥ 3 of the 6 years, and still > 0 with the best year left out.
-- **G4:** CAGR ÷ max drawdown ≥ SPY's over the same period, and max drawdown within your tolerance (§10 Q1).
+- **G4:** CAGR ÷ max drawdown ≥ SPY's over the same period, and max drawdown ≤ 45% (§10, decision 1).
 
 **Holdout, opened once:** excess CAGR over SPY > 0 and over MTUM ≥ 0. 2023-25 was kind to momentum (README §15), so a pass there is weak evidence and a fail is strong.
 
@@ -248,6 +248,21 @@ Pre-registered in task 7.0, from the dry-run data: the information coefficient o
 | `sim/fills.py`, slippage tiers; `block_bootstrap`; the cluster rule | The scorecard (information coefficient) and the live rule book (4.5) |
 
 ## 10. Questions only you can answer
+
+**Decided 2026-10-25** (the user delegated them; Claude chose for expected return, without loosening the validation):
+
+| # | Decision | Why |
+|---|---|---|
+| 1 | Drawdown halt at **−30%** (manual re-enable; it blocks buys only, never sells or stops). G4's drawdown cap: **45%** | A −15% halt would sit out most recoveries, which is where momentum earns. 45% is about 1.3× SPY's 2020 fall |
+| 2 | G2 (beat MTUM) **required** | If the book can't beat MTUM, holding MTUM makes more money |
+| 3 | **Hold through earnings** (primary); C5 tests the cushion | Much of momentum's return comes around reports |
+| 4 | The LLM picks from the **top 16** | Keeps the live book inside the tested strategy |
+| 5 | Phase 4 **after the tuning gate passes** | No prompts paid for a strategy that fails |
+| 6 | Comparisons chosen on **2017-2022 only**; the holdout is one clean test of the frozen book | The holdout is the last clean evidence |
+| 7 | Paper trial: **the later of 6 rebalances or 3 months**, judged mainly on operations | "30 trades" would take about a year |
+| 8 | **8 names, monthly, trades at 15:40 on the first session** | As proposed |
+
+The original questions, for the record:
 
 1. **Drawdown tolerance.** A momentum book often falls 25-40% from its peak. What is the most you'd accept in the backtest (G4)? And should the −15% drawdown halt stay (it would stop the strategy in most bad years), move to −25%, or become an alert only? *Recommendation:* the halt at −25% with manual re-enable, and G4's cap at 40%.
 2. **MTUM.** If the book beats SPY but not MTUM, should it still go ahead, or would you rather hold MTUM? *Recommendation:* keep G2 (MTUM ≥ 0) required. A book that can't beat a cheap ETF isn't worth its running costs.
