@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 
 from auratrade.config import (
+    EntryPolicy,
     GateKind,
     KullamagiPartial,
     MinerviniPartial,
@@ -203,8 +204,8 @@ def test_breakout_gate_passes() -> None:
 @pytest.mark.parametrize(
     ("changes", "failure"),
     [
-        ({"price": 99.9, "day_low": 98.0}, "between"),  # back below the pivot
-        ({"price": 105.1, "day_high": 106.0}, "between"),  # past the max chase
+        ({"price": 99.9, "day_low": 98.0}, "below the level"),  # back below the pivot
+        ({"price": 105.1, "day_high": 106.0}, "max chase"),  # past the max chase
         ({"day_low": 101.0, "day_high": 105.0}, "upper"),  # (102 - 101) / 4 = 0.25
         ({"day_high": 99.0}, "upper"),  # no range
         ({"projected_volume": 1399.0}, "volume"),  # < 1.4x
@@ -227,7 +228,7 @@ def test_pullback_gate_passes_without_breakout_volume_or_a_new_rs_high() -> None
 @pytest.mark.parametrize(
     ("changes", "failure"),
     [
-        ({"price": 52.6, "day_high": 53.0}, "between"),
+        ({"price": 52.6, "day_high": 53.0}, "max chase"),
         ({"projected_volume": 999.0}, "volume"),
         ({"rs_line_at_low": True}, "50-session low"),
         ({"tested_ma": 51.0}, "tested moving average"),
@@ -252,3 +253,84 @@ def test_tranche2_gate_per_strategy() -> None:
         result = tranche2_gate(single, BREAKOUT_OK, PLANS)
         assert not result.passed
         assert "single tranche" in result.failures[0]
+
+
+# --- The close-entry candidate (#144) ----------------------------------------------------------
+
+GAP_OK = GateInput(
+    price=112.0,
+    level=110.0,  # the gap session's open
+    day_high=114.0,
+    day_low=106.0,
+    projected_volume=3000.0,  # 3x
+    avg_volume_50=1000.0,
+    rs_line_near_high=False,
+    rs_line_at_low=True,
+)
+
+
+def test_gap_held_gate_has_no_max_chase_and_no_rs_conditions() -> None:
+    assert confirmation_gate(GateKind.GAP_HELD, GAP_OK, PLANS).passed
+    far = _with(GAP_OK, price=125.0, day_high=126.0)  # 14% above the open
+    assert confirmation_gate(GateKind.GAP_HELD, far, PLANS).passed
+
+
+@pytest.mark.parametrize(
+    ("changes", "failure"),
+    [
+        ({"price": 109.9}, "below the level"),  # the gap didn't hold
+        ({"price": 109.0, "day_low": 105.0}, "below the level"),
+        ({"day_high": 125.0}, "upper"),  # (112 - 106) / 19 < 0.5
+        ({"projected_volume": 2999.0}, "volume"),  # < 3x, the after-close EP rule
+    ],
+)
+def test_gap_held_gate_fails(changes: dict[str, Any], failure: str) -> None:
+    result = confirmation_gate(GateKind.GAP_HELD, _with(GAP_OK, **changes), PLANS)
+    assert any(failure in f for f in result.failures)
+
+
+def test_gate_without_its_volume_condition() -> None:
+    gates = dict(PLANS.confirmation_gates)
+    gates[GateKind.BREAKOUT] = gates[GateKind.BREAKOUT].model_copy(
+        update={"min_volume_ratio": None}
+    )
+    plans = PLANS.model_copy(update={"confirmation_gates": gates})
+    light = _with(BREAKOUT_OK, projected_volume=1.0, avg_volume_50=None)
+    assert confirmation_gate(GateKind.BREAKOUT, light, plans).passed
+    assert not confirmation_gate(GateKind.BREAKOUT, light, PLANS).passed
+
+
+def test_close_candidate_matches_the_preregistration() -> None:
+    candidate = PLANS.entry_candidates["CLOSE"]
+    gates = {
+        Strategy.VCP_BREAKOUT: GateKind.BREAKOUT,
+        Strategy.EMERGING_LEADER: GateKind.BREAKOUT,
+        Strategy.MOMENTUM_BREAKOUT: GateKind.BREAKOUT,
+        Strategy.LEADER_PULLBACK: GateKind.PULLBACK,
+        Strategy.EPISODIC_PIVOT: GateKind.GAP_HELD,
+    }
+    for strategy, gate in gates.items():
+        policy = candidate.entry[strategy]
+        assert (policy.trigger, policy.stop, policy.tranches, policy.gate) == (
+            TriggerKind.CLOSE,
+            StopKind.TRIGGER_DAY_LOW,
+            1,
+            gate,
+        )
+    ep = candidate.stop_widths[Strategy.EPISODIC_PIVOT]
+    assert (ep.unit.value, ep.max) == ("LIMIT_PCT", 0.08)
+    gap = PLANS.confirmation_gates[GateKind.GAP_HELD]
+    assert gap.max_above_level is None
+    assert (gap.min_range_position, gap.min_volume_ratio) == (0.5, 3.0)
+
+
+@pytest.mark.parametrize(
+    "fields",
+    [
+        {"trigger": "CLOSE", "stop": "TRIGGER_DAY_LOW", "tranches": 2, "gate": "BREAKOUT"},
+        {"trigger": "CLOSE", "stop": "TRIGGER_DAY_LOW", "tranches": 1},
+    ],
+)
+def test_close_entry_policy_is_one_tranche_with_a_gate(fields: dict[str, Any]) -> None:
+    with pytest.raises(ValueError, match="close entry"):
+        EntryPolicy.model_validate(fields)

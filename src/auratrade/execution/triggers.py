@@ -79,6 +79,8 @@ def trigger_level(kind: TriggerKind, level: float, opening: OpeningRange | None)
             return None if opening is None else max(level, opening.high)
         case TriggerKind.OPENING_RANGE_HIGH:
             return None if opening is None else opening.high
+        case TriggerKind.CLOSE:
+            raise ValueError("a close entry has no 09:36 trigger (guardrails.orders.check_close)")
         case _:  # pragma: no cover - every trigger kind is handled above
             assert_never(kind)
 

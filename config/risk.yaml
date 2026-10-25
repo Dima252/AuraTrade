@@ -314,12 +314,31 @@ plans:  # README §7.1-7.4; see auratrade.plans. Defaults change only on backtes
       rs_line_near_high: false
       above_tested_ma: true
       rs_line_not_at_low: true
+    GAP_HELD:                        # an EP at the close (#144): price >= the gap open ...
+      max_above_level: null          # ... no max chase (the 8% stop cap bounds it)
+      min_range_position: 0.5
+      min_volume_ratio: 3.0          # = strategies.EPISODIC_PIVOT.min_volume_ratio (after close)
+      rs_line_near_high: false
+      above_tested_ma: false
+      rs_line_not_at_low: false
   entry:                             # §7.1
     VCP_BREAKOUT: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: BREAKOUT}
     LEADER_PULLBACK: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: PULLBACK}
     EMERGING_LEADER: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: BREAKOUT}
     MOMENTUM_BREAKOUT: {trigger: CONSOLIDATION_OR_RANGE_HIGH, stop: LOW_OF_DAY, tranches: 1}
     EPISODIC_PIVOT: {trigger: OPENING_RANGE_HIGH, stop: LOW_OF_DAY, tranches: 1}
+  # The close-entry candidates (#144, docs/backtests/close-entry-preregistration.md): the
+  # backtest swaps them into `entry`; nothing live reads them until one passes the gate.
+  entry_candidates:
+    CLOSE:
+      entry:
+        VCP_BREAKOUT: {trigger: CLOSE, stop: TRIGGER_DAY_LOW, tranches: 1, gate: BREAKOUT}
+        LEADER_PULLBACK: {trigger: CLOSE, stop: TRIGGER_DAY_LOW, tranches: 1, gate: PULLBACK}
+        EMERGING_LEADER: {trigger: CLOSE, stop: TRIGGER_DAY_LOW, tranches: 1, gate: BREAKOUT}
+        MOMENTUM_BREAKOUT: {trigger: CLOSE, stop: TRIGGER_DAY_LOW, tranches: 1, gate: BREAKOUT}
+        EPISODIC_PIVOT: {trigger: CLOSE, stop: TRIGGER_DAY_LOW, tranches: 1, gate: GAP_HELD}
+      stop_widths:                   # every cap is measured from the limit at the close
+        EPISODIC_PIVOT: {unit: LIMIT_PCT, max: 0.08, noise_floor_atr: 0.5}  # Minervini's 8%
   # Default exit sets (§7.3): one trader's own set per strategy, plus the safety rules
   # (earnings cushion, regime-downgrade tightening). Values inside the menus are provisional
   # and chosen by the 3.8 baseline backtest.

@@ -462,6 +462,17 @@ class RiskConfig(_Strict):
     def short_hash(self) -> str:
         return self.config_hash[:12]
 
+    def with_candidate(self, name: str) -> RiskConfig:
+        """The config with the entry candidate ``name`` swapped in: its entry policies and its
+        stop caps (#144)."""
+        c = self.plans.entry_candidates[name]
+        plans = self.plans.model_copy(update={"entry": {**self.plans.entry, **c.entry}})
+        widths = {**self.guardrails.stop_widths, **c.stop_widths}
+        guardrails = self.guardrails.model_copy(update={"stop_widths": widths})
+        # Re-validated, so the copy has its own hash.
+        data = {**self.model_dump(), "plans": plans.model_dump()}
+        return RiskConfig.model_validate({**data, "guardrails": guardrails.model_dump()})
+
 
 def load_risk_config(path: Path = DEFAULT_RISK_CONFIG) -> RiskConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -789,16 +800,24 @@ class TriggerKind(StrEnum):
     CONSOLIDATION_OR_RANGE_HIGH = "CONSOLIDATION_OR_RANGE_HIGH"
     """max(consolidation high, opening-range high)."""
     OPENING_RANGE_HIGH = "OPENING_RANGE_HIGH"
+    CLOSE = "CLOSE"
+    """The close-entry candidate (#144): the entry gate on the 15:40 decision price, then a
+    marketable limit buy with its stop leg."""
 
 
 class StopKind(StrEnum):
     STRUCTURAL = "STRUCTURAL"
     LOW_OF_DAY = "LOW_OF_DAY"
+    TRIGGER_DAY_LOW = "TRIGGER_DAY_LOW"
+    """The trigger session's low at the decision time, never below the structural stop
+    (#144)."""
 
 
 class GateKind(StrEnum):
     BREAKOUT = "BREAKOUT"
     PULLBACK = "PULLBACK"
+    GAP_HELD = "GAP_HELD"
+    """An EP at the close (#144): the gap held, on the after-close EP volume."""
 
 
 class EntryPolicy(_Strict):
@@ -806,20 +825,34 @@ class EntryPolicy(_Strict):
     stop: StopKind
     tranches: Literal[1, 2]
     gate: GateKind | None = None
+    """The tranche-2 gate; for a close entry, the entry's own gate."""
 
     @model_validator(mode="after")
     def _check(self) -> Self:
-        if (self.tranches == 2) != (self.gate is not None):
+        if self.trigger is TriggerKind.CLOSE:
+            if self.tranches != 1 or self.gate is None:
+                raise ValueError("a close entry is one tranche with an entry gate")
+        elif (self.tranches == 2) != (self.gate is not None):
             raise ValueError("a confirmation gate is needed exactly when there are 2 tranches")
         return self
 
 
-class GateConfig(_Strict):
-    """Tranche-2 confirmation gate (README §7.1), on the decision price."""
+class EntryCandidate(_Strict):
+    """A pre-registered entry candidate: the policies and stop caps it swaps in."""
 
-    max_above_level: Fraction
+    entry: dict[Strategy, EntryPolicy]
+    stop_widths: dict[Strategy, StopWidthRule] = {}
+
+
+class GateConfig(_Strict):
+    """A confirmation gate (README §7.1) on the decision price: tranche 2's, or a close entry's
+    (#144)."""
+
+    max_above_level: Fraction | None
+    """The max chase above the level; None: none (an EP has no prior pivot to chase from)."""
     min_range_position: Fraction
-    min_volume_ratio: Positive
+    min_volume_ratio: Positive | None
+    """None: no volume condition (the close-entry comparison)."""
     rs_line_near_high: bool
     above_tested_ma: bool
     rs_line_not_at_low: bool
@@ -887,6 +920,9 @@ class PlansConfig(_Strict):
     earnings_cushion: EarningsCushionConfig
     confirmation_gates: dict[GateKind, GateConfig]
     entry: dict[Strategy, EntryPolicy]
+    entry_candidates: dict[str, EntryCandidate] = {}
+    """Pre-registered entry policies a backtest swaps in (the close entry, #144); nothing live
+    reads them (``RiskConfig.with_candidate``)."""
     exit_sets: dict[ExitSetName, ExitPlan]
     default_plans: dict[Strategy, DefaultPlan]
 

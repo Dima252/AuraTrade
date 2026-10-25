@@ -57,11 +57,12 @@ def new_plan(
 
 @dataclass(frozen=True, slots=True)
 class GateInput:
-    """The session tranche 2 is decided on (the 15:40 decision price, projected volume)."""
+    """The session tranche 2 or a close entry is decided on (the 15:40 decision price,
+    projected volume)."""
 
     price: float
     level: float
-    """The pivot (breakout gate) or the trigger (pullback gate)."""
+    """The pivot (breakout gate), the trigger (pullback gate) or an EP's gap open."""
     day_high: float
     day_low: float
     projected_volume: float
@@ -87,12 +88,16 @@ def confirmation_gate(kind: GateKind, x: GateInput, config: PlansConfig) -> Gate
     failures: list[str] = []
     if not all(math.isfinite(v) for v in (x.price, x.level, x.day_high, x.day_low)):
         return GateResult(("prices must be finite",))
-    if not (reached(x.price, x.level) and reached(x.level * (1 + gate.max_above_level), x.price)):
-        failures.append("price is not between the level and the max chase")
+    if not reached(x.price, x.level):
+        failures.append("price is below the level")
+    elif gate.max_above_level is not None and not reached(
+        x.level * (1 + gate.max_above_level), x.price
+    ):
+        failures.append("price is above the max chase")
     day_range = x.day_high - x.day_low
     if day_range <= 0 or not reached((x.price - x.day_low) / day_range, gate.min_range_position):
         failures.append("price is not in the upper part of the day's range")
-    if (
+    if gate.min_volume_ratio is not None and (
         x.avg_volume_50 is None
         or x.avg_volume_50 <= 0
         or not reached(x.projected_volume, gate.min_volume_ratio * x.avg_volume_50)

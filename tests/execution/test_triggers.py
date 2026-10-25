@@ -188,3 +188,8 @@ def test_order_never_buys_above_the_limit() -> None:
 def test_low_of_day_stop_never_below_the_invalidation_level() -> None:
     assert low_of_day_stop(96.123, 95.0) == 96.13
     assert low_of_day_stop(94.0, 95.0) == 95.0
+
+
+def test_close_entry_has_no_0936_trigger() -> None:
+    with pytest.raises(ValueError, match="close entry"):
+        trigger_level(TriggerKind.CLOSE, 100.0, OpeningRange(101, 99))
