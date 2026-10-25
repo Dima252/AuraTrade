@@ -188,4 +188,23 @@ From `docs/backtests/baseline.md`, the EP after the look-ahead fix (#143).
 
 ## Reading
 
-(Not written yet.)
+*Written 2026-10-25 after the report above was committed as produced (84bd347). Read by the pre-registration's section 8; nothing here changes a rule.*
+
+**The result: nothing passes.** The pool is -0.30R (90% interval -0.39 to -0.20) over 1,003 closed trades, positive in 1 of 6 years. Every strategy's point estimate is below its 09:36 reference: `EPISODIC_PIVOT` -0.12R (276 trades, -0.27 to +0.03, positive in 2 of 6 years) against +0.21R at 09:36; `LEADER_PULLBACK`, the only strategy with 300 trades, -0.31R (-0.46 to -0.13) against -0.22R; VCP -0.40R, emerging leaders -0.55R. The decision-price check is well within its threshold (3 of 200), so the result isn't an artefact of deciding on the close.
+
+**What the pre-registration says now (section 8.2, "Nothing passes"):** stop. No further runs on 2017-2022, whatever this report suggests. The holdout stays closed. The fallback is **F** (the user's answer 2): Phase 4 continues in `dry_run` (#145), and before 4.6 deploys, a pre-registered bar is written that triggered BUYs must beat triggered SKIPs by more than the pool's deficit plus 0.1R on the scorecard. No capital until that bar is met. The EP isn't funded (its estimate is negative anyway); it stays in the scan and is scored in `dry_run`.
+
+**Why it lost (descriptive; none of this is a lever):**
+- **The hypothesis held in form, not in effect.** By construction no trade is stopped on its entry session, but the failures moved to the next few: 56% of pullbacks, 48% of emerging leaders, 41% of VCPs and 37% of EPs were stopped at a loss within 5 sessions.
+- **The trigger day's low is not out of the noise.** It set 98-100% of the stops, and the stops are tight: medians of 2.5% (pullbacks), 2.7% (emerging), 3.6% (VCP). The review expected the close entry to widen stops; for the scan strategies it didn't.
+- **The pay-up is large.** The median fill is 0.5-0.6R above the level: the entry gives away half of R before the trade starts.
+- **Costs** take about 0.19R a trade (zero slippage: -0.11R over everything; EP +0.04R), more than at 09:36 (0.13R), because the stops are tighter.
+- **The gate admits few.** Of the attempts that closed at or above their level, 10-20% passed (the volume rule failed 73-80% of them; see the blind report), so four of five strategies are under 300 trades.
+
+**The comparisons** (section 7; adoption needs both periods, and the holdout doesn't open):
+- *Volume off:* no difference (+0.00R together, -0.10 to +0.09) on nearly three times the trades. The IBD volume rule neither helps nor hurts at the close.
+- *The structural stop* (candidate 2): better by more than noise together (+0.16R, +0.02 to +0.31), for VCPs (+0.36R) and emerging leaders (+0.20R), and it rejects most pullbacks on width (376). It is still negative (-0.21R together, VCP -0.04R) and is not adopted; under section 8.3 it is not a reason for another run. It is consistent with 3.8's finding that tight stops lose.
+
+**Against the review's estimates:** it put EP at the close at +0.15 to +0.35R on 900-1,200 trades with about a 40% chance of passing, and the pool at about 0 +/- 0.1R. Both were wrong: the EP made 276 trades at -0.12R, the pool -0.30R. The gate and the 8% cap cut the EP sample by three quarters, and buying the gap's close did worse than its opening range.
+
+**Held sessions (3.8's owed check):** a soft-rule decision on the 15:40 price differs from one on the close on 14 of 200 held sessions (7%). Every daily-bar backtest here carries that much noise in its exits.

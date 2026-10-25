@@ -1,5 +1,7 @@
 # Executing the close-entry restructure (task 3.8, after the failed gate)
 
+**Outcome 2026-10-25: done, and the candidates failed.** 3.8c was built (PR #45); the blind check showed only pullbacks could reach 300 trades, and the user chose to run as pre-registered; the scored run (`docs/backtests/close-entry.md`) passes nothing: the pool -0.30R, EP -0.12R. By the pre-registered rule the fallback F applies (Step 6b). The rest of this page is the plan as written.
+
 **Status 2026-10-25.** This page turns the recommendation in [strategy-review-2026-10-25.md](strategy-review-2026-10-25.md) (B′ + A′: confirmation at the 15:40 decision price, two pre-registered candidates) into an ordered set of tasks. It is for the user and for the agents of the next sessions. **Step 0 is done:** the user answered every question as the review recommended (§2), recorded as #144 and #145. **Step 1 is done:** the user approved [close-entry-preregistration.md](backtests/close-entry-preregistration.md) and every explicit choice in it on 2026-10-25. Nothing is built, nothing has run on real data and the holdout (2023 on) stays closed.
 
 The order follows one rule. **Every choice that can move the result is fixed and committed before the code that measures it touches real data.** Then the tuning period gets exactly one scored run, and the holdout is opened at most once.
