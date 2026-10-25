@@ -1,4 +1,4 @@
-"""Ranking and the cap (README §5.3 "Ranking and cap"; task 3.3, #138).
+"""Ranking and the cap (archived README §5.3 "Ranking and cap"; task 3.3, #138).
 
 Every setup gets a **quality score**: the plain average of eight components, each scaled to
 0-1 (the user's choice: equal weights, nothing fitted). A component without data scores
@@ -12,11 +12,12 @@ Every setup gets a **quality score**: the plain average of eight components, eac
 | RS line | 1 at a new 52-week high, 0.5 within 5% of it, 0 otherwise |
 | Up/down volume | 1 at a ratio >= 1.0 (accumulation), else 0 |
 | Tightness | stop width / ADR, ranked within the session's pool: the tightest scores 1 |
-| Base count | 1st base 1, 2nd 2/3, 3rd or an unreliable count 1/3, 4th+ 0 (README §8, #126) |
+| Base count | 1st base 1, 2nd 2/3, 3rd or an unreliable count 1/3, 4th+ 0 (archived README §8,
+#126) |
 | Catalyst | the share of: a recent earnings gap-up, EPS growth >= 25%, accelerating EPS |
 
 **The earnings surprise is not in the score**: it has no history, and the backtested pool
-must be the pool the Analyst gets (README §5.3).
+must be the pool the Analyst gets (archived README §5.3).
 
 **Selection** (``select``): only setups of strategies fundable in the regime compete; a stock
 more than 25% above its 50-day is excluded, except momentum and EP setups; each ticker takes
@@ -51,7 +52,8 @@ COMPONENTS = (
 
 @dataclass(frozen=True, slots=True)
 class Fundamentals:
-    """The latest quarter filed before the scan session (README §15: by EDGAR `filed` date)."""
+    """The latest quarter filed before the scan session (archived README §15: by EDGAR `filed`
+    date)."""
 
     eps_growth: float | None
     eps_acceleration: float | None
@@ -59,7 +61,7 @@ class Fundamentals:
 
 @dataclass(frozen=True, slots=True)
 class Features:
-    """The candidate's features at the scan session, as README §5.3 lists them."""
+    """The candidate's features at the scan session, as archived README §5.3 lists them."""
 
     rs_rating: float | None
     momentum_rank: float | None
@@ -223,7 +225,7 @@ def score_pool(candidates: Sequence[tuple[Setup, Features]], risk: RiskConfig) -
 
 
 def too_extended(scored: Scored, risk: RiskConfig) -> bool:
-    """More than 25% above the 50-day (README §5.3); momentum and EP setups are exempt. An
+    """More than 25% above the 50-day (archived README §5.3); momentum and EP setups are exempt. An
     unknown extension excludes (fail closed)."""
     if scored.setup.strategy in EXTENSION_EXEMPT:
         return False

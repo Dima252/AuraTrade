@@ -352,7 +352,7 @@ BASE_STATUSES = ("FORMING", "BROKEN_OUT", "FAILED")
 
 
 class DetectedBase(Base):
-    """A base found by `indicators.bases` (README §5.3, task 2.2). The count is carried
+    """A base found by `indicators.bases` (archived README §5.3, task 2.2). The count is carried
     forward from these rows, so they outlive the 2-year bar window."""
 
     __tablename__ = "bases"
@@ -441,7 +441,7 @@ class MarketRegimeRow(Base):
     computed_at: Mapped[datetime] = _created()
 
 
-# --- Position plans (task 3.5a, README §7.3, §10) -------------------------------------------
+# --- Position plans (task 3.5a, archived README §7.3; README §10) ---------------------------------
 # These value lists mirror the enums in `auratrade.config` and `auratrade.plans` (a test
 # checks they match), so the database rejects a value the code can't produce.
 
@@ -699,8 +699,9 @@ class OrderRow(Base):
 
 
 class TradeJournalRow(Base):
-    """One row per closed trade (README §5.10). The skeleton fills the basics; the sim R,
-    default-plan R and MAE/MFE come with the simulator (3.6) and the full journal (5.5)."""
+    """One row per closed trade (archived README §5.10; the book's `book_journal` replaces it).
+    The skeleton fills the basics; the sim R, default-plan R and MAE/MFE come with the simulator
+    (3.6) and the full journal (5.5)."""
 
     __tablename__ = "trade_journal"
     __table_args__ = (
@@ -752,7 +753,7 @@ class AccountSnapshot(Base):
     created_at: Mapped[datetime] = _created()
 
 
-# --- Watchlist, baseline book, breakout tracker, scorecard (task 3.7, README §5.12, §10) -------
+# --- Watchlist, baseline book, breakout tracker, scorecard (task 3.7, archived README §5.12) --
 
 TRADE_OUTCOMES = ("SKIPPED", "MISSED", "OPEN", "CLOSED")
 BASELINE_STATUSES = ("REJECTED", *TRADE_OUTCOMES)
@@ -760,9 +761,9 @@ VERDICTS = ("BUY", "WATCH", "SKIP")
 
 
 class WatchlistRow(Base):
-    """Session T's full, uncapped scan (README §5.3): every setup with its score; ``rank`` is
-    its place in the capped list (None: not selected). The breakout tracker reads every row,
-    the baseline book the ranked ones. 90 days in Postgres, then Parquet (README §10)."""
+    """Session T's full, uncapped scan (archived README §5.3): every setup with its score;
+    ``rank`` is its place in the capped list (None: not selected). The breakout tracker reads
+    every row, the baseline book the ranked ones. 90 days in Postgres, then Parquet (README §10)."""
 
     __tablename__ = "daily_watchlist"
     __table_args__ = (
@@ -838,7 +839,7 @@ class BreakoutRow(Base):
 
 
 class BaselineSignalRow(Base):
-    """One shadow-book proposal (README §5.12): rejected by the guardrails, or approved and
+    """One shadow-book proposal (archived README §5.12): rejected by the guardrails, or approved and
     simulated from its entry session through ``sim/``, re-played each evening. Kept forever."""
 
     __tablename__ = "baseline_signals"
@@ -885,9 +886,9 @@ class BaselineSignalRow(Base):
 
 
 class VerdictOutcomeRow(Base):
-    """One scorecard unit (README §5.12): a setup (ticker, strategy, structure) labelled with
-    the verdict in force at its trigger, or its last verdict, played forward under the default
-    plan. Small, kept forever."""
+    """One scorecard unit (archived README §5.12): a setup (ticker, strategy, structure)
+    labelled with the verdict in force at its trigger, or its last verdict, played forward under
+    the default plan. Small, kept forever."""
 
     __tablename__ = "verdict_outcomes"
     __table_args__ = (

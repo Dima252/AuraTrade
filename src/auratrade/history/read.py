@@ -169,7 +169,7 @@ def ranks_by_security(
     series: Mapping[str, SecuritySeries], members: Mapping[date, set[str]], risk: RiskConfig
 ) -> tuple[dict[str, list[float | None]], dict[str, list[float | None]]]:
     """Each security's RS rating and best momentum rank per bar, ranked within the session's
-    universe (README §5.3). Non-members get None: they are never scanned."""
+    universe (archived README §5.3). Non-members get None: they are never scanned."""
     lookbacks = risk.strategies.MOMENTUM_BREAKOUT.rank_lookbacks
     rs: dict[date, dict[str, float]] = defaultdict(dict)
     returns: dict[tuple[date, int], dict[str, float]] = defaultdict(dict)

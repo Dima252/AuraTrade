@@ -1,4 +1,5 @@
-"""`EpisodicPivot`: Kullamägi's episodic pivot, as the **backtest proxy** (README §5.3, §7.1).
+"""`EpisodicPivot`: Kullamägi's episodic pivot, as the **backtest proxy** (archived README §5.3,
+§7.1).
 
 Live, an EP is detected in the morning from the pre-market gap, the news and the earnings beat
 (task 5.6). On daily bars the proxy comes in two views of the gap session:
@@ -10,7 +11,7 @@ Live, an EP is detected in the morning from the pre-market gap, the news and the
   (``min_opening_volume_ratio``, ``backtest.pool``) and reads the features at the prior close.
   The full-day volume of ``scan`` isn't known when the entry goes in (#143).
 
-What the proxy can't check, and the report notes (README §5.3): the earnings **beat** and
+What the proxy can't check, and the report notes (archived README §5.3): the earnings **beat** and
 growth (no free surprise history back to 2016), and the news behind a non-earnings gap. The two
 preferences, a gap on an earnings reaction session and no big rally over the prior 3-6 months,
 are reported as facts for the ranking rather than filtered on.

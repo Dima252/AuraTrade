@@ -6,7 +6,7 @@
 - **Sizing:** a fixed risk on the worst fill (the limit price), in whole shares (#122). The
   guardrails' sizing (3.5b) replaces it.
 - **Entry:** at 09:36, an OTO buy stop-limit at the trigger; a limit buy at the limit if the
-  price is already past the trigger; skipped above the limit (README §7.1).
+  price is already past the trigger; skipped above the limit (archived README §7.1).
 """
 
 from __future__ import annotations

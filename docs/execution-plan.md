@@ -50,7 +50,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 2.3 Regime classifier *(built out of plan order with the user's approval)*
 - [x] 2.4 Regime backtest *(`backtest/regime.py`, report `docs/backtests/regime.md`, targets pre-registered before the first run. IBD's published thresholds failed 4 of 5 checks on 4 pillars (38% in `CORRECTION`, 7 false spells); the provisional thresholds adopted with the user (#135) pass 3: declines early, the 2020 recovery, 1 false spell. Still missed, for the 3.8 re-run: `CONFIRMED_UPTREND` 49% / 55% of 2019 / H2 2020-21 (target 60%) and ~17 switches a year)*
 
-**Phase 3: Scanner, strategies, plans, baseline**
+**Phase 3: Scanner, strategies, plans, baseline** (the setup system: built, failed its gate, archived; its code stays as facts for the Analyst)
 - [x] 3.1 Trend Template *(built out of plan order with the user's approval)*
 - [x] 3.2a Strategy registry + core scans (VCP, momentum, EP proxy) *(`strategies/` base, registry, `vcp_breakout`, `momentum_breakout`, `episodic_pivot`; pure, 100% branch coverage. Real-data run over 2017-2022 in `docs/backtests/scans.md`: 0 exceptions. Readings approved as #136: a 5% floor on a VCP's first contraction (merger-arbitrage flatliners), no momentum depth cap until 3.8)*
 - [x] 3.2b Remaining scans (leader pullback, emerging leader) *(`leader_pullback`, `emerging_leader`; `SymbolData` gains RS ratings, SPY's closes and the regime's `CORRECTION` spells. Real-data run with all five scans in `docs/backtests/scans.md`, 0 exceptions. The user's choices are #137: drawdown at most 1.5x SPY's, a pullback at least 2 x ATR deep, the 5-session-low stop)*

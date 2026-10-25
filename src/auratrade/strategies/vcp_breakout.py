@@ -1,4 +1,4 @@
-"""`VcpBreakout`: Minervini's volatility contraction pattern (README §5.3, §7.1).
+"""`VcpBreakout`: Minervini's volatility contraction pattern (archived README §5.3, §7.1).
 
 2-4 (up to 6) contractions, each shallower than the last (e.g. 25% -> 12% -> 6%), volume drying
 up in the final one, and the pivot at the final contraction's high.

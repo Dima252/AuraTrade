@@ -26,7 +26,8 @@ from auratrade.plans.entry import (
 from auratrade.plans.model import HOLD_TRAIL, HoldState, PlanChange
 from tests.plans.factories import PLANS, exits_for, make_plan
 
-# --- Entry policies (README §7.1) ----------------------------------------------------------
+# --- Entry policies (archived README §7.1)
+# ----------------------------------------------------------
 
 
 def test_entry_policies_match_the_readme() -> None:
@@ -50,7 +51,8 @@ def test_entry_policies_match_the_readme() -> None:
     assert (ep.trigger, ep.tranches) == (TriggerKind.OPENING_RANGE_HIGH, 1)
 
 
-# --- Default exit sets (README §7.3) -------------------------------------------------------
+# --- Default exit sets (archived README §7.3)
+# -------------------------------------------------------
 
 
 @pytest.mark.parametrize("strategy", [Strategy.MOMENTUM_BREAKOUT, Strategy.EPISODIC_PIVOT])

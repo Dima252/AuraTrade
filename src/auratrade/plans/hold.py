@@ -1,4 +1,4 @@
-"""The 8-week hold (README §7.3, IBD) and regime-downgrade tightening (§6, §7.3, #84).
+"""The 8-week hold (archived README §7.3, IBD) and regime-downgrade tightening (§6, §7.3, #84).
 
 Both change the plan without selling. Their results are folded into one new plan version by
 ``plans.resolve``, which also checks it is no looser.

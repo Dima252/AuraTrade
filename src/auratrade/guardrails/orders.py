@@ -1,4 +1,5 @@
-"""The 09:36 check of an approved entry, on the real trigger, limit and stop (README §7.1, §8).
+"""The 09:36 check of an approved entry, on the real trigger, limit and stop (archived README §7.1,
+§8).
 
 The Portfolio Manager's approval (``guardrails.evaluate``) sized the entry on a planned limit.
 At 09:36 the opening range is known, so the trigger, the limit and a momentum / EP low-of-day

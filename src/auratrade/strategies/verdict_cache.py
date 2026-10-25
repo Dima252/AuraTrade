@@ -1,4 +1,4 @@
-"""The verdict cache (README §5.3 "Verdict cache", §9): which selected setups the Analyst
+"""The verdict cache (archived README §5.3 "Verdict cache", §9): which selected setups the Analyst
 re-reviews tonight.
 
 A setup is re-reviewed only if its ticker has no verdict for the strategy, its **structure**

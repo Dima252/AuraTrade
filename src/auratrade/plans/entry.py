@@ -1,4 +1,5 @@
-"""Entry policies, the tranche-2 confirmation gate, and the plan written at entry (README §7.1).
+"""Entry policies, the tranche-2 confirmation gate, and the plan written at entry (archived README
+§7.1).
 
 Triggers, limits and sizing are computed by ``execution`` (3.5b); this module says which kind
 each strategy uses and decides whether tranche 2 is confirmed.
@@ -83,7 +84,7 @@ class GateResult:
 
 
 def confirmation_gate(kind: GateKind, x: GateInput, config: PlansConfig) -> GateResult:
-    """README §7.1 "Confirmation gate, per strategy". Missing data fails the check."""
+    """Archived README §7.1 "Confirmation gate, per strategy". Missing data fails the check."""
     gate = config.confirmation_gates[kind]
     failures: list[str] = []
     if not all(math.isfinite(v) for v in (x.price, x.level, x.day_high, x.day_low)):

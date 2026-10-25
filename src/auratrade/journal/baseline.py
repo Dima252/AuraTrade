@@ -1,5 +1,5 @@
-"""The shadow baseline book (README §5.12, #29, #49), pure: the LLM book with rules in place of
-the LLM.
+"""The shadow baseline book (archived README §5.12, #29, #49), pure: the LLM book with rules in
+place of the LLM.
 
 - **Same inputs:** the same capped top-40 list (the scan's selection, in its order), regime
   gating, guardrails, sizing, entry policies, default exit plans, the confirmation gate for
@@ -10,8 +10,8 @@ the LLM.
   approves them in that order, each approval counting against the next, so it takes setups
   until the limits are full. It holds no regime view: the computed regime governs.
 - **No conviction:** where a regime asks for conviction >= 4, the baseline's "conviction >= 4"
-  is the top quarter of the list by quality score (README §6). Those setups are proposed at 4,
-  the rest at 3.
+  is the top quarter of the list by quality score (archived README §6). Those setups are proposed at
+  4, the rest at 3.
 - **Its own account:** a starting equity (``baseline.start_equity``, the paper account's), its
   P&L at each close, its own progressive-exposure multiplier (replayed over its days) and its
   own strategy records for "keep losses small".
@@ -113,8 +113,8 @@ def equity_on(start_equity: float, trades: Sequence[BookTrade], day: date) -> fl
 def multiplier(
     start_equity: float, trades: Sequence[BookTrade], sessions: Sequence[date], risk: RiskConfig
 ) -> float:
-    """The book's multiplier after ``sessions`` (its days so far, oldest first): the README §8
-    state machine replayed from a new account."""
+    """The book's multiplier after ``sessions`` (its days so far, oldest first): the archived README
+    §8 state machine replayed from a new account."""
     days = []
     for day in sessions:
         closed = [t for t in trades if t.exit_session == day and t.result.r is not None]

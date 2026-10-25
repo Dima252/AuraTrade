@@ -1,4 +1,4 @@
-"""Entry triggers, limits and the 09:36 order type (README §7.1)."""
+"""Entry triggers, limits and the 09:36 order type (archived README §7.1)."""
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -75,7 +75,7 @@ def test_pivot_trigger_below_the_range_stays_at_the_pivot() -> None:
 
 def test_opened_below_the_pivot_and_broke_it_before_0936() -> None:
     """The opening range traded above the pivot: the opening-range high is the trigger, so the
-    order isn't below the market (README §7.1 "Pivot crossed before 09:36")."""
+    order isn't below the market (archived README §7.1 "Pivot crossed before 09:36")."""
     bars = minutes((99.5, 98.5), (100.4, 99.4), (101.2, 100.1), (101.0, 100.5), (100.9, 100.4))
     opening = opening_range(bars, open_at=OPEN, minutes=ENTRIES.opening_range_minutes)
     result = levels(TriggerKind.PIVOT, opening)

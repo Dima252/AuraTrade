@@ -1,4 +1,4 @@
-"""The exit menu's rules (README §7.3), each as a pure check on one session.
+"""The exit menu's rules (archived README §7.3), each as a pure check on one session.
 
 Suppression and ordering are not decided here: ``plans.resolve`` applies the precedence.
 """

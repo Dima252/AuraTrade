@@ -138,7 +138,8 @@ def _earnings(
 
 
 def _fundamentals(conn: Connection, ids: Sequence[int], session: date) -> dict[int, Fundamentals]:
-    """The latest quarter filed before ``session`` (README §15: readable from the next one)."""
+    """The latest quarter filed before ``session`` (archived README §15: readable from the next
+    one)."""
     rows = conn.execute(
         select(Fundamental.ticker_id, Fundamental.eps_growth, Fundamental.eps_acceleration)
         .where(Fundamental.ticker_id.in_(ids), Fundamental.filed_date < session)

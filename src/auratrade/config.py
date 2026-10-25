@@ -76,7 +76,8 @@ class Settings(BaseSettings):
     pm_model: str = DEFAULT_MODEL
     eod_model: str = DEFAULT_MODEL
     weekly_model: str = DEFAULT_MODEL
-    # The Analyst's effort (medium vs high) is chosen by test in task 4.5 (README §9).
+    # The Analyst's effort (medium vs high) is chosen by test in task 4.6 (README §9). The EOD
+    # role belongs to the setup system; Phase 4 removes its settings.
     analyst_effort: Effort = Effort.MEDIUM
     pm_effort: Effort = Effort.HIGH
     eod_effort: Effort = Effort.HIGH
@@ -164,7 +165,7 @@ class FundedStrategy(_Strict):
 
 
 class RegimeLimits(_Strict):
-    """One row of README §6. Risk and exposure are fractions of equity."""
+    """One row of archived README §6. Risk and exposure are fractions of equity."""
 
     strategies: tuple[FundedStrategy, ...]
     base_risk: Fraction
@@ -174,7 +175,7 @@ class RegimeLimits(_Strict):
 
 
 class EarlyUptrendStep(_Strict):
-    """README §6: `EARLY_UPTREND` limits step up after N sessions, on score ≥ +1 only."""
+    """Archived README §6: `EARLY_UPTREND` limits step up after N sessions, on score ≥ +1 only."""
 
     starter_sessions: PositiveInt
     min_score_to_step_up: int
@@ -192,7 +193,7 @@ class RegimesConfig(_Strict):
 
 
 class GuardrailsConfig(_Strict):
-    """Numeric defaults from README §8; behaviour lives in `auratrade.guardrails`."""
+    """Numeric defaults from archived README §8; behaviour lives in `auratrade.guardrails`."""
 
     max_risk_per_trade: Fraction
     max_position_size: Fraction
@@ -226,7 +227,7 @@ class GuardrailsConfig(_Strict):
 
 
 class StopWidthUnit(StrEnum):
-    """What a strategy's max stop width is measured in (README §7.1, §8)."""
+    """What a strategy's max stop width is measured in (archived README §7.1, §8)."""
 
     LIMIT_PCT = "LIMIT_PCT"
     """A fraction of the limit price (the worst fill), measured down from the limit."""
@@ -250,7 +251,7 @@ class HaltsConfig(_Strict):
 
 
 class MultiplierConfig(_Strict):
-    """Progressive-exposure multiplier (README §8)."""
+    """Progressive-exposure multiplier (archived README §8)."""
 
     win_r: Positive
     loss_r: Positive
@@ -283,7 +284,7 @@ class UpDayCluster(_Strict):
 
 
 class ClimaxConfig(_Strict):
-    """Climax-sale signals and actions (README §7.3); see `indicators.climax`."""
+    """Climax-sale signals and actions (archived README §7.3); see `indicators.climax`."""
 
     up_day_clusters: tuple[UpDayCluster, ...]
     min_above_long_average: Positive
@@ -496,7 +497,8 @@ TrendTemplateRule = Annotated[int, Field(ge=1, le=8)]
 
 
 class TrendTemplateConfig(_Strict):
-    """Minervini's 8-rule Trend Template (README §5.3); see `strategies.trend_template`."""
+    """Minervini's 8-rule Trend Template (archived README §5.3); see
+    `strategies.trend_template`."""
 
     short_sma: PositiveInt
     mid_sma: PositiveInt
@@ -520,7 +522,7 @@ class TrendTemplateConfig(_Strict):
 
 
 class BasesConfig(_Strict):
-    """Base detection and IBD counting (README §5.3); see `indicators.bases.BaseRules`."""
+    """Base detection and IBD counting (archived README §5.3); see `indicators.bases.BaseRules`."""
 
     min_sessions: PositiveInt
     max_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
@@ -714,7 +716,7 @@ class MinerviniMenu(_Strict):
 
 
 class PartialMenus(_Strict):
-    """The bounded strength-partial menu (README §7.3)."""
+    """The bounded strength-partial menu (archived README §7.3)."""
 
     KULLAMAGI: KullamagiMenu
     ONEIL: ONeilMenu
@@ -736,7 +738,8 @@ class PartialMenus(_Strict):
 
 
 class ExitPlan(_Strict):
-    """One position's exit-menu choices (README §7.3). Written at entry; tighten-only after."""
+    """One position's exit-menu choices (archived README §7.3). Written at entry; tighten-only
+    after."""
 
     partial: StrengthPartial | None = None
     breakeven_after_partial: bool = False
@@ -793,7 +796,7 @@ class DefaultPlan(_Strict):
 
 
 class TriggerKind(StrEnum):
-    """Entry triggers (README §7.1); computed by `execution.triggers` (3.5b)."""
+    """Entry triggers (archived README §7.1); computed by `execution.triggers` (3.5b)."""
 
     PIVOT = "PIVOT"
     """The pivot (a pullback's prior-session high), or the opening-range high if the range
@@ -846,7 +849,8 @@ class EntryCandidate(_Strict):
 
 
 class GateConfig(_Strict):
-    """A confirmation gate (README §7.1) on the decision price: tranche 2's, or a close entry's
+    """A confirmation gate (archived README §7.1) on the decision price: tranche 2's, or a close
+    entry's
     (#144)."""
 
     max_above_level: Fraction | None
@@ -906,7 +910,7 @@ class EarningsCushionConfig(_Strict):
 
 
 class PlansConfig(_Strict):
-    """Position plans (README §7.1-7.4); behaviour lives in `auratrade.plans`."""
+    """Position plans (archived README §7.1-7.4); behaviour lives in `auratrade.plans`."""
 
     trails: dict[TrailMA, TrailSpec]
     partial_menus: PartialMenus
@@ -999,7 +1003,8 @@ class ExecutionConfig(_Strict):
 
 
 class EntriesConfig(_Strict):
-    """Entry triggers, limits and sizing (README §7.1); see ``execution.triggers``, ``.sizing``."""
+    """Entry triggers, limits and sizing (archived README §7.1); see ``execution.triggers``,
+    ``.sizing``."""
 
     opening_range_minutes: PositiveInt
     # limit = min(trigger x (1 + min(limit_max_above_trigger, limit_adr_fraction x ADR)),
@@ -1018,10 +1023,10 @@ class SkeletonConfig(_Strict):
     trend_template_rules: frozenset[TrendTemplateRule] = Field(min_length=1)
     pivot_sessions: PositiveInt
     stop_sessions: PositiveInt
-    # The structural stop is at most this far below the limit price (README §7.1).
+    # The structural stop is at most this far below the limit price (archived README §7.1).
     max_stop: Fraction
     # limit = min(trigger x (1 + min(limit_max_above_trigger, limit_adr_fraction x ADR)),
-    #             pivot x (1 + guardrails.max_chase_above_pivot))  (README §7.1)
+    #             pivot x (1 + guardrails.max_chase_above_pivot))  (archived README §7.1)
     limit_max_above_trigger: Fraction
     limit_adr_fraction: Positive
     adr_sessions: PositiveInt
@@ -1042,7 +1047,8 @@ class SkeletonConfig(_Strict):
 
 
 class VcpConfig(_Strict):
-    """`VcpBreakout` detection (README §5.3, Minervini); see ``strategies.vcp_breakout``."""
+    """`VcpBreakout` detection (archived README §5.3, Minervini); see
+    ``strategies.vcp_breakout``."""
 
     min_base_sessions: PositiveInt
     max_base_sessions: PositiveInt
@@ -1073,7 +1079,7 @@ class VcpConfig(_Strict):
 
 
 class MomentumConfig(_Strict):
-    """`MomentumBreakout` detection (README §5.3, Kullamägi); see
+    """`MomentumBreakout` detection (archived README §5.3, Kullamägi); see
     ``strategies.momentum_breakout``."""
 
     rank_lookbacks: tuple[PositiveInt, ...] = Field(min_length=1)
@@ -1095,7 +1101,7 @@ class MomentumConfig(_Strict):
 
 
 class EpisodicPivotProxyConfig(_Strict):
-    """The `EpisodicPivot` backtest proxy (README §5.3; live detection is task 5.6)."""
+    """The `EpisodicPivot` backtest proxy (archived README §5.3; live detection is task 5.6)."""
 
     min_gap: Positive
     min_volume_ratio: Positive
@@ -1109,7 +1115,7 @@ class EpisodicPivotProxyConfig(_Strict):
 
 
 class LeaderPullbackConfig(_Strict):
-    """`LeaderPullback` detection (README §5.3, Minervini / O'Neil); see
+    """`LeaderPullback` detection (archived README §5.3, Minervini / O'Neil); see
     ``strategies.leader_pullback``."""
 
     min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
@@ -1136,7 +1142,8 @@ class LeaderPullbackConfig(_Strict):
 
 
 class EmergingLeaderConfig(_Strict):
-    """`EmergingLeader` detection (README §5.3, O'Neil); see ``strategies.emerging_leader``."""
+    """`EmergingLeader` detection (archived README §5.3, O'Neil); see
+    ``strategies.emerging_leader``."""
 
     min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
     high_sessions: PositiveInt
@@ -1155,7 +1162,7 @@ class RsLineConfig(_Strict):
 
 
 class CatalystConfig(_Strict):
-    """The quality score's catalyst, without the surprise (README §5.3)."""
+    """The quality score's catalyst, without the surprise (archived README §5.3)."""
 
     gap_lookback_sessions: PositiveInt
     min_gap: Positive
@@ -1165,7 +1172,7 @@ class CatalystConfig(_Strict):
 
 
 class RankingConfig(_Strict):
-    """The quality score, the cap and the verdict cache (README §5.3; task 3.3, #138)."""
+    """The quality score, the cap and the verdict cache (archived README §5.3; task 3.3, #138)."""
 
     rs_line: RsLineConfig
     up_down_sessions: PositiveInt
@@ -1178,7 +1185,7 @@ class RankingConfig(_Strict):
 
 
 class ChartsConfig(_Strict):
-    """The Analyst's charts (README §5.3 "Charts"; task 3.4); see ``auratrade.charts``."""
+    """The Analyst's charts (README §5.3; task 3.4); see ``auratrade.charts``."""
 
     daily_sessions: PositiveInt
     daily_width: PositiveInt
@@ -1229,21 +1236,23 @@ class StrategiesConfig(_Strict):
 
 
 class WatchlistConfig(_Strict):
-    """The evening's full scan (README §5.3; task 3.7); see ``strategies.watchlist``."""
+    """The evening's full scan (archived README §5.3; task 3.7); see ``strategies.watchlist``."""
 
     # The ATR stored with each setup: the guardrails' stop-width floor and ATR caps read it.
     atr_sessions: PositiveInt
 
 
 class BaselineConfig(_Strict):
-    """The shadow baseline book (README §5.12; task 3.7); see ``journal.baseline``."""
+    """The shadow book's own account (README §5.12): the setup baseline (`journal.baseline`) now,
+    the rule book from task 4.5."""
 
     # Its own account starts at the paper account's capital (#122).
     start_equity: Positive
 
 
 class ScorecardConfig(_Strict):
-    """The Analyst verdict scorecard (README §5.12; task 3.7); see ``journal.scorecard``."""
+    """The Analyst verdict scorecard (archived README §5.12; task 3.7); see
+    ``journal.scorecard``."""
 
     # R after each horizon, in sessions from the entry session (the entry session is 1).
     horizons: tuple[PositiveInt, ...] = Field(min_length=1)

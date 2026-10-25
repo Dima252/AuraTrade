@@ -1,4 +1,4 @@
-"""One trade through the simulator, on hand-built days with known fills (README §5.12).
+"""One trade through the simulator, on hand-built days with known fills (archived README §5.12).
 
 The default setup is a VCP: pivot 50, structural stop 47, ADR 4% -> trigger 50.00, limit 51.00.
 $50 of risk sized on the limit is 12 shares: 6 at the trigger, 6 on confirmation. History is 60

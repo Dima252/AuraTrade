@@ -121,11 +121,11 @@ Each comparison changes one dimension against the primary, on 2017-2022 only.
 | C2 | Stop at **10%** instead of 20% (Han, Zhou & Zhu), raised the same way | The only momentum-specific stop evidence (gross of costs) |
 | C3 | Market overlay **off** | Safety rule, tested on vs off (§15) |
 | C4 | Market overlay = **SPY above its 200-day SMA** (Clenow) instead of the regime | A simpler, sourced filter |
-| C5 | **Earnings rules on:** the existing blackout for buys (§8) and the cushion for holdings (§7.4, measured in % since R doesn't apply: exit if under +10%, otherwise hold) | The README's safety rule, against the evidence in §2 |
+| C5 | **Earnings rules on:** the setup system's blackout for buys (archived README §8) and its cushion for holdings (archived README §7.4, measured in % since R doesn't apply: exit if under +10%, otherwise hold) | The README's safety rule, against the evidence in §2 |
 | C6 | **The whole universe** instead of the top 1,000 by dollar volume | Hong, Lim & Stein (2000): momentum is stronger in small, less-covered names; costs say otherwise |
 | C7 | Cluster cap **off** | Safety rule, tested on vs off |
 
-**Adoption:** a comparison replaces the primary only if, on 2017-2022, the 90% block-bootstrap interval of its daily return difference against the primary excludes zero in its favour, with max drawdown no worse. A safety rule (C3, C5, C7) stays unless removing it improves return by more than noise without a deeper drawdown (README §15). **The holdout is not used to choose between them.** README §15 asks for "beats on both periods", but that spends the last clean test on selection, so this plan proposes judging the comparisons on tuning only and keeping the holdout for the gate (§10 Q6). The report states that 8 configurations were tried.
+**Adoption:** a comparison replaces the primary only if, on 2017-2022, the 90% block-bootstrap interval of its daily return difference against the primary excludes zero in its favour, with max drawdown no worse. A safety rule (C3, C7) stays unless removing it improves return by more than noise without a deeper drawdown (README §15). C5 adds the README's earnings rules: it is adopted if it gives a shallower drawdown without a return cost beyond noise (the pre-registration §6 has the exact test). **The holdout is not used to choose between them.** README §15 asks for "beats on both periods", but that spends the last clean test on selection, so this plan proposes judging the comparisons on tuning only and keeping the holdout for the gate (§10 Q6). The report states that 8 configurations were tried.
 
 ### 5.6 Diagnostics (reported, never adopted)
 

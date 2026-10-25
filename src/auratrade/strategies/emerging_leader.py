@@ -1,4 +1,4 @@
-"""`EmergingLeader`: O'Neil's first leaders out of a correction (README §5.3, §6, §7.1).
+"""`EmergingLeader`: O'Neil's first leaders out of a correction (archived README §5.3, §6, §7.1).
 
 A stock with an RS rating >= 85, Trend Template rules 1 and 5-8 (the moving-average stack lags
 right after a correction), at a new 52-week high or with its RS line at one, that held up best

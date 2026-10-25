@@ -1,9 +1,10 @@
-"""The strategy interface and the inputs every scan reads (README §5.3, §6 "Strategy registry").
+"""The strategy interface and the inputs every scan reads (archived README §5.3, §6 "Strategy
+registry").
 
 Each strategy implements ``scan()``, ``build_llm_context()``, ``system_prompt``, ``entry_policy``,
 ``exit_policy`` and ``default_risk``. Scans are pure: one symbol's history in, at most one setup
 out, with the **code-computed pivot and structural stop** that the Analyst's levels are checked
-against (README §8, "Price levels").
+against (archived README §8, "Price levels").
 
 A scan evaluates one session ``at`` of a ``SymbolData`` and reads sessions ``<= at`` only, so
 the evening scan (``at`` = the last session) and a backtest (every ``at`` of one history) run the
@@ -119,7 +120,8 @@ class SymbolData:
 
 
 class SetupDetail(Protocol):
-    """A strategy's own findings, as rounded facts for the Analyst (README §9, compact context)."""
+    """A strategy's own findings, as rounded facts for the Analyst (archived README §9, compact
+    context)."""
 
     def facts(self) -> Mapping[str, Fact]: ...
 
@@ -134,7 +136,7 @@ class Setup:
     """The bar position the scan evaluated (the evening scan's session T)."""
     pivot: float
     """The code pivot: the trigger level, the Analyst's pivot within ±3% of it, the max chase
-    and the limit measured from it (README §7.1, §8)."""
+    and the limit measured from it (archived README §7.1, §8)."""
     structural_stop: float
     """The support the setup fails below: the lowest stop the Analyst may give (tighter only).
     Strategies with a low-of-day stop (momentum, EP) set it at 09:36, never below this."""
@@ -187,13 +189,14 @@ class BaseStrategy(ABC):
 
     @property
     def exit_policy(self) -> ExitPlan:
-        """The default exit plan (README §7.3): the strategy's trader set plus its overrides."""
+        """The default exit plan (archived README §7.3): the strategy's trader set plus its
+        overrides."""
         return self.risk.plans.default_exit_plan(self.strategy)
 
     def default_risk(self, regime: Regime) -> float | None:
         """The regime's base risk per trade if the strategy is fundable in it, else ``None``.
         Before the progressive-exposure multiplier, the `EARLY_UPTREND` step and the late-stage
-        factor (README §6, §8)."""
+        factor (archived README §6, §8)."""
         limits = getattr(self.risk.regimes, regime.value)
         funded = any(f.strategy is self.strategy for f in limits.strategies)
         return limits.base_risk if funded else None

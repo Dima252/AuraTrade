@@ -1,4 +1,4 @@
-"""The earnings blackout for new entries and tranche 2 (README §8), EPs exempt.
+"""The earnings blackout for new entries and tranche 2 (archived README §8), EPs exempt.
 
 Sessions are counted by the caller with the market calendar:
 

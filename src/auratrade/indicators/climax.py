@@ -1,4 +1,4 @@
-"""IBD climax-top signals for a held position (README §7.3, "Climax sale").
+"""IBD climax-top signals for a held position (archived README §7.3, "Climax sale").
 
 ``move_start`` is the breakout session the move is measured from. Every "since the move began"
 signal needs at least one session after it, so the breakout day itself never counts against

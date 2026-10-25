@@ -1,4 +1,4 @@
-"""The position plan and what the EOD review reads and writes (README §7.3).
+"""The position plan and what the EOD review reads and writes (archived README §7.3).
 
 A ``PositionPlan`` is one version of a position's plan: the exit-menu choices made at entry
 (``ExitPlan``), the levels code derives from them (the hard stop), and the milestones reached so
@@ -18,7 +18,7 @@ from auratrade.config import EntryPolicy, ExitPlan, Regime, Strategy, TrailMA
 
 Price = Annotated[float, Field(gt=0.0, allow_inf_nan=False)]
 
-# The 8-week hold replaces the trail with the 50-day (README §7.3).
+# The 8-week hold replaces the trail with the 50-day (archived README §7.3).
 HOLD_TRAIL = TrailMA.SMA_50
 
 # Computed levels carry float noise (100 * 1.1 = 110.00000000000001); a value this close to a
@@ -58,7 +58,7 @@ class PlanChange(StrEnum):
 
 
 class Rule(StrEnum):
-    """Plan rules in README §7.3 precedence order: the first is the highest."""
+    """Plan rules in archived README §7.3 precedence order: the first is the highest."""
 
     HARD_STOP = "HARD_STOP"
     EARNINGS_CUSHION = "EARNINGS_CUSHION"
@@ -88,7 +88,7 @@ class EventKind(StrEnum):
     FALTERING_RS = "FALTERING_RS"
     FAILED_BREAKOUT = "FAILED_BREAKOUT"
     """Closed below the pivot without a heavy-volume reversal exit: hold, no tranche 2; the
-    LLM may exit early on days 1-3 (README §5.9)."""
+    LLM may exit early on days 1-3 (archived README §5.9)."""
 
 
 TRAIL_ORDER: tuple[TrailMA, ...] = tuple(TrailMA)  # loosest first

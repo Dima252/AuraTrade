@@ -146,7 +146,7 @@ def rs_ratings_by_security(
     risk: RiskConfig,
 ) -> dict[str, list[float | None]]:
     """Each security's RS rating per bar: the percentile of its RS score within the session's
-    universe (README §5.3). Non-members get None (rule 8 fails)."""
+    universe (archived README §5.3). Non-members get None (rule 8 fails)."""
     by_session: dict[date, dict[str, float]] = defaultdict(dict)
     for key, s in series.items():
         for d, score in zip(s.dates, rs_scores(s.close, risk.trend_template), strict=True):

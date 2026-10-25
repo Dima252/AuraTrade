@@ -17,6 +17,7 @@ AuraTrade is an autonomous trading system for US stocks:
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
 | README §16 "Decision log" | **Why** things are the way they are (149 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review, #108 the public site, #109–112 spike findings, #113–128 the 0.4 spike review, #129 the ingest build, #130 the backfill build, #131 the skeleton build, #132 1.7's acceptance moved to AWS, #133 the AWS skeleton, #134 the public site plan, #135 the regime thresholds from 2.4, #136 the strategy-scan readings from 3.2a, #137 those from 3.2b, #138 the ranking from 3.3, #139 the charts from 3.4, #140 the guardrail readings from 3.5b, #141 the simulator readings from 3.6, #142 the watchlist, baseline, tracker and scorecard readings from 3.7, #143 the EP proxy at 09:36 from the 3.8 diagnostics, #144 the close-entry candidates after the failed gate, #145 the gate moved to before capital, #146 the strategy change to a momentum book (`docs/strategy-change-momentum.md`), #147-#149 the momentum book's rules, risk limits and pre-registered backtest, and the re-plan (`docs/momentum-plan.md`, `docs/backtests/momentum-preregistration.md`) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
+| `docs/archive/` | The setup system's README and plan (superseded by #146-#149) | Code written for the setup system cites `archived README §x`; a plain `README §x` always means the current README. The setup code stays, unwired; don't wire it into the book. |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
 
@@ -25,7 +26,7 @@ If code and README disagree, the README wins until the user approves a change. T
 1. **No live trading.** Only Alpaca **paper** keys are used until the user explicitly starts Phase 8. `TRADING_MODE` defaults to `dry_run`. Never write code that silently falls back to `live`.
 2. **No secrets in git.** Keys live in `.env` (git-ignored) locally and SSM Parameter Store in AWS. Never print keys in logs or chat.
 3. **No paid API calls in tests or CI.** Use recorded HTTP fixtures. Anything that costs money (Claude calls, especially batches; AWS resources) needs the user's OK first, with an estimated cost.
-4. **The LLM decides; code enforces limits.** Don't redesign the system as rules-only and don't suggest a "deterministic-first" approach; the user rejected it. Guardrails must never be bypassable by LLM output. **Price levels come from code:** the LLM may only nudge a pivot within the guardrail tolerance or tighten a stop, never supply an unchecked price.
+4. **The LLM decides; code enforces limits.** Don't redesign the system as rules-only and don't suggest a "deterministic-first" approach; the user rejected it. Guardrails must never be bypassable by LLM output. **Price levels come from code:** in the momentum book the LLM may only raise a stop (checked by `guardrails/book.py`); it never supplies an unchecked price. (The archived setup system also let it nudge a pivot within the guardrail tolerance.)
 5. **Protective stops always rest at the broker.** Any order code must preserve the invariant: every position's GTC stops (one stop, or one OTO leg per buy) together cover its full quantity, each at or above its plan level; a partly filled buy counts as unprotected. Sells follow the sequence: reduce the stop, sell, restore it on failure (or sell at once if the price is already through the stop level). Every order change runs under the single-writer lock. **No kill switch, halt or error path may cancel a protective stop or block a plan exit**; halts block entries and adds only.
 6. **Fail closed.** On uncertainty (missing data, LLM error, calendar disagreement, reconciliation mismatch), open no new positions.
 7. **Don't push, deploy, or create AWS resources** unless the user asks. Committing on a feature branch is fine.
@@ -54,8 +55,8 @@ Phase 0 spikes exist to test assumptions. When a spike or a later finding contra
 - **Python 3.13**, managed with **uv**; `src/` layout (`src/auratrade/`), structure as in README §13.
 - **Typing:** full type hints; `mypy --strict` on `src/`. Pydantic v2 for config, API payloads and LLM schemas.
 - **Pure logic is pure:** indicators, regime scoring, plans, guardrails and sizing are pure functions with no I/O, unit-tested on hand-built data with known answers. Guardrails need 100% branch coverage.
-- **One simulator:** backtests, the baseline book, the verdict scorecard and replay tests all go through `sim/`, which calls the live pure functions. Never write a second fill model. The one exception is the spike-grade edge check (spike 0.3h): it lives in `spikes/`, tunes nothing, and nothing outside `spikes/` may import it or its data.
-- **Backtests follow README §15 "Backtest validity":** point-in-time universe, raw-price filters, the fill model, the 2016–2022 tune / 2023+ holdout, and source defaults unless clearly beaten on both periods.
+- **One simulator:** backtests, the rule book (the setup system's baseline book), the scorecard and replay tests all go through `sim/` (`sim/book.py` for the momentum book, on `sim/fills.py`), which calls the live pure functions. Never write a second fill model. The one exception is the spike-grade edge check (spike 0.3h): it lives in `spikes/`, tunes nothing, and nothing outside `spikes/` may import it or its data.
+- **Backtests follow README §15 "Backtest validity" and their pre-registration** (`docs/backtests/momentum-preregistration.md` for the book): point-in-time universe, raw-price filters and sizing, the fill model, the 2017–2022 tuning period, the 2023+ holdout opened once for the frozen configuration, and comparisons adopted only as pre-registered (judged on the tuning period alone, #148).
 - **Time:** store UTC; compute in `America/New_York`; timezone-aware datetimes only. **Count trading sessions, never calendar days** (use the calendar helpers, never `timedelta(days=...)` for market windows).
 - **Money and prices:** round order prices to the valid tick ($0.01 for stocks ≥ $1). Share counts are integers, floored.
 - **Config:** every threshold lives in `config/risk.yaml` (typed and hashed), never hard-coded.
@@ -81,17 +82,17 @@ uv run python -m auratrade.calendar.sync  # sync market_sessions from Alpaca + c
 uv run python -m auratrade.jobs.<job> --session 2026-10-07 --dry-run   # from task 1.1
 uv run python -m auratrade.jobs.post_market --session 2026-10-20 --dry-run --chain   # the evening chain in-process (1.7)
 uv run python -m auratrade.jobs.ingest --direct --session 2026-10-14   # ingest alone, without the runner
-uv run python -m auratrade.jobs.simulate --session 2026-10-23 --dry-run   # tracker, baseline book, scorecard (3.7; fetches minute bars)
+uv run python -m auratrade.jobs.simulate --session 2026-10-23 --dry-run   # tracker, setup baseline book, scorecard (3.7; fetches minute bars; the rule book replaces the baseline at 4.5)
 uv run python scripts/backfill.py all     # the Parquet history since 2016 (hours, resumable; from task 1.6)
 uv run python scripts/backfill.py postgres   # the 2-year window's earnings, fundamentals, VIX into Postgres (after an ingest run)
 uv run python scripts/smoke_real_data.py  # the early modules over the whole history -> docs/backtests/smoke.md
 uv run python backtest/regime.py         # the regime backtest, 2016-2022 only (holdout closed) -> docs/backtests/regime.md
-uv run python scripts/scan_real_data.py   # every strategy scan over 2017-2022 (holdout closed) -> docs/backtests/scans.md
+uv run python scripts/scan_real_data.py   # setup system: every strategy scan over 2017-2022 -> docs/backtests/scans.md
 uv run python -m backtest.baseline regime   # 3.8: the 5-pillar regime re-run (tuning only) -> docs/backtests/regime-5-pillar.md
-uv run python -m backtest.baseline pool     # 3.8: the setup pool, the gate and the comparisons -> docs/backtests/baseline.md
-uv run python -m backtest.diagnostics       # 3.8: why the pool loses (pre-registered splits) -> docs/backtests/baseline-diagnostics.md
-uv run python -m backtest.baseline close --blind   # 3.8c: the close entry (#144), counts and invariants only -> docs/backtests/close-entry-blind.md
-uv run python -m backtest.baseline close           # 3.8d: the ONE scored run (once; pre-registered) -> docs/backtests/close-entry.md
+uv run python -m backtest.baseline pool     # setup system (3.8, done): the pool, the gate and the comparisons -> docs/backtests/baseline.md
+uv run python -m backtest.diagnostics       # setup system (3.8, done): why the pool loses -> docs/backtests/baseline-diagnostics.md
+uv run python -m backtest.baseline close --blind   # setup system (3.8c, done): the close entry (#144), counts only -> docs/backtests/close-entry-blind.md
+uv run python -m backtest.baseline close           # setup system (3.8d, done; never re-run: pre-registered once) -> docs/backtests/close-entry.md
 uv run auratrade kill on|off|status       # the kill switch (entries only); also: auratrade mismatches / resolve <id> --note
 uv run --env-file .env.paper auratrade kill status   # any command against `paper` (its file's values override .env)
 TRADING_MODE=paper uv run python scripts/local_session.py --until YYYY-MM-DD   # the skeleton's jobs on schedule (dev paper)

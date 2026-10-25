@@ -1,4 +1,4 @@
-"""Tighten-only plan versions (README §7.3 "Tighten-only", §8 "Plans are tighten-only").
+"""Tighten-only plan versions (archived README §7.3 "Tighten-only", §8 "Plans are tighten-only").
 
 Later decisions may raise the stop, choose a tighter trail, sell earlier or add an exit rule.
 Anything else is rejected. The one widening allowed is one the plan committed to at entry: an

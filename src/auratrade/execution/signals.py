@@ -3,7 +3,7 @@ for the next session, written to the `signals` queue.
 
 Point in time like every scan: the universe filters on raw prices as of T, a ticker without a
 bar on T is left out (never forward-filled), and the RS rating is the percentile of the RS
-score among T's universe members (README §5.3).
+score among T's universe members (archived README §5.3).
 """
 
 from __future__ import annotations

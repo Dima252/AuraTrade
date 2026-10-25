@@ -1,4 +1,4 @@
-"""Whole-share sizing and tranches (README §7.1, §8, #122)."""
+"""Whole-share sizing and tranches (archived README §7.1, §8, #122)."""
 
 import math
 

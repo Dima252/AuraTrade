@@ -1,4 +1,4 @@
-"""The earnings cushion for open positions (README §7.4).
+"""The earnings cushion for open positions (archived README §7.4).
 
 It runs at the EOD review of the last session before a report: the prior session for a report
 before the open, the report day itself for one after the close. Timing that isn't known to be
@@ -59,8 +59,8 @@ def estimated_cushion_session(
     """The cushion session for a position with no known next report date.
 
     The next report is estimated at ``estimate_sessions`` after the last one, with a window of
-    ``window_sessions`` either side (README §8); the cushion runs the session before the window
-    starts. None if the calendar doesn't reach it.
+    ``window_sessions`` either side (archived README §8); the cushion runs the session before the
+    window starts. None if the calendar doesn't reach it.
     """
     if window_sessions >= estimate_sessions:
         raise ValueError("the window must start after the last report")
@@ -70,7 +70,7 @@ def estimated_cushion_session(
 
 
 def cushion_action(gain_r: float, config: EarningsCushionConfig) -> CushionAction:
-    """The README §7.4 table on the unrealized gain in R (on the decision price)."""
+    """The archived README §7.4 table on the unrealized gain in R (on the decision price)."""
     if not math.isfinite(gain_r):
         raise ValueError(f"gain_r must be finite, got {gain_r}")
     if not reached(gain_r, config.exit_below_r):
