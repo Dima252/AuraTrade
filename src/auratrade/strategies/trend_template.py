@@ -1,4 +1,5 @@
-"""Minervini's Trend Template: the 8-rule stage-2 screen in front of the scans (README §5.3).
+"""Minervini's Trend Template: the 8-rule stage-2 screen in front of the scans (archived README
+§5.3).
 
 Computed for every session of a symbol's history in one pass, so backtests read the same series
 the evening scan reads at its last session. A rule whose inputs are still warming up (fewer than

@@ -1,4 +1,4 @@
-"""Hard-stop and soft-rule levels (README §7.3 "Execution split").
+"""Hard-stop and soft-rule levels (archived README §7.3 "Execution split").
 
 The hard stop rests at the broker; the soft rules are decided by code at the EOD review on the
 decision price. ``plan_levels`` is what ``position_plans`` stores as a version's current levels,

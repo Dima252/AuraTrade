@@ -1,9 +1,9 @@
-"""The strategy registry (README §6): every strategy, the scans run together, and what each
+"""The strategy registry (archived README §6): every strategy, the scans run together, and what each
 regime funds.
 
 **All scans run every evening**, whatever the regime: the breakout tracker and the watchlist
-need every trigger (README §5.12). ``risk.yaml`` decides which strategies are fundable in each
-regime; only those compete for the Analyst's slots (task 3.3).
+need every trigger (archived README §5.12). ``risk.yaml`` decides which strategies are fundable in
+each regime; only those compete for the Analyst's slots (task 3.3).
 """
 
 from collections.abc import Mapping, Sequence
@@ -42,7 +42,7 @@ def scan_all(
 
 
 def fundable(risk: RiskConfig, regime: Regime) -> tuple[FundedStrategy, ...]:
-    """The strategies ``regime`` funds, with their conviction bars (README §6)."""
+    """The strategies ``regime`` funds, with their conviction bars (archived README §6)."""
     limits = getattr(risk.regimes, regime.value)
     funded: tuple[FundedStrategy, ...] = limits.strategies
     return funded
@@ -60,7 +60,7 @@ class CrossSection:
 def cross_section(
     closes_by_symbol: Mapping[str, Sequence[float]], risk: RiskConfig
 ) -> CrossSection:
-    """RS ratings and momentum ranks for the universe on its last session (README §5.3).
+    """RS ratings and momentum ranks for the universe on its last session (archived README §5.3).
 
     ``closes_by_symbol`` must hold exactly the session's universe members: ranks are
     percentiles within it.

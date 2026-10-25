@@ -1,4 +1,4 @@
-"""``evaluate(actions, context)`` end to end (README §8)."""
+"""``evaluate(actions, context)`` end to end (archived README §8)."""
 
 from dataclasses import replace
 

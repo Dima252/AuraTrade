@@ -1,4 +1,4 @@
-"""One approved entry played forward through the fill model (README §5.12), pure.
+"""One approved entry played forward through the fill model (archived README §5.12), pure.
 
 The evening baseline, the verdict scorecard, the 3.8 backtest and the plan counterfactual all
 call ``simulate_trade``. It calls the live pure functions, never copies of them: the 09:36 order
@@ -557,7 +557,7 @@ def _tranche2(
     trade: _Trade, n: int, s: SimSession, price: float, gate: GateInput, *, blocked: bool
 ) -> None:
     """Tranche 2 at the EOD review: a marketable limit buy, sized on its limit so the total
-    risk stays within the plan (README §7.1)."""
+    risk stays within the plan (archived README §7.1)."""
     plan, risk = trade.plan, trade.risk_config
     if trade.order.tranches.second == 0 or plan.tranche2_filled or not s.tranche2_allowed:
         return

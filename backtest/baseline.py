@@ -1,5 +1,5 @@
-"""The baseline backtest (task 3.8; README §15): the historical full scan, the breakout tracker,
-the 5-pillar regime re-run, then the setup pool and the baseline book.
+"""The baseline backtest (task 3.8; archived README §15): the historical full scan, the breakout
+tracker, the 5-pillar regime re-run, then the setup pool and the baseline book.
 
     uv run python -m backtest.baseline regime    # steps 1-3 -> docs/backtests/regime-5-pillar.md
     uv run python -m backtest.baseline pool      # step 4: the pool and gate -> baseline.md

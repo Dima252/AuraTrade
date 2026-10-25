@@ -1,4 +1,4 @@
-"""Rule precedence (README §7.3), mostly on sessions where several rules fire at once."""
+"""Rule precedence (archived README §7.3), mostly on sessions where several rules fire at once."""
 
 import pytest
 from hypothesis import given, settings

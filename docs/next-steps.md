@@ -61,12 +61,13 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 1. Other things only you can do (not urgent)
 
-- **Anthropic Console:** confirm a monthly spend limit is set (about $20 now, about $40 from 4.6).
+- **Anthropic Console:** confirm a monthly spend limit is set. Nothing calls Claude until 4.6; the book's budget is about $3-8 a month from 4.7, so $20 is ample.
+- **Public site redeploy:** `web/index.html` now describes the momentum book (2026-10-26); the live site still shows the setup system until `cd infra && npx aws-cdk deploy AuraTradePublicSite --profile auratrade`.
 - **Domain** for the public site: optional.
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~2.4~~, ~~3.2a~~, ~~3.2b~~, ~~3.3~~, ~~3.4~~, ~~3.5b~~, ~~3.6~~, ~~3.7~~ (done, below) → **3.8** baseline backtest (stopped at the gate; the strategy decision is next).
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → **3.12** portfolio simulation → 3.13 → 3.14 blind check → 3.15 scored run → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
 
 ### Task 3.8: stopped at the gate; the strategy decision is next (2026-10-24)
 

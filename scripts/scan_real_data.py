@@ -358,7 +358,7 @@ def render(run: ScanRun, risk: RiskConfig, reading: str) -> str:
         "Setups per session in each regime (the regime of the scan session, from the replay). "
         "Sessions: "
         + ", ".join(f"`{r.value}` {spread.get(r, 0)}" for r in regimes)
-        + ". The regime decides what is fundable (README §6), not what is scanned.",
+        + ". The regime decides what is fundable (archived README §6), not what is scanned.",
         "",
         "| Strategy | " + " | ".join(f"`{r.value}`" for r in regimes) + " |",
         "|---|" + "---|" * len(regimes),

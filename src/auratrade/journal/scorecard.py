@@ -1,4 +1,4 @@
-"""The Analyst verdict scorecard (README §5.12 "Counting honestly", #73), pure.
+"""The Analyst verdict scorecard (archived README §5.12 "Counting honestly", #73), pure.
 
 Every verdict (BUY, WATCH, SKIP) is played forward under its strategy's default entry policy and
 exit plan, as if it had been taken. Verdicts aren't independent observations, so:

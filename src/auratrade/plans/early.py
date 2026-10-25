@@ -1,4 +1,4 @@
-"""Early-behaviour rules for a position's first sessions (README §7.2).
+"""Early-behaviour rules for a position's first sessions (archived README §7.2).
 
 Each fires only if it is in the position's plan: the heavy-volume reversal in the O'Neil set,
 time stops on backtest evidence or by Portfolio Manager choice. The light-volume dip below the

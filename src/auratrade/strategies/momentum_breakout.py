@@ -1,4 +1,4 @@
-"""`MomentumBreakout`: Kullamägi's breakout after a big move (README §5.3, §7.1).
+"""`MomentumBreakout`: Kullamägi's breakout after a big move (archived README §5.3, §7.1).
 
 A top-~2% momentum stock (1-, 3- or 6-month return) that made a move of 30-100%+ within the
 last 1-3 months, then consolidated for 10-40 sessions with higher lows and a tightening range,
@@ -15,7 +15,7 @@ riding its rising 10- or 20-day average.
 The trigger is the consolidation high (or the opening-range high above it, §7.1); the structural
 stop is the second half's low, the consolidation's last higher low. The order-time stop is the
 low of the day at 09:36, capped at 1 x ADR below the trigger. Momentum setups are exempt from
-the 25%-above-50-day rule; their own consolidation bounds their extension (README §5.3).
+the 25%-above-50-day rule; their own consolidation bounds their extension (archived README §5.3).
 """
 
 from collections.abc import Mapping, Sequence

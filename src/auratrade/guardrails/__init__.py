@@ -1,4 +1,5 @@
-"""Pure guardrail checks on LLM actions (README §8). 100% branch coverage, enforced in CI.
+"""Pure guardrail checks on LLM actions (README §8; the setup system's in the archived README §8).
+100% branch coverage, enforced in CI.
 
 No I/O and no clock: the caller builds the context (equity, positions, today's setups, the
 regime, the multiplier, the blocks) and logs the findings to ``guardrail_events``. Every

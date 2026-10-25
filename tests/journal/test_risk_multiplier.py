@@ -1,4 +1,4 @@
-"""The progressive-exposure multiplier, row by row (README §8)."""
+"""The progressive-exposure multiplier, row by row (archived README §8)."""
 
 import pytest
 

@@ -1,4 +1,4 @@
-"""Earnings-gap catalyst detection (README §5.3, "Earnings catalyst").
+"""Earnings-gap catalyst detection (archived README §5.3, "Earnings catalyst").
 
 Finds a gap up on the first session that could react to an earnings report. The report's session
 and timing come from ``earnings_events`` (EDGAR 8-K acceptance time for history, §5.1); mapping

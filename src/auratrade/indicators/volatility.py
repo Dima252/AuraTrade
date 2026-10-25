@@ -1,4 +1,5 @@
-"""ATR and ADR %: the two measures that bound stop width (README §5.3, §7.1, #66)."""
+"""ATR and ADR %: the two measures that bound stop width in the setup system (archived README
+§5.3, §7.1, #66); the book shows ATR % to the Analyst as a fact (README §5.3)."""
 
 from collections.abc import Sequence
 from itertools import pairwise

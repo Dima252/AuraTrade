@@ -1,4 +1,4 @@
-"""Guardrails on actions for held positions: tranche 2, tightenings and exits (README §8).
+"""Guardrails on actions for held positions: tranche 2, tightenings and exits (archived README §8).
 
 - **Tranche 2:** only to a two-tranche entry not yet added to, through its confirmation gate, on
   sessions 1 to ``tranche2_max_sessions`` (the entry session is 1), and not after a dip below

@@ -1,4 +1,4 @@
-"""The progressive-exposure multiplier (README §8), pure.
+"""The progressive-exposure multiplier (archived README §8), pure.
 
 Evaluated once a day in ``post_market``: ``step`` takes yesterday's state and today's closed
 trades and equity, and returns today's state and reading. **The first matching row wins**:
@@ -47,7 +47,7 @@ def trade_result(r: float, config: MultiplierConfig) -> TradeResult:
 
 
 class Row(StrEnum):
-    """README §8, most conservative first."""
+    """Archived README §8, most conservative first."""
 
     DEEP_DRAWDOWN = "DEEP_DRAWDOWN"
     DRAWDOWN = "DRAWDOWN"

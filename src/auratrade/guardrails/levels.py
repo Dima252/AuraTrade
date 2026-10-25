@@ -1,4 +1,5 @@
-"""Price levels, stop width, keep losses small vs gains, and the 50-day limit (README §7.1, §8).
+"""Price levels, stop width, keep losses small vs gains, and the 50-day limit (archived README §7.1,
+§8).
 
 **Price levels come from code.** The LLM may nudge the pivot within ±3% of the code pivot and
 may only tighten the stop: at or above the structural stop, and at least 0.5 x ATR below the
@@ -6,10 +7,10 @@ pivot. The 5% max chase and the limit are always measured from the **code** pivo
 (``execution.triggers``), so a nudged pivot can't extend them.
 
 **Stop width** is measured from the limit price (the worst fill) for the percentage caps and from
-the trigger for the ATR and ADR caps (README §7.1). After ``keep_losses_small_trades`` closed
-trades of a strategy, its max width is also capped at ½ x its rolling average gain, measured
-from the same reference; if that leaves less than the strategy's noise floor, the entry is
-rejected rather than squeezing the stop into normal noise.
+the trigger for the ATR and ADR caps (archived README §7.1). After ``keep_losses_small_trades``
+closed trades of a strategy, its max width is also capped at ½ x its rolling average gain, measured
+from the same reference; if that leaves less than the strategy's noise floor, the entry is rejected
+rather than squeezing the stop into normal noise.
 """
 
 from dataclasses import dataclass
@@ -19,7 +20,7 @@ from auratrade.config import GuardrailsConfig, StopWidthRule, StopWidthUnit, Str
 from auratrade.guardrails.model import Finding, GuardrailRule, finite_positive, reject
 from auratrade.plans.model import reached
 
-# Momentum and EPs may run far above the 50-day (README §5.3).
+# Momentum and EPs may run far above the 50-day (archived README §5.3).
 EXTENSION_EXEMPT = frozenset({Strategy.MOMENTUM_BREAKOUT, Strategy.EPISODIC_PIVOT})
 
 
@@ -32,8 +33,8 @@ def price_levels(
     atr: float | None,
     config: GuardrailsConfig,
 ) -> Finding | None:
-    """The LLM's pivot and stop against the code's (README §8 "Price levels", "Stop on every
-    entry")."""
+    """The LLM's pivot and stop against the code's (archived README §8 "Price levels", "Stop on
+    every entry")."""
     if stop is None:
         return reject(GuardrailRule.STOP_REQUIRED, "every entry needs a stop")
     if atr is None or not finite_positive(pivot, stop, code_pivot, structural_stop, atr):
@@ -95,8 +96,8 @@ def stop_width(
     record: StrategyRecord | None,
     config: GuardrailsConfig,
 ) -> Finding | None:
-    """README §8 "Max stop width" and "Keep losses small vs gains". ``adr`` is a fraction (an
-    EP's pre-gap ADR)."""
+    """Archived README §8 "Max stop width" and "Keep losses small vs gains". ``adr`` is a fraction
+    (an EP's pre-gap ADR)."""
     if atr is None or adr is None or not finite_positive(trigger, limit, stop, atr, adr):
         return reject(GuardrailRule.INVALID_INPUT, "levels must be finite and positive", stop)
     if stop >= trigger:

@@ -1,4 +1,4 @@
-"""Position sizing in whole shares (README §7.1, §8, #122), pure.
+"""Position sizing in whole shares (archived README §7.1, §8, #122), pure.
 
 - **Planned size** is sized on the worst fill (the limit price): the approved risk amount over
   (limit - stop), clipped by the max position size and the exposure reserved for the entry,

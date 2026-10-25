@@ -744,10 +744,12 @@ AuraTrade/
 │   │                             # the setup system, unwired (facts for the Analyst): base, registry, trend_template, vcp_breakout,
 │   │                             # momentum_breakout, episodic_pivot, leader_pullback, emerging_leader
 │   │                             # ranking, verdict_cache, watchlist (the evening's full scan), store
-│   ├── plans/                    # plans, early-behaviour rules, soft rules, 8-week hold, cushion, events
+│   ├── plans/                    # plan versioning (tighten-only; the book's plans use it from Phase 5); the setup system's menus,
+│   │                             # early-behaviour and soft rules, 8-week hold, cushion, events (unwired)
 │   ├── llm/
 │   ├── guardrails/               # book (the momentum book's limits, #148); the setup system's rules, unwired
-│   ├── execution/                # account, sizing, triggers (pivot / opening-range high), tranches, orders, reconciliation;
+│   ├── execution/                # account, orders, reconciliation (used by the book); the setup system's sizing,
+│   │                             # triggers (pivot / opening-range high) and tranches (unwired);
 │   │                             # from 1.7: broker interface + Alpaca adapter, the stop invariant, the order desk
 │   │                             # (sell sequence, sell at once), the single-writer lock, signals, the skeleton's rules
 │   ├── journal/                  # rule_book (the momentum book's shadow, 4.5), the book scorecard; journal, reports, lessons;
@@ -780,8 +782,8 @@ AuraTrade/
 - **`ENVIRONMENT`:** `dev` | `paper`; names the Alpaca account and Neon branch a process belongs to, and prefixes its alerts. Set in each env file (§12) and by the stack in AWS.
 - **`TRADING_MODE`:** `dry_run` | `paper` | `live` (live needs an explicit flag and separate credentials, added with the Phase 8 live stack; until then the settings refuse `live` outright). A job's `--dry-run` flag forces `dry_run` for that run; nothing can raise the mode.
 - **Kill switch:** `system_flags.trading_enabled` in the database (§5.13), flipped with `auratrade kill on|off`. It is deliberately not an environment variable, so it works without a redeploy. A new database starts with it on (entries disabled; a missing flag row reads the same way), so a fresh environment trades only after someone runs `auratrade kill off`.
-- **Models / effort:** `ANALYST_MODEL`, `PM_MODEL`, `EOD_MODEL`, `WEEKLY_MODEL`, `*_EFFORT`; `ANALYST_MAX_CANDIDATES=40`.
-- **`config/risk.yaml`:** regime thresholds, fundable strategies, entry rules, exit-plan menus and defaults, guardrails, multiplier rules, early-behaviour rules, the cushion table, the universe filters and the ingest settings. Its hash is logged with every run.
+- **Models / effort:** `ANALYST_MODEL` (the Book Analyst), `PM_MODEL`, `WEEKLY_MODEL`, `*_EFFORT`; `ANALYST_MAX_CANDIDATES=40` (the review list, `book.review_candidates`). `EOD_*` belong to the setup system's EOD role; Phase 4 removes them.
+- **`config/risk.yaml`:** the momentum book (`book:`), regime thresholds, halts, the cluster rule, the fill model, the universe filters and the ingest settings; and the setup system's sections (fundable strategies, entry rules, exit menus, multiplier, early-behaviour rules, cushion), marked "archived README" and unwired. Its hash is logged with every run.
 - **Paper account:** set the Alpaca paper equity to the intended live capital ($5,000, #122).
 
 ---
@@ -796,7 +798,7 @@ The book's backtest decides whether capital is used, so it follows rules that ke
 - **Benchmarks:** SPY and MTUM on total return; the book on price only, which biases the comparison against it.
 - **Tuning period 2017–2022** (2016 is the warm-up for the 12-month signal). **The 2023+ holdout is opened once, for the frozen configuration only.** It has never been opened: the setup system's tests failed before reaching it.
 - **Per-year results** in every table; no conclusion may rest on a single year. 2023–25 was unusually kind to momentum.
-- **Comparisons:** seven, fixed in advance (C1–C7), each changing one thing. One is adopted only if its daily-return difference against the primary has a 90% block-bootstrap interval wholly in its favour on the tuning period, with no deeper drawdown. A safety rule stays unless removing it passes that test. **The holdout is never used to choose.** That departs from the setup system's "beats on both periods" rule, which spent the holdout on selection (#148).
+- **Comparisons:** seven, fixed in advance (C1–C7), each changing one thing. One is adopted only if its daily-return difference against the primary has a 90% block-bootstrap interval wholly in its favour on the tuning period, with no deeper drawdown. A safety rule (the overlay, the cluster cap) stays unless removing it passes that test; the setup system's earnings rules (C5) are adopted if they give a shallower drawdown without a return cost beyond noise. **The holdout is never used to choose.** That departs from the setup system's "beats on both periods" rule, which spent the holdout on selection (#148).
 - **The power problem.** The book's tracking error against SPY is likely 15–25% a year, so 6 years can't tell a realistic 2–5% edge from zero. **The gate therefore rests on point estimates and robustness:**
   - **G1:** excess CAGR over SPY > 0.
   - **G2:** excess CAGR over MTUM ≥ 0.

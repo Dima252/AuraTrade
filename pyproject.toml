@@ -1,7 +1,7 @@
 [project]
 name = "auratrade"
 version = "0.1.0"
-description = "Autonomous swing-trading system for US stocks: an LLM decides inside hard risk limits enforced by code."
+description = "Autonomous momentum book for US stocks: an LLM decides inside hard risk limits enforced by code."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
 dependencies = [

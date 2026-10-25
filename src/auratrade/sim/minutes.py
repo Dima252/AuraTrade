@@ -1,4 +1,4 @@
-"""Minute bars for the simulator, cached in the object store (README §5.12).
+"""Minute bars for the simulator, cached in the object store (archived README §5.12).
 
 The evening `simulate` job fetches session T's SIP and IEX minute bars for its symbols only (the
 baseline book's entries and open trades, the scorecard's), and every later evening re-plays the

@@ -1,4 +1,4 @@
-"""Risk per trade, heat, positions and exposure (README §6, §8).
+"""Risk per trade, heat, positions and exposure (archived README §6, §8).
 
 - **Effective risk** = the regime's base risk x the progressive-exposure multiplier x the
   late-stage factor, hard cap 1.5%. `EARLY_UPTREND` steps up after its starter sessions only on
@@ -32,7 +32,8 @@ class RegimeLimits:
 def regime_limits(
     regime: Regime, *, stepped: bool, equity: float, config: RegimesConfig
 ) -> RegimeLimits:
-    """The README §6 row for ``regime``; ``stepped`` applies the `EARLY_UPTREND` step-up."""
+    """The archived README §6 row for ``regime``; ``stepped`` applies the `EARLY_UPTREND`
+    step-up."""
     row = getattr(config, regime.value)
     base_risk, max_exposure = row.base_risk, row.max_exposure
     if regime is Regime.EARLY_UPTREND and stepped:

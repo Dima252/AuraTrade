@@ -67,7 +67,7 @@ def test_estimated_cushion_session_with_the_repo_config() -> None:
         estimate_sessions=guard.earnings_estimate_sessions,
         window_sessions=guard.earnings_estimate_window_sessions,
     )
-    assert session == sessions[52]  # the window starts at +53 (README §7.4)
+    assert session == sessions[52]  # the window starts at +53 (archived README §7.4)
 
 
 def test_estimated_cushion_session_beyond_the_calendar() -> None:

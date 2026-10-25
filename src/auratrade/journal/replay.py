@@ -1,4 +1,4 @@
-"""Trades replayed through ``sim/`` (README §5.12), pure.
+"""Trades replayed through ``sim/`` (archived README §5.12), pure.
 
 - **Sim R:** an LLM-book trade replayed as decided (its levels, exit plan and risk). Every
   comparison with the baseline uses it, never the paper fills (§5.12, #83).

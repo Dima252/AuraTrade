@@ -144,7 +144,7 @@ class OtoBuy:
     """An entry: a GTC buy parent with one GTC sell stop leg (#113, #114).
 
     `trigger` set: a buy stop-limit (trigger, limit). `trigger` None: a limit buy at `limit`,
-    for a price already past the trigger but within the limit (README §7.1)."""
+    for a price already past the trigger but within the limit (archived README §7.1)."""
 
     symbol: str
     qty: int

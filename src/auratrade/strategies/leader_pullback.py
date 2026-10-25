@@ -1,4 +1,5 @@
-"""`LeaderPullback`: buying a leader's pullback to its 10- or 21-day EMA (README §5.3, §7.1).
+"""`LeaderPullback`: buying a leader's pullback to its 10- or 21-day EMA (archived README §5.3,
+§7.1).
 
 A stage-2 leader (all 8 Trend Template rules, RS rating >= 80) pulls back from a recent high to
 within 1 x ATR of its 10- or 21-day EMA, on volume below its 50-day average.

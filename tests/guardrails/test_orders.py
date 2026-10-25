@@ -1,4 +1,4 @@
-"""The 09:36 check of an approved entry (README §7.1, §8)."""
+"""The 09:36 check of an approved entry (archived README §7.1, §8)."""
 
 from dataclasses import replace
 

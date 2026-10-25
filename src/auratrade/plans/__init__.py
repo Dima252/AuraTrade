@@ -1,4 +1,4 @@
-"""Position plans, early-behaviour and exit rules, rule precedence (README §7).
+"""Position plans, early-behaviour and exit rules, rule precedence (archived README §7).
 
 Pure: no I/O, no clock. Thresholds come from ``config/risk.yaml`` (``plans:``, ``climax:``);
 base counts (2.2) and regime changes (2.3) arrive as typed inputs. Sessions count from the

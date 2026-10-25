@@ -1,4 +1,4 @@
-"""``evaluate(actions, context)``: every LLM action through the guardrails (README §8).
+"""``evaluate(actions, context)``: every LLM action through the guardrails (archived README §8).
 
 The Portfolio Manager proposes a regime view, entries, tightenings and exits; the EOD review
 proposes tranche-2 adds, tightenings and exits. Each action is approved, clipped or rejected.
@@ -257,7 +257,7 @@ def regime_ceiling(regime: Regime, view: RegimeView) -> tuple[Regime, Finding | 
 
 
 def evaluate(actions: Sequence[Action], context: Context, risk: RiskConfig) -> Evaluation:
-    """Every action, in order, after the regime views (README §8)."""
+    """Every action, in order, after the regime views (archived README §8)."""
     regime = context.regime
     view_findings: dict[int, Finding | None] = {}
     for i, action in enumerate(actions):

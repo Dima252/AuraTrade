@@ -60,6 +60,6 @@ def strategy_record(
     trades: Sequence[ClosedTrade], strategy: Strategy, *, window: int
 ) -> StrategyRecord:
     """A strategy's count of closed trades and its rolling average gain, for the guardrails'
-    "keep losses small vs gains" (README §8)."""
+    "keep losses small vs gains" (archived README §8)."""
     own = [t for t in trades if t.strategy is strategy]
     return StrategyRecord(closed_trades=len(own), average_gain=numbers(own, window).average_gain)

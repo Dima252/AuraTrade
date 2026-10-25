@@ -1,4 +1,4 @@
-"""Rule precedence for one session of one held position (README §7.3), in one place.
+"""Rule precedence for one session of one held position (archived README §7.3), in one place.
 
 The order is ``Rule``'s: hard stop, earnings cushion, early-behaviour exits, climax sales (with
 the late-stage sale), regime-downgrade tightening, 8-week-hold constraints, strength partials,

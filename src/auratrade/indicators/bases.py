@@ -1,4 +1,4 @@
-"""Base detection and IBD base counting (README §5.3, task 2.2).
+"""Base detection and IBD base counting (archived README §5.3, task 2.2).
 
 One forward pass over split-adjusted daily bars. Positions are session indexes into ``bars``; the
 caller maps them to dates.

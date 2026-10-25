@@ -1,4 +1,4 @@
-"""Entry triggers, limits and the 09:36 order type (README §7.1), pure.
+"""Entry triggers, limits and the 09:36 order type (archived README §7.1), pure.
 
 - **Opening range:** the high and low of the first ``opening_range_minutes`` 1-minute bars
   (09:30-09:34). From IEX live; when IEX printed nothing in it, the caller passes delayed-SIP
@@ -86,7 +86,7 @@ def trigger_level(kind: TriggerKind, level: float, opening: OpeningRange | None)
 
 
 def chased_too_far(trigger: float, code_pivot: float, max_chase: float) -> bool:
-    """README §7.1: skip a trigger above the code pivot x (1 + max chase)."""
+    """Archived README §7.1: skip a trigger above the code pivot x (1 + max chase)."""
     return not reached(code_pivot * (1 + max_chase), trigger)
 
 
@@ -176,7 +176,7 @@ class OrderKind(StrEnum):
 
 
 def order_decision(price: float | None, levels: EntryLevels) -> OrderKind | Skip:
-    """README §7.1 "Already through the trigger at 09:36", on the last price."""
+    """Archived README §7.1 "Already through the trigger at 09:36", on the last price."""
     if price is None or not (math.isfinite(price) and price > 0):
         return Skip(SkipReason.NO_PRICE, "no price")
     if price > levels.limit:

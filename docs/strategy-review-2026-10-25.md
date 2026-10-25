@@ -1,5 +1,7 @@
 # Strategy review (2026-10-25): a second reading of the 3.8 decision
 
+> **Superseded 2026-10-25** by the strategy change to a momentum book (#146-#149, [momentum-plan.md](momentum-plan.md)). Its recommendation (the close entry, then fallback F) was tested and failed; kept as the record.
+
 **Status.** Written 2026-10-25 for the user and the next session's agent, after reading [strategy-decision.md](strategy-decision.md), the five reports it lists, README §5.3, §7, §8, §15 and #136–#143, CLAUDE.md, and the code behind the numbers (`backtest/pool.py`, `sim/fills.py`, `sim/trade.py`, `journal/scorecard.py`, `strategies/episodic_pivot.py`, `config/risk.yaml`). **Nothing was re-run and the holdout (2023 on) stays closed.** Nothing was built. This page is a review and a recommendation; the plan is the user's to approve.
 
 The short version:

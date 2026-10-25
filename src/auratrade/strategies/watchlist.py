@@ -1,10 +1,10 @@
-"""The evening's full scan (README §5.3, task 3.7), pure: session T's universe through every
-strategy scan, scored and capped.
+"""The evening's full scan (archived README §5.3, task 3.7), pure: session T's universe through
+every strategy scan, scored and capped.
 
 Every setup of every strategy is kept, whatever the regime, the cap or the ranking: the breakout
-tracker reads them all (README §5.12). The capped selection (``ranking.select``, the computed
-regime's fundable strategies) gives the ranked ones their ``rank``, the order the Analyst and
-the baseline book take them in.
+tracker reads them all (archived README §5.12). The capped selection (``ranking.select``, the
+computed regime's fundable strategies) gives the ranked ones their ``rank``, the order the Analyst
+and the baseline book take them in.
 
 The inputs are what Postgres holds (about two years of bars). Cross-sectional values (RS ratings,
 momentum ranks) are ranked within each session's universe as ``indicators.universe`` rebuilds it
@@ -44,7 +44,7 @@ class SymbolHistory:
     industry: str | None = None
     earnings: Sequence[tuple[date, EarningsTiming]] = ()
     fundamentals: Fundamentals | None = None
-    """The latest quarter filed before T (README §15: readable from the next session)."""
+    """The latest quarter filed before T (archived README §15: readable from the next session)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +93,7 @@ def cross_sections(
     histories: Sequence[SymbolHistory], members: Mapping[date, set[int]], risk: RiskConfig
 ) -> tuple[dict[int, list[float | None]], dict[int, list[float | None]]]:
     """Each security's RS rating and best momentum rank per bar, ranked within that session's
-    universe (README §5.3); None where it wasn't a member."""
+    universe (archived README §5.3); None where it wasn't a member."""
     lookbacks = risk.strategies.MOMENTUM_BREAKOUT.rank_lookbacks
     rs: dict[date, dict[int, float]] = defaultdict(dict)
     returns: dict[tuple[date, int], dict[int, float]] = defaultdict(dict)

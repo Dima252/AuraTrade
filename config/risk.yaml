@@ -1,4 +1,6 @@
 # Every trading threshold lives here (CLAUDE.md §6), loaded into `auratrade.config.RiskConfig`.
+# The momentum book's values are under `book:` (README §5.3, §7, §8). Sections marked "archived
+# README" belong to the setup system (docs/archive/README-setup-system.md): its code stays, unwired.
 # Unknown keys are rejected. The hash of the validated values is logged with every job run,
 # so a change here is visible in every log line that follows it.
 #
@@ -6,7 +8,7 @@
 # Sections for the scans and entry rules are added with the tasks that implement them
 # (3.2a, 3.5b); the exit-plan menus and the earnings cushion are under `plans`.
 
-regimes:  # README §6
+regimes:  # archived README §6
   CONFIRMED_UPTREND:
     strategies:
       - {strategy: VCP_BREAKOUT}
@@ -44,7 +46,7 @@ regimes:  # README §6
     stepped_max_exposure: 0.5
   large_account_equity: 100000
 
-guardrails:  # README §8
+guardrails:  # README §8 (the cluster rule, used by the book); the rest is the setup system's (archived README §8)
   max_risk_per_trade: 0.015          # hard cap on effective risk
   max_position_size: 0.25
   max_heat: 0.06
@@ -72,7 +74,7 @@ guardrails:  # README §8
   keep_losses_small_trades: 20       # after 20 closed trades of a strategy ...
   keep_losses_small_gain_share: 0.5  # ... max width <= ½ x its rolling 20-trade average gain
 
-entries:  # README §7.1; see auratrade.execution.triggers and auratrade.execution.sizing
+entries:  # archived README §7.1; see auratrade.execution.triggers and auratrade.execution.sizing
   opening_range_minutes: 5           # 09:30-09:34
   limit_max_above_trigger: 0.02      # limit = min(trigger x (1 + min(2%, ½ ADR)), code pivot x 1.05)
   limit_adr_fraction: 0.5
@@ -84,7 +86,7 @@ halts:  # README §8, §5.13
   weekly_loss: 0.05
   drawdown: 0.15
 
-multiplier:  # README §8, progressive exposure
+multiplier:  # archived README §8, progressive exposure
   win_r: 0.5
   loss_r: 0.5
   deep_drawdown: 0.10
@@ -103,7 +105,7 @@ multiplier:  # README §8, progressive exposure
   trading_well_trades: 10
   trading_well_multiplier: 1.25
 
-climax:  # README §7.3 "Climax sale"
+climax:  # archived README §7.3 "Climax sale"
   up_day_clusters:                   # >= 7 up days in 8, or >= 8 in 10
     - {up_days: 7, of_sessions: 8}
     - {up_days: 8, of_sessions: 10}
@@ -179,7 +181,7 @@ jobs:  # README §2
   watchdog_grace_minutes: 15
   eod_review_window_minutes: 30
 
-trend_template:  # README §5.3 (Minervini)
+trend_template:  # archived README §5.3 (Minervini)
   short_sma: 50
   mid_sma: 150
   long_sma: 200
@@ -200,14 +202,14 @@ trend_template:  # README §5.3 (Minervini)
     EMERGING_LEADER: [1, 5, 6, 7, 8]   # the MA stack (2-4) lags right after a correction
     EPISODIC_PIVOT: []
 
-bases:  # README §5.3 base count (IBD); see indicators/bases.py
+bases:  # archived README §5.3 base count (IBD); see indicators/bases.py
   min_sessions: 25                   # IBD's 5-week minimum; shorter consolidations are ignored
   max_depth: 0.50                    # deeper is not a base, and resets the count
   swing_reversal: 0.03               # a contraction is a >= 3% pullback from a swing high
   pivot_min_position: 0.5            # the final contraction's high is the pivot only in the upper half
   new_stage_advance: 0.20            # a new stage needs >= 20% from the prior base's pivot
 
-regime:  # README §5.2; provisional 4-pillar thresholds from the 2.4 backtest (#135), final after the 3.8 re-run
+regime:  # README §5.2; provisional 4-pillar thresholds (#135); task 3.16 freezes the 5-pillar variant the book's backtest uses
   indexes: [SPY, QQQ]                # both for +1, either for -1; distribution counted per index
   index_trend:
     short_sma: 50
@@ -259,7 +261,7 @@ regime:  # README §5.2; provisional 4-pillar thresholds from the 2.4 backtest (
     index_drop: 0.04                 # SPY -4% in a session: that session and the next
   replay_warmup_sessions: 252        # a replay starts this many sessions before its first label
 
-plans:  # README §7.1-7.4; see auratrade.plans. Defaults change only on backtest evidence (3.8).
+plans:  # archived README §7.1-7.4; see auratrade.plans. Defaults change only on backtest evidence (3.8).
   trails:                            # "first close below" the average exits (§7.3)
     TEN_DAY: {kind: SMA, window: 10}   # user decision, task 3.5a: the 10-day is an SMA
     EMA_21: {kind: EMA, window: 21}
@@ -397,7 +399,7 @@ skeleton:  # execution plan task 1.7: rule-only, no LLM; Phase 5 replaces the sc
   max_positions: 6
   trail: EMA_21                      # the one soft rule: a decision price below the 21 EMA
 
-strategies:  # README §5.3 scans (task 3.2a); see auratrade.strategies. Provisional until 3.8.
+strategies:  # archived README §5.3 scans (task 3.2a); see auratrade.strategies. Provisional until 3.8.
   VCP_BREAKOUT:                      # Minervini
     min_base_sessions: 15            # a base of 3 ...
     max_base_sessions: 325           # ... to 65 weeks
@@ -445,7 +447,7 @@ strategies:  # README §5.3 scans (task 3.2a); see auratrade.strategies. Provisi
     max_sessions_since_correction: 63  # only within 3 months of the correction's end
     stop_sessions: 5                 # structural stop = the 5-session low (#137: the 10-session low was > 8% on 69%)
 
-ranking:  # README §5.3 "Ranking and cap", "Verdict cache"; see auratrade.strategies.ranking (task 3.3)
+ranking:  # archived README §5.3 "Ranking and cap", "Verdict cache"; see auratrade.strategies.ranking (task 3.3)
   # The quality score is the plain average of 8 components, each scaled to 0-1 (#138, the user's
   # choice: no weights to fit). Only setups fundable in the regime compete; one slot per ticker.
   rs_line:                           # close / SPY
@@ -482,7 +484,7 @@ charts:  # README §5.3 "Charts" (task 3.4); see auratrade.charts. Image tokens 
     40-week SMA: {kind: SMA, window: 40}
   dpi: 100
 
-sim:  # README §5.12 fill model (task 3.6); see auratrade.sim. Provisional until the 3.8 backtest.
+sim:  # README §5.12 fill model (task 3.6, #141); see auratrade.sim. The book's backtest uses these tiers as they are.
   # Liquidity-scaled slippage: a fraction of the price, by the 50-session average dollar
   # volume (the universe floor is $10M). The first tier the stock reaches applies.
   slippage:
@@ -495,13 +497,13 @@ sim:  # README §5.12 fill model (task 3.6); see auratrade.sim. Provisional unti
   volume_sessions: 50                # the average volume the plan rules compare with
   long_average_sessions: 200         # the climax "far above the 200-day" signal
 
-watchlist:  # README §5.3 the evening's full scan (task 3.7); see auratrade.strategies.watchlist
+watchlist:  # archived README §5.3 the evening's full scan (task 3.7); see auratrade.strategies.watchlist
   atr_sessions: 14                   # the ATR stored with each setup (stop-width floor and caps)
 
-baseline:  # README §5.12 shadow baseline book (task 3.7); see auratrade.journal.baseline
+baseline:  # README §5.12 the shadow book's account: the setup baseline now (journal.baseline), the rule book from 4.5
   start_equity: 5000                 # the paper account's capital (#122)
 
-scorecard:  # README §5.12 Analyst verdict scorecard (task 3.7); see auratrade.journal.scorecard
+scorecard:  # archived README §5.12 Analyst verdict scorecard (task 3.7); see auratrade.journal.scorecard
   horizons: [5, 10, 20]              # R after 5, 10 and 20 sessions (the entry session is 1)
   notional_equity: 100000            # every verdict sized as if taken on a notional account ...
   risk_per_trade: 0.01               # ... at 1%: whole shares don't distort R

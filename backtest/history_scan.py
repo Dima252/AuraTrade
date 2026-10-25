@@ -1,5 +1,5 @@
-"""The historical full scan of the 3.8 baseline backtest (pre-registration step 1, README §15):
-every strategy on every point-in-time universe member, each session, with its features as they
+"""The historical full scan of the 3.8 baseline backtest (pre-registration step 1, archived README
+§15): every strategy on every point-in-time universe member, each session, with its features as they
 stood then; and the breakout tracker built from it (step 2).
 
 - **Universe:** the 1.6 membership table (delisted securities included, raw-price filters).
@@ -68,7 +68,7 @@ from auratrade.strategies.watchlist import corrections_for, reaction_sessions
 
 LOAD_START = date(2016, 1, 1)
 FIRST_SCANNED = date(2017, 1, 1)
-"""2016 is warm-up: the 200-day average and the 252-session windows fill (README §15)."""
+"""2016 is warm-up: the 200-day average and the 252-session windows fill (archived README §15)."""
 TUNING_END = date(2022, 12, 30)
 
 Spells = Sequence[tuple[date, date | None]]
