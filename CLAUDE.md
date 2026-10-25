@@ -4,8 +4,8 @@ This file is loaded at the start of every Claude Code session in this repository
 
 ## 1. What this project is
 
-AuraTrade is an autonomous swing-trading system for US stocks:
-- It is modelled on Minervini (SEPA/VCP), O'Neil/IBD and Kullamägi.
+AuraTrade is an autonomous trading system for US stocks:
+- It is a monthly **momentum book** (#146-#149): it holds 8 of the strongest of the 1,000 most liquid stocks by 12-1 month return, each with a broker stop. The earlier chart-pattern setup system (Minervini, O'Neil/IBD, Kullamägi) failed its tests; its spec is archived in `docs/archive/` and its code stays, unwired, as facts for the LLM.
 - An LLM (Claude) makes trade and allocation decisions inside hard risk limits enforced by code.
 - It runs serverless on AWS, using free data tiers, on a budget under $150/month.
 
@@ -15,7 +15,7 @@ AuraTrade is an autonomous swing-trading system for US stocks:
 |---|---|---|
 | [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **How and in what order** to build it: phases, tasks, acceptance criteria, **progress tracker** | Work strictly in its order. |
-| README §16 "Decision log" | **Why** things are the way they are (146 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review, #108 the public site, #109–112 spike findings, #113–128 the 0.4 spike review, #129 the ingest build, #130 the backfill build, #131 the skeleton build, #132 1.7's acceptance moved to AWS, #133 the AWS skeleton, #134 the public site plan, #135 the regime thresholds from 2.4, #136 the strategy-scan readings from 3.2a, #137 those from 3.2b, #138 the ranking from 3.3, #139 the charts from 3.4, #140 the guardrail readings from 3.5b, #141 the simulator readings from 3.6, #142 the watchlist, baseline, tracker and scorecard readings from 3.7, #143 the EP proxy at 09:36 from the 3.8 diagnostics, #144 the close-entry candidates after the failed gate, #145 the gate moved to before capital, #146 the strategy change to a momentum book: see `docs/strategy-change-momentum.md`; Phases 4-7 wait for its plan) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
+| README §16 "Decision log" | **Why** things are the way they are (149 decisions; #51–65 come from the 2026-10-07 design review, #66–78 from the 2026-10-08 follow-up, #79–91 from the third review the same day, #92–104 from the fourth, #105–107 from the build-order review, #108 the public site, #109–112 spike findings, #113–128 the 0.4 spike review, #129 the ingest build, #130 the backfill build, #131 the skeleton build, #132 1.7's acceptance moved to AWS, #133 the AWS skeleton, #134 the public site plan, #135 the regime thresholds from 2.4, #136 the strategy-scan readings from 3.2a, #137 those from 3.2b, #138 the ranking from 3.3, #139 the charts from 3.4, #140 the guardrail readings from 3.5b, #141 the simulator readings from 3.6, #142 the watchlist, baseline, tracker and scorecard readings from 3.7, #143 the EP proxy at 09:36 from the 3.8 diagnostics, #144 the close-entry candidates after the failed gate, #145 the gate moved to before capital, #146 the strategy change to a momentum book (`docs/strategy-change-momentum.md`), #147-#149 the momentum book's rules, risk limits and pre-registered backtest, and the re-plan (`docs/momentum-plan.md`, `docs/backtests/momentum-preregistration.md`) | Don't reopen a logged decision unless the user asks. **The design is frozen (#105):** don't start or propose another design review; changes come only from spike/backtest findings (§5) or the user. |
 | `docs/spikes/*.md` | Findings from Phase 0 experiments | Where a spike contradicts the README, stop and ask the user (§5). |
 
 If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
@@ -108,7 +108,15 @@ CI (`.github/workflows/ci.yml`) runs the same lint → type-check → test steps
 | Term | Meaning |
 |---|---|
 | **Session** | A trading day in `market_sessions`. All windows count sessions. |
-| **Pivot** | The breakout price level (for a VCP, the high of the final contraction). |
+| **Ranking / execution session (R / E)** | R: the last session of each month, when the book is ranked. E: the next full session, when it trades at 15:40 |
+| **Ranked set** | The 1,000 most liquid stocks of the point-in-time universe, ranked by 12-1 |
+| **12-1** | The return from 252 to 21 sessions before the ranking close: the past year, skipping the last month |
+| **Slot** | One of the book's 8 equal positions: equity × max exposure ÷ 8 at the rebalance |
+| **Hold zone** | The top decile (percentile ≥ 90): a holding is kept while it stays there |
+| **Candidates** | The first 16 eligible names not held: the only names that can be bought |
+| **Rule book** | The simulated rule-only book (candidates in rank order), the benchmark for the LLM book |
+| **Information coefficient** | The monthly rank correlation between the Book Analyst's conviction and each name's later relative return: the main evidence for the LLM's value |
+| *Setup system (archived):* **Pivot** | The breakout price level (for a VCP, the high of the final contraction). |
 | **R** | The initial risk per share (entry − initial stop). "+2R" = a gain of twice that risk. |
 | **ORH** | Opening-range high: the high of the first 5 minutes; an entry trigger. |
 | **ADR / ATR** | Average daily range (%) / average true range; they bound stop width. |
@@ -117,11 +125,11 @@ CI (`.github/workflows/ci.yml`) runs the same lint → type-check → test steps
 | **Base count** | Which base since the stage-2 start (IBD rules); 3rd → half risk, 4th+ → no entry. |
 | **Distribution day / FTD** | IBD market signals: an index down ≥ 0.2% on higher volume / day 4+ of a rally with a ≥ 1.25% gain on higher volume. |
 | **Tranche** | Part of a position; two-tranche entries buy 50% at the trigger and 50% on confirmation. |
-| **Position plan** | The exit plan written at entry; code carries it out; tighten-only. |
+| **Position plan** | The exit rules set at entry (hold zone, stop); code carries them out; tighten-only. |
 | **Hard stop / soft rule** | The broker-side GTC stop / a close-based rule checked by code at the EOD review. |
-| **Baseline book** | A simulated rule-only portfolio used as the benchmark for the LLM. |
-| **Breakout tracker** | Every scan trigger, ungated, used for the leadership-health regime pillar. |
+| **Baseline book** | The setup system's simulated rule-only portfolio (archived); the book's equivalent is the rule book. |
+| **Breakout tracker** | Every trigger of the old scans, ungated; still feeds the leadership-health regime pillar. |
 | **Regime** | `CONFIRMED_UPTREND` / `UNDER_PRESSURE` / `EARLY_UPTREND` (after a follow-through day) / `CORRECTION` (IBD's pre-FTD "rally attempt" is a sub-state of it). "More conservative" means lower on the ladder `CORRECTION` < `EARLY_UPTREND` < `UNDER_PRESSURE` < `CONFIRMED_UPTREND`. |
-| **Heat** | Total open risk: Σ max(0, entry − hard stop) × shares across positions, plus pending entries. Capped at 6% of equity. |
+| **Heat** | Total open risk: Σ max(0, entry − hard stop) × shares. Capped at 6% in the setup system; reported, not capped, for the book (about 20% fully invested, #148). |
 | **Decision price** | The 15:40 price on which "close-based" soft rules decide (12:40 on half days): the last IEX trade if ≤ 2 min old, else the IEX quote midpoint if fresh, else none (#120). |
-| **Verdict scorecard** | Every Analyst verdict simulated forward under the default plan: the main evidence for whether the LLM adds value. |
+| **Verdict scorecard** | The setup system's scorecard (archived); the book's is the information coefficient above. |
