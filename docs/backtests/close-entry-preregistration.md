@@ -1,6 +1,6 @@
 # The close entry (task 3.8, after the failed gate): pre-registration
 
-**Written 2026-10-25, before any close-entry code exists or has run on real data.** **Status: DRAFT, awaiting the user's approval.** Once approved, the commit that holds the approved text is quoted at the top of `docs/backtests/close-entry.md`. Everything below is fixed from that commit:
+**Written 2026-10-25, before any close-entry code exists or has run on real data.** **Status: approved by the user 2026-10-25.** The commit that holds the approved text is quoted at the top of `docs/backtests/close-entry.md`. Everything below is fixed from that commit:
 - A change after the blind mechanics check (step 3) needs the user's approval and is listed in the report with its reason.
 - A change after the scored run (step 4) makes that change a new trial, which this page doesn't allow (§9).
 - A change after the holdout is opened voids the holdout as a test (README §15).
