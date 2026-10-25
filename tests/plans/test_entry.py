@@ -18,6 +18,7 @@ from auratrade.plans.entry import (
     GateInput,
     PlanError,
     confirmation_gate,
+    entry_gate,
     entry_policy,
     new_plan,
     tranche2_gate,
@@ -334,3 +335,14 @@ def test_close_candidate_matches_the_preregistration() -> None:
 def test_close_entry_policy_is_one_tranche_with_a_gate(fields: dict[str, Any]) -> None:
     with pytest.raises(ValueError, match="close entry"):
         EntryPolicy.model_validate(fields)
+
+
+def test_entry_gate_is_the_close_policy_gate() -> None:
+    close = PLANS.model_copy(
+        update={"entry": {**PLANS.entry, **PLANS.entry_candidates["CLOSE"].entry}}
+    )
+    assert entry_gate(Strategy.VCP_BREAKOUT, BREAKOUT_OK, close).passed
+    assert entry_gate(Strategy.EPISODIC_PIVOT, GAP_OK, close).passed
+    # The 09:36 momentum policy has no gate: it never enters at the close.
+    result = entry_gate(Strategy.MOMENTUM_BREAKOUT, BREAKOUT_OK, PLANS)
+    assert result.failures == ("MOMENTUM_BREAKOUT has no entry gate",)

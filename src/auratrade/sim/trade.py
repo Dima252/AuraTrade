@@ -12,6 +12,12 @@ low of the day, the decision price) come from IEX bars, fills from SIP bars. Wit
 range of an opening-range entry, the consolidated range is used and the order goes in at 09:51
 (#109). The entry works until the decision time, when the EOD review cancels it (§5.7).
 
+**A close entry** (the #144 candidate, ``TriggerKind.CLOSE``) needs no minute bars: on its entry
+session the strategy's gate is read at the decision time (``plans.entry.entry_gate``), then
+``guardrails.orders.check_close`` sets the limit, the stop and the size, and the buy fills at
+the decision price plus slippage if that is within the limit: the tranche-2 fill. The session
+then runs only the hard stop from the decision time to the close.
+
 **Later sessions** may carry minute bars (the evening simulation) or only a daily bar
 (backtests, where the close stands in for the decision price, §7.3). Each session runs:
 1. the hard stop, bar by bar, up to the decision time (on a daily bar: the whole bar)
@@ -29,7 +35,7 @@ from __future__ import annotations
 
 import statistics
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from enum import StrEnum
 
@@ -39,13 +45,19 @@ from auratrade.execution.sizing import tranche2_shares
 from auratrade.execution.triggers import OrderKind, opening_range, session_low
 from auratrade.guardrails.evaluate import ApprovedEntry
 from auratrade.guardrails.levels import StrategyRecord
-from auratrade.guardrails.model import Finding
-from auratrade.guardrails.orders import MarketAtOpen, OrderPlan, check_order
+from auratrade.guardrails.model import Finding, GuardrailRule, reject
+from auratrade.guardrails.orders import (
+    MarketAtDecision,
+    MarketAtOpen,
+    OrderPlan,
+    check_close,
+    check_order,
+)
 from auratrade.guardrails.positions import tranche2_check
 from auratrade.indicators.bars import OHLCV, Bar
 from auratrade.indicators.climax import climax_signals
 from auratrade.indicators.moving_averages import sma
-from auratrade.plans.entry import GateInput, new_plan, tranche2_gate
+from auratrade.plans.entry import GateInput, GateResult, entry_gate, new_plan, tranche2_gate
 from auratrade.plans.levels import trail_levels
 from auratrade.plans.model import Day, Event, PositionPlan, Rule
 from auratrade.plans.resolve import resolve
@@ -114,6 +126,8 @@ class TradeSetup:
 class TradeOutcome(StrEnum):
     SKIPPED = "SKIPPED"
     """The 09:36 check rejected it (``findings`` say why)."""
+    NOT_CONFIRMED = "NOT_CONFIRMED"
+    """A close entry whose gate failed at the decision time (``gate`` says why)."""
     MISSED = "MISSED"
     """Placed but never filled: not triggered, or it jumped past its limit for good."""
     CLOSED = "CLOSED"
@@ -155,6 +169,8 @@ class TradeResult:
     """Realized P&L, plus open shares at the last close."""
     marks: tuple[float, ...] = ()
     """R at each session's close, from the entry session to the exit (or the last session)."""
+    gate: GateResult | None = None
+    """A close entry's gate at the decision time."""
 
     @property
     def triggered(self) -> bool:
@@ -246,12 +262,14 @@ def simulate_trade(
         raise ValueError("no sessions to simulate")
     if not setup.history:
         raise ValueError("the trade needs at least the session before its entry")
-    first = sessions[0]
-    if not first.has_minutes or first.open_at is None or first.decision_at is None:
-        raise ValueError("the entry session needs minute bars and its open and decision times")
     for s in sessions:
         if s.has_minutes and (s.open_at is None or s.decision_at is None):
             raise ValueError("a session with minute bars needs its open and decision times")
+    if risk.plans.entry[setup.entry.strategy].trigger is TriggerKind.CLOSE:
+        return _close_entry(setup, sessions, equity=equity, record=record, risk=risk)
+    first = sessions[0]
+    if not first.has_minutes or first.open_at is None or first.decision_at is None:
+        raise ValueError("the entry session needs minute bars and its open and decision times")
 
     slip = slippage(setup.dollar_volume, risk.sim)
     placed = _place(setup, first, first.open_at, equity=equity, record=record, risk=risk)
@@ -293,6 +311,102 @@ def simulate_trade(
         if trade.exit is not None:
             break
     return trade.result()
+
+
+def _close_entry(
+    setup: TradeSetup,
+    sessions: Sequence[SimSession],
+    *,
+    equity: float,
+    record: StrategyRecord | None,
+    risk: RiskConfig,
+) -> TradeResult:
+    """A close entry from its entry session (``sessions[0]``) to its exit or the last session."""
+    first = sessions[0]
+    strategy = setup.entry.strategy
+    price, bars, after = _decision_view(first, risk)
+    if price is None:
+        return TradeResult(
+            TradeOutcome.SKIPPED,
+            findings=(reject(GuardrailRule.INVALID_INPUT, "no decision price"),),
+        )
+    day_low = min(b.low for b in bars)
+    volumes = [b.volume for b in setup.history[-risk.sim.volume_sessions :]]
+    volume = first.projected_volume if first.projected_volume is not None else first.bar.volume
+    gate = entry_gate(
+        strategy,
+        GateInput(
+            price=price,
+            level=setup.code_pivot,
+            day_high=max(b.high for b in bars),
+            day_low=day_low,
+            projected_volume=volume,
+            avg_volume_50=(
+                statistics.fmean(volumes) if len(volumes) == risk.sim.volume_sessions else None
+            ),
+            rs_line_near_high=first.rs_line_near_high,
+            rs_line_at_low=first.rs_line_at_low,
+            tested_ma=first.tested_ma,
+        ),
+        risk.plans,
+    )
+    if not gate.passed:
+        return TradeResult(TradeOutcome.NOT_CONFIRMED, gate=gate)
+    market = MarketAtDecision(price=price, low_of_day=day_low, atr=setup.atr, adr=setup.adr)
+    check = check_close(setup.entry, market, equity=equity, record=record, risk=risk)
+    if check.plan is None:
+        return TradeResult(TradeOutcome.SKIPPED, findings=check.findings, gate=gate)
+    order = check.plan
+    slip = slippage(setup.dollar_volume, risk.sim)
+    fill = buy_fill(price, slip)
+    if fill > order.limit:
+        return TradeResult(TradeOutcome.MISSED, order=order, gate=gate)
+
+    plan = new_plan(
+        strategy,
+        pivot=setup.code_pivot,
+        entry_price=fill,
+        initial_stop=order.stop,
+        config=risk.plans,
+        exits=setup.entry.exits,
+    )
+    trade = _Trade(
+        setup=setup,
+        order=order,
+        plan=plan,
+        risk_config=risk,
+        slip=slip,
+        bars=list(setup.history),
+        high_since_entry=max([fill, *(b.high for b in after)]),
+    )
+    trade.buy(1, FillKind.ENTRY, order.tranches.first, fill)
+    if (hit := stop_fill(after, stop=order.stop, slip=slip)) is not None:
+        trade.close_out(1, hit.price, Rule.HARD_STOP)
+    trade.mark(first.bar.close)
+    trade.prior_price = price
+    trade.bars.append(first.bar)
+    for n, s in enumerate(sessions[1:], start=2):
+        if trade.exit is not None:
+            break
+        _session(trade, n, s, None)
+    return replace(trade.result(), gate=gate)
+
+
+def _decision_view(
+    s: SimSession, risk: RiskConfig
+) -> tuple[float | None, Sequence[PriceBar], Sequence[PriceBar]]:
+    """The session's decision price, its bars up to the decision time and its bars after it.
+    On a daily bar the close is the decision price and the bar is all before it."""
+    if s.has_minutes and s.open_at is not None and s.decision_at is not None:
+        levels = s.iex if s.iex is not None else s.sip
+        price = (
+            s.decision_price
+            if s.decision_price is not None
+            else _price_at(s, levels, s.decision_at, risk)
+        )
+        return price, between(s.sip, s.open_at, s.decision_at), between(s.sip, s.decision_at, None)
+    price = s.decision_price if s.decision_price is not None else s.bar.close
+    return price, [s.bar], []
 
 
 def _place(
@@ -341,20 +455,8 @@ def _price_at(
 def _session(trade: _Trade, n: int, s: SimSession, held: Sequence[PriceBar] | None) -> None:
     """Session ``n`` of a held position; ``held`` is the entry session's bars from the fill."""
     plan_stop = trade.plan.hard_stop
-    if s.has_minutes and s.open_at is not None and s.decision_at is not None:
-        session_bars: Sequence[PriceBar] = between(s.sip, s.open_at, s.decision_at)
-        before: Sequence[PriceBar] = held if held is not None else session_bars
-        after: Sequence[PriceBar] = between(s.sip, s.decision_at, None)
-        levels = s.iex if s.iex is not None else s.sip
-        price = (
-            s.decision_price
-            if s.decision_price is not None
-            else _price_at(s, levels, s.decision_at, trade.risk_config)
-        )
-    else:
-        session_bars = before = [s.bar]
-        after = []
-        price = s.decision_price if s.decision_price is not None else s.bar.close
+    price, session_bars, after = _decision_view(s, trade.risk_config)
+    before = held if held is not None else session_bars
 
     if (hit := stop_fill(before, stop=plan_stop, slip=trade.slip)) is not None:
         trade.close_out(n, hit.price, Rule.HARD_STOP)

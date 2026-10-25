@@ -118,3 +118,12 @@ def tranche2_gate(strategy: Strategy, x: GateInput, config: PlansConfig) -> Gate
     if gate is None:
         return GateResult((f"{strategy} enters in a single tranche",))
     return confirmation_gate(gate, x, config)
+
+
+def entry_gate(strategy: Strategy, x: GateInput, config: PlansConfig) -> GateResult:
+    """A close entry's own gate at the decision time (#144); a policy without one never
+    enters."""
+    gate = entry_policy(strategy, config).gate
+    if gate is None:
+        return GateResult((f"{strategy} has no entry gate",))
+    return confirmation_gate(gate, x, config)
