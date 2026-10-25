@@ -30,7 +30,7 @@ from backtest.close_entry import (
     verdict,
 )
 from backtest.comparisons import Difference, Variant
-from backtest.pool import PoolTrade, Status, expectancy
+from backtest.pool import PoolTrade, Status, expectancy, rejections
 from backtest.pool_report import ORDER, READING
 
 GATE_FAILURES = (
@@ -99,6 +99,7 @@ def render_close(
         ]
     lines += _attempts(by)
     lines += _invariants(run)
+    lines += _rejections(run.reference)
     lines += _gate_mechanics(by)
     lines += _stops(by)
     lines += _sizes(by)
@@ -169,19 +170,34 @@ def _invariants(run: CloseRun) -> list[str]:
     return [*lines, f"**{len(bad)} violations:**", "", *(f"- {b}" for b in bad[:30]), ""]
 
 
-def _gate_mechanics(by: dict[Strategy, list[PoolTrade]]) -> list[str]:
+def _rejections(trades: Sequence[PoolTrade]) -> list[str]:
+    rules = rejections(trades)
+    shown = sorted({r for counts in rules.values() for r in counts}, key=lambda r: r.value)
+    lines = [
+        "## Rejections at proposal",
+        "",
+        "The guardrail that rejected each attempt before the decision time (the first rejection "
+        "ends the check), per strategy.",
+        "",
+        "| Strategy | " + " | ".join(f"`{r.value}`" for r in shown) + " |",
+        "|---|" + "---|" * len(shown),
+    ]
+    for s in ORDER:
+        lines.append(
+            f"| `{s.value}` | " + " | ".join(f"{rules[s].get(r, 0):,}" for r in shown) + " |"
+        )
+    return [*lines, ""]
+
+
+def _gate_table(rows: Iterable[tuple[Strategy, list[PoolTrade]]], title: str) -> list[str]:
     names = [short for _, short in GATE_FAILURES]
     lines = [
-        "## The gate at the decision time",
-        "",
-        "Attempts that reached the gate (past the proposal guardrails), how many passed, and "
-        "how often each condition failed (an attempt can fail several).",
+        title,
         "",
         "| Strategy | Reached | Passed | " + " | ".join(names) + " |",
         "|---|---|---|" + "---|" * len(names),
     ]
-    for s in ORDER:
-        reached = gated(by[s])
+    for s, reached in rows:
         passed = sum(
             1
             for t in reached
@@ -201,6 +217,28 @@ def _gate_mechanics(by: dict[Strategy, list[PoolTrade]]) -> list[str]:
             + " |"
         )
     return [*lines, ""]
+
+
+def _at_level(t: PoolTrade) -> bool:
+    gate = t.result.gate if t.result is not None else None
+    return gate is not None and not any("below the level" in f for f in gate.failures)
+
+
+def _gate_mechanics(by: dict[Strategy, list[PoolTrade]]) -> list[str]:
+    return [
+        "## The gate at the decision time",
+        "",
+        "Attempts that reached the gate (past the proposal guardrails), how many passed, and "
+        "how often each condition failed (an attempt can fail several). A unit is attempted on "
+        "every session it stays listed, so most attempts are quiet sessions below the level; "
+        "the second table keeps the attempts that closed at or above it.",
+        "",
+        *_gate_table(((s, gated(by[s])) for s in ORDER), "**Every attempt at the gate:**"),
+        *_gate_table(
+            ((s, [t for t in gated(by[s]) if _at_level(t)]) for s in ORDER),
+            "**Closed at or above the level:**",
+        ),
+    ]
 
 
 def _width(t: PoolTrade) -> float | None:

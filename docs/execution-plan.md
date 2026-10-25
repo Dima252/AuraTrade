@@ -61,7 +61,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [ ] 3.8 Baseline backtest (choose defaults) + re-run 2.4 with leadership health *(in progress: the 5-pillar regime run is done (not frozen); **the pool fails the gate** on 2017-2022 and no comparison fixes it; diagnostics found costs, early failures and an EP look-ahead (fixed, #143). The strategy decision is #144: two close-entry candidates, run once (3.8a-e below). The holdout is still closed)*
 - [x] 3.8a 👤 Strategy decision: the review's questions answered, fallback F chosen *(2026-10-25; `docs/strategy-review-2026-10-25.md`, `docs/strategy-execution-2026-10-25.md`; decisions #144, #145)*
 - [x] 3.8b 👤 Pre-register the close entry (`docs/backtests/close-entry-preregistration.md`), approved and committed before any code reads real data *(approved by the user 2026-10-25)*
-- [ ] 3.8c Build the close entry: pure layer, simulator entry, pool, report; known-answer tests; the blind mechanics check and the decision-price sample
+- [x] 3.8c Build the close entry: pure layer, simulator entry, pool, report; known-answer tests; the blind mechanics check and the decision-price sample *(2026-10-25, PR #45; `docs/backtests/close-entry-blind.md`: invariants hold, 15:40 vs close 2% disagreement; but only `LEADER_PULLBACK` reaches 300 fills (EP 277, VCP 85, emerging 137, momentum 5): brought to the user before 3.8d, as the pre-registration's step 3 requires)*
 - [ ] 3.8d The one scored run on 2017-2022 and its pre-registered reading
 - [ ] 3.8e (on a pass only) Freeze, open the holdout once, finish 3.8
 
