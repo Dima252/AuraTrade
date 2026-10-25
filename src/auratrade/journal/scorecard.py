@@ -175,17 +175,28 @@ def block_bootstrap(
     samples: int,
     confidence: float,
     seed: int,
+    block_of: Callable[[date], int] | None = None,
 ) -> Interval | None:
     """A percentile interval for ``statistic`` over ``groups`` (each a group's values by
     trigger session), resampling whole sessions with replacement from the union of their
-    sessions. Resamples where the statistic is undefined are dropped; None if all are."""
+    sessions. ``block_of`` resamples whole blocks of sessions instead (each session's block
+    number), every value of a block's sessions together. Resamples where the statistic is
+    undefined are dropped; None if all are."""
     sessions = sorted(set().union(*(g.keys() for g in groups)))
     if not sessions:
         return None
+    members: dict[int, list[date]] = defaultdict(list)
+    if block_of is not None:
+        for day in sessions:
+            members[block_of(day)].append(day)
+    blocks = sorted(members)
     rng = random.Random(seed)  # noqa: S311 - resampling, not crypto
     values = []
     for _ in range(samples):
-        drawn = rng.choices(sessions, k=len(sessions))
+        if block_of is None:
+            drawn = rng.choices(sessions, k=len(sessions))
+        else:
+            drawn = [d for b in rng.choices(blocks, k=len(blocks)) for d in members[b]]
         resampled = [[v for day in drawn for v in g.get(day, ())] for g in groups]
         value = statistic(resampled)
         if value is not None:
