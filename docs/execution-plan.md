@@ -18,7 +18,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 ## Progress tracker
 
-> **Re-plan pending (#146, 2026-10-25).** The strategy changed to a momentum book (`docs/strategy-change-momentum.md`). Phases 4-7 below describe the old setup-pool system and are re-planned in a separate step. **Don't start 4.1 or any later task until the user has approved the new plan.** The 1.7 / 1.8 acceptance on `paper` continues.
+> **Re-plan pending (#146, 2026-10-25).** The strategy changed to a momentum book (`docs/strategy-change-momentum.md`). Phases 4-7 below describe the old setup-pool system; their replacement is proposed in `docs/momentum-plan.md` §9 (tasks 3.9-3.16, then the revised Phases 4-7). **Don't start 4.1 or any later task until the user has approved the new plan.** The 1.7 / 1.8 acceptance on `paper` continues.
 
 **Phase 0: Foundations and spikes**
 - [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
