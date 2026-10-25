@@ -90,6 +90,8 @@ uv run python scripts/scan_real_data.py   # every strategy scan over 2017-2022 (
 uv run python -m backtest.baseline regime   # 3.8: the 5-pillar regime re-run (tuning only) -> docs/backtests/regime-5-pillar.md
 uv run python -m backtest.baseline pool     # 3.8: the setup pool, the gate and the comparisons -> docs/backtests/baseline.md
 uv run python -m backtest.diagnostics       # 3.8: why the pool loses (pre-registered splits) -> docs/backtests/baseline-diagnostics.md
+uv run python -m backtest.baseline close --blind   # 3.8c: the close entry (#144), counts and invariants only -> docs/backtests/close-entry-blind.md
+uv run python -m backtest.baseline close           # 3.8d: the ONE scored run (once; pre-registered) -> docs/backtests/close-entry.md
 uv run auratrade kill on|off|status       # the kill switch (entries only); also: auratrade mismatches / resolve <id> --note
 uv run --env-file .env.paper auratrade kill status   # any command against `paper` (its file's values override .env)
 TRADING_MODE=paper uv run python scripts/local_session.py --until YYYY-MM-DD   # the skeleton's jobs on schedule (dev paper)

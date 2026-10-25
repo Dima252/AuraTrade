@@ -1,5 +1,6 @@
 """The Analyst verdict scorecard (journal.scorecard), on synthetic verdicts."""
 
+from collections.abc import Sequence
 from datetime import date, timedelta
 
 import pytest
@@ -150,6 +151,40 @@ class TestStatistics:
             [group], lambda g: sum(g[0]) / len(g[0]), samples=200, confidence=0.9, seed=5
         )
         assert run() == run()
+
+    def test_blocks_resample_their_sessions_together(self) -> None:
+        # Sessions 0-1 (block 0) hold +1R each, sessions 2-3 (block 1) -1R each. A draw takes
+        # both sessions of a block, so the mean is only ever +1, 0 or -1.
+        group = {DAYS[0]: [1.0], DAYS[1]: [1.0], DAYS[2]: [-1.0], DAYS[3]: [-1.0]}
+        means: set[float] = set()
+
+        def mean(g: Sequence[Sequence[float]]) -> float:
+            means.add(sum(g[0]) / len(g[0]))
+            return sum(g[0]) / len(g[0])
+
+        position = {d: i for i, d in enumerate(DAYS)}
+        block_bootstrap(
+            [group],
+            mean,
+            samples=200,
+            confidence=0.9,
+            seed=3,
+            block_of=lambda d: position[d] // 2,
+        )
+        assert means == {-1.0, 0.0, 1.0}
+
+    def test_one_session_blocks_match_the_session_bootstrap(self) -> None:
+        group = {DAYS[i]: [float(i % 4 - 1)] for i in range(20)}
+        kw = {"samples": 200, "confidence": 0.9, "seed": 5}
+        plain = block_bootstrap([group], lambda g: sum(g[0]) / len(g[0]), **kw)  # type: ignore[arg-type]
+        position = {d: i for i, d in enumerate(DAYS)}
+        blocked = block_bootstrap(
+            [group],
+            lambda g: sum(g[0]) / len(g[0]),
+            block_of=position.__getitem__,
+            **kw,  # type: ignore[arg-type]
+        )
+        assert plain == blocked
 
     def test_no_sessions_or_no_defined_statistic(self) -> None:
         assert block_bootstrap([{}], lambda g: 0.0, samples=10, confidence=0.9, seed=1) is None

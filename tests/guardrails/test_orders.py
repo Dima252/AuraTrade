@@ -4,13 +4,19 @@ from dataclasses import replace
 
 import pytest
 
-from auratrade.config import Strategy
+from auratrade.config import RiskConfig, StopKind, Strategy
 from auratrade.execution.sizing import Tranches
 from auratrade.execution.triggers import OpeningRange, OrderKind
 from auratrade.guardrails.evaluate import ApprovedEntry, evaluate
 from auratrade.guardrails.levels import StrategyRecord
 from auratrade.guardrails.model import GuardrailRule, Outcome
-from auratrade.guardrails.orders import MarketAtOpen, OrderCheck, check_order
+from auratrade.guardrails.orders import (
+    MarketAtDecision,
+    MarketAtOpen,
+    OrderCheck,
+    check_close,
+    check_order,
+)
 from tests.guardrails.factories import EQUITY, RISK, context, entry, setup
 
 
@@ -129,3 +135,93 @@ def test_momentum_low_of_day_wider_than_1x_adr_is_rejected() -> None:
 def test_momentum_without_a_low_or_an_opening_range() -> None:
     assert rule(check(momentum(), low_of_day=None)) is GuardrailRule.INVALID_INPUT
     assert rule(check(momentum(), opening=None)) is GuardrailRule.PRICE_LEVELS
+
+
+# --- A close entry at the decision time (the #144 candidate) ---------------------------------
+
+CLOSE = RISK.with_candidate("CLOSE")
+
+
+def approved_close(strategy: Strategy = Strategy.VCP_BREAKOUT, **kw: object) -> ApprovedEntry:
+    facts = setup(strategy=strategy, **kw)
+    a = evaluate([entry(strategy=strategy)], context(facts), CLOSE).decisions[0].approved
+    assert isinstance(a, ApprovedEntry)
+    return a
+
+
+def at_close(
+    a: ApprovedEntry | None = None, *, risk: RiskConfig = CLOSE, **kw: object
+) -> OrderCheck:
+    defaults = MarketAtDecision(price=101.0, low_of_day=98.0, atr=2.5, adr=0.04)
+    m = replace(defaults, **kw)  # type: ignore[arg-type]
+    return check_close(a or approved_close(), m, equity=EQUITY, record=None, risk=risk)
+
+
+def test_close_entry_is_a_marketable_limit_stopped_at_the_day_low() -> None:
+    a = approved_close()
+    assert a.tranches == 1
+    plan = at_close(a).plan
+    assert plan is not None
+    # 101 x 1.005 = 101.505, up to the tick; the day low 98 is above the stop of 94.
+    assert (plan.kind, plan.trigger, plan.limit, plan.stop) == (
+        OrderKind.LIMIT,
+        101.51,
+        101.51,
+        98.0,
+    )
+    # $100 at risk / 3.51 = 28 shares, but the reservation (12 x 102 = 1,224) allows 12.
+    assert plan.tranches == Tranches(12, 0)
+
+
+def test_close_entry_stop_never_below_the_structural_stop() -> None:
+    plan = at_close(low_of_day=92.0).plan
+    assert plan is not None
+    assert plan.stop == 94.0
+
+
+def test_close_entry_with_the_structural_stop() -> None:
+    vcp = CLOSE.plans.entry[Strategy.VCP_BREAKOUT]
+    policy = vcp.model_copy(update={"stop": StopKind.STRUCTURAL})
+    plans = CLOSE.plans.model_copy(
+        update={"entry": {**CLOSE.plans.entry, Strategy.VCP_BREAKOUT: policy}}
+    )
+    structural = CLOSE.model_copy(update={"plans": plans})
+    plan = at_close(risk=structural, low_of_day=None).plan
+    assert plan is not None
+    assert plan.stop == 94.0
+
+
+@pytest.mark.parametrize("price", [None, float("nan"), 0.0])
+def test_close_entry_without_a_decision_price(price: float | None) -> None:
+    assert rule(at_close(price=price)) is GuardrailRule.INVALID_INPUT
+
+
+def test_close_entry_without_a_low_of_the_day() -> None:
+    assert rule(at_close(low_of_day=None)) is GuardrailRule.INVALID_INPUT
+
+
+def test_close_entry_stop_too_wide_from_the_limit() -> None:
+    # Limit 105.53: 8% is 8.44, the stop of 94 is 11.53 below it.
+    assert rule(at_close(price=105.0, low_of_day=93.0)) is GuardrailRule.STOP_WIDTH
+
+
+def test_close_entry_atr_cap_is_measured_from_the_limit() -> None:
+    a = approved_close(Strategy.LEADER_PULLBACK)
+    # 1.5 x ATR = 3.75. From the decision price 101 the stop 97.4 is 3.60 away, from the
+    # limit 101.51 it is 4.11: rejected.
+    assert rule(at_close(a, low_of_day=97.4)) is GuardrailRule.STOP_WIDTH
+    assert at_close(a, low_of_day=98.0).plan is not None
+
+
+def test_close_entry_ep_takes_the_candidate_8pct_cap() -> None:
+    a = approved_close(Strategy.EPISODIC_PIVOT, structural_stop=90.0)
+    # Limit 104.52, stop at the gap day's low 97: 7.52 below it. 8% (8.36) allows it; the
+    # 09:36 cap of 1.5 x the pre-gap ADR (6.27) would not.
+    assert at_close(a, price=104.0, low_of_day=97.0).plan is not None
+    assert rule(at_close(a, risk=RISK, price=104.0, low_of_day=97.0)) is GuardrailRule.STOP_WIDTH
+    assert rule(at_close(a, price=104.0, low_of_day=95.0)) is GuardrailRule.STOP_WIDTH
+
+
+def test_close_entry_under_one_share_is_skipped() -> None:
+    a = replace(approved_close(), reserved_exposure=50.0)
+    assert rule(at_close(a)) is GuardrailRule.WHOLE_SHARES

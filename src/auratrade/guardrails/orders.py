@@ -5,11 +5,19 @@ At 09:36 the opening range is known, so the trigger, the limit and a momentum / 
 stop are computed in code (``execution.triggers``), the stop width is checked again, the order
 type is chosen on the last price (a buy-stop-limit, a limit buy at the limit, or a skip), and
 the entry is sized in whole shares within its approved risk and reserved exposure.
+
+**A close entry** (the #144 candidate) is checked at the decision time instead, once its gate
+has passed (``check_close``): a marketable limit at the decision price x (1 +
+``marketable_limit_slippage``), the stop at the trigger session's low (never below the
+structural stop) or the structural stop, every stop cap measured from that limit, and the same
+whole-share sizing.
 """
 
+import math
 from dataclasses import dataclass
 
 from auratrade.config import RiskConfig, StopKind
+from auratrade.execution.prices import round_up
 from auratrade.execution.sizing import Tranches, planned_shares, split_tranches
 from auratrade.execution.triggers import (
     EntryLevels,
@@ -111,6 +119,51 @@ def check_order(
     if isinstance(kind, Skip):
         return OrderCheck(None, (_skipped(kind),))
     return _sized(entry, levels, kind, stop, equity=equity, risk=risk)
+
+
+@dataclass(frozen=True, slots=True)
+class MarketAtDecision:
+    """What the decision time knows about a close entry's symbol."""
+
+    price: float | None
+    """The decision price."""
+    low_of_day: float | None
+    """The session low up to the decision time."""
+    atr: float | None
+    adr: float | None
+
+
+def check_close(
+    entry: ApprovedEntry,
+    market: MarketAtDecision,
+    *,
+    equity: float,
+    record: StrategyRecord | None,
+    risk: RiskConfig,
+) -> OrderCheck:
+    """A close entry whose gate passed: the limit, the stop, the stop width from the limit,
+    whole shares. The limit is the order's trigger too, so every cap is measured from it."""
+    price = market.price
+    if price is None or not (math.isfinite(price) and price > 0):
+        return OrderCheck(None, (reject(GuardrailRule.INVALID_INPUT, "no decision price"),))
+    limit = round_up(price * (1 + risk.execution.marketable_limit_slippage))
+    policy = risk.plans.entry[entry.strategy]
+    stop = _stop(entry, policy.stop, market.low_of_day)
+    if isinstance(stop, Finding):
+        return OrderCheck(None, (stop,))
+    if too_wide := stop_width(
+        entry.strategy,
+        trigger=limit,
+        limit=limit,
+        stop=stop,
+        atr=market.atr,
+        adr=market.adr,
+        record=record,
+        config=risk.guardrails,
+    ):
+        return OrderCheck(None, (too_wide,))
+    levels = EntryLevels(trigger=limit, limit=limit)
+    return _sized(entry, levels, OrderKind.LIMIT, stop, equity=equity, risk=risk)
 
 
 def _stop(entry: ApprovedEntry, kind: StopKind, low_of_day: float | None) -> float | Finding:
