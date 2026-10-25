@@ -4,6 +4,8 @@ the 5-pillar regime re-run, then the setup pool and the baseline book.
     uv run python -m backtest.baseline regime    # steps 1-3 -> docs/backtests/regime-5-pillar.md
     uv run python -m backtest.baseline pool      # step 4: the pool and gate -> baseline.md
     uv run python -m backtest.baseline pool --count   # only count the minute bars it would fetch
+    uv run python -m backtest.baseline close --blind  # 3.8c: the close entry, counts only
+    uv run python -m backtest.baseline close          # 3.8d: the one scored run -> close-entry.md
 
 Everything is fixed in `docs/backtests/baseline-preregistration.md`, written before any of this
 ran on real data. **The holdout stays closed:** nothing after `TUNING_END` is loaded until the
@@ -31,6 +33,8 @@ from auratrade.storage import ObjectStore
 from auratrade.strategies.registry import build_strategies
 from auratrade.strategies.watchlist import correction_spells
 from backtest import regime as bt
+from backtest.close_entry import CANDIDATE, CloseRun, run_close
+from backtest.close_report import render_close
 from backtest.comparisons import Difference, compare
 from backtest.comparisons import Variant as CompareVariant
 from backtest.comparisons import variants as comparison_variants
@@ -67,6 +71,8 @@ from backtest.regime_search import (
 
 REGIME_REPORT = REPO_ROOT / "docs" / "backtests" / "regime-5-pillar.md"
 POOL_REPORT = REPO_ROOT / "docs" / "backtests" / "baseline.md"
+CLOSE_REPORT = REPO_ROOT / "docs" / "backtests" / "close-entry.md"
+BLIND_REPORT = REPO_ROOT / "docs" / "backtests" / "close-entry-blind.md"
 DETAIL = REPO_ROOT / "var" / "backtests" / "baseline"
 CHOSEN = "cu+2_corr-2_c2_dist8"
 """The variant step 3 chose (docs/backtests/regime-5-pillar.md)."""
@@ -382,11 +388,30 @@ def run_pool_step(
     return PoolRun(reference, survivors, out, morning_notes(p, lists, check))
 
 
+def run_close_step(loaded: Loaded, risk: RiskConfig, variant: Variant, *, blind: bool) -> CloseRun:
+    """The close-entry candidates (#144): the capped lists with the EPs in their morning view
+    and no opening-volume check, played under the `CLOSE` candidate."""
+    from auratrade.jobs.simulate import _alpaca
+
+    p, candidates = pool_inputs(loaded, risk.with_candidate(CANDIDATE), variant)
+    cache = MinuteCache(loaded.store, _alpaca(loaded.settings))
+
+    def symbols_for(wanted: Mapping[date, set[str]]) -> Mapping[tuple[date, str], str]:
+        return traded_symbols(loaded.store, wanted)
+
+    def minutes_for(wanted: Mapping[date, set[str]]) -> Mapping[date, Mapping[str, Minutes]]:
+        return prefetch(p, cache, {d: s for d, s in wanted.items() if s}, log=_log)
+
+    lists = capped_lists(p.h, candidates.found, candidates.regimes, p.risk)
+    _log(f"lists: {sum(map(len, lists.values()))} listings")
+    return run_close(p, lists, minutes_for, symbols_for, blind=blind, log=_log)
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     from auratrade.jobs.wiring import load_runtime_settings
 
     parser = argparse.ArgumentParser(prog="python -m backtest.baseline")
-    parser.add_argument("step", choices=["regime", "pool"])
+    parser.add_argument("step", choices=["regime", "pool", "close"])
     parser.add_argument("--report", type=Path)
     parser.add_argument("--variant", default=CHOSEN, help="the regime variant (pool)")
     parser.add_argument(
@@ -395,11 +420,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--no-compare", action="store_true", help="pool: the gate only, no comparisons"
     )
+    parser.add_argument(
+        "--blind", action="store_true", help="close: counts and invariants only (step 3)"
+    )
     args = parser.parse_args(argv)
     clock = time.monotonic()
     risk = load_risk_config(load_runtime_settings().risk_config_path)
     loaded = _load(risk)
     h = loaded.h
+    if args.step == "close":
+        close_run = run_close_step(loaded, risk, variant_named(args.variant), blind=args.blind)
+        report = args.report or (BLIND_REPORT if args.blind else CLOSE_REPORT)
+        report.write_text(
+            render_close(
+                close_run,
+                risk.with_candidate(CANDIDATE),
+                args.variant,
+                time.monotonic() - clock,
+                bt.kept_reading(report),
+            ),
+            encoding="utf-8",
+        )
+        _log(f"wrote {report}")
+        if not args.blind:
+            DETAIL.mkdir(parents=True, exist_ok=True)
+            with (DETAIL / "close.pickle").open("wb") as f:
+                pickle.dump({"reference": close_run.reference}, f)
+        return 0
     if args.step == "pool":
         run = run_pool_step(
             loaded,

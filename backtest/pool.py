@@ -438,8 +438,13 @@ def play(
     approved: ApprovedEntry,
     minutes: Minutes | None,
     market: Market,
+    *,
+    later: Mapping[date, Minutes] | None = None,
+    decision_price: float | None = None,
 ) -> TradeResult:
-    """``simulate_trade`` from the entry session, in its traded units, over a growing span."""
+    """``simulate_trade`` from the entry session, in its traded units, over a growing span.
+    ``later`` gives later sessions minute bars, ``decision_price`` overrides the entry
+    session's (the close-entry decision-price checks)."""
     f = listing.found
     s = p.h.series[f.security]
     k = scale(p.h, f.security, entry)
@@ -474,13 +479,15 @@ def play(
             f.setup.strategy,
             days,
             symbol=symbol,
-            minutes={} if minutes is None else {entry: minutes},
+            minutes={**(later or {}), **({} if minutes is None else {entry: minutes})},
             market=market,
             risk=p.risk,
             tested_ema=detail.tested_ema if isinstance(detail, PullbackDetail) else None,
         )
         if not sessions:
             return TradeResult(TradeOutcome.SKIPPED)
+        if decision_price is not None:
+            sessions[0] = replace(sessions[0], decision_price=decision_price)
         result = simulate_trade(setup, sessions, equity=POOL_EQUITY, record=None, risk=p.risk)
         if result.outcome is not TradeOutcome.OPEN or len(sessions) < len(days):
             break
