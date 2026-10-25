@@ -70,7 +70,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 **Phase 3 (continued): the momentum book and its backtest** (#147-#149; `docs/momentum-plan.md`)
 - [x] 3.9 👤 Momentum-book spec: README rewrite, decisions #147-#149, `risk.yaml` `book:`, the pre-registration (`docs/backtests/momentum-preregistration.md`) *(2026-10-25; the user delegated the open choices; the setup system's README and Phases 4-7 archived in `docs/archive/`)*
 - [x] 3.10 Momentum ranking and rule-book choice (pure) *(`strategies/momentum_book.py`: the ranked set, 12-1 and 52-week-high signals, percentiles and tie-breaks, the hold zone, the rebalance calendar (R/E, half days, timing offsets), slots, limits, stops, the candidates with skip reasons, the rule book's choice; 25 known-answer tests, 100% branch coverage)*
-- [ ] 3.11 Book guardrails (pure)
+- [x] 3.11 Book guardrails (pure) *(`guardrails/book.py`: the book's halts (−30% drawdown), the overlay (regime / SPY trend / off), buys (blocks, candidates only, no adding, max positions, 1 or ½ slot, clusters, whole shares within cash and the exposure cap), exits never blocked, stop raises (held, rounded down, above the current stop, below the last price); `EntryBlock` gains `CORRECTION` and `INDEX_TREND`; `guardrails/` stays at 100% branch coverage)*
 - [ ] 3.12 Portfolio simulation (`sim/book.py`) + SPY/MTUM total-return bars
 - [ ] 3.13 Backtest harness and report (`backtest/momentum.py`)
 - [ ] 3.14 Blind mechanics check (counts only)
