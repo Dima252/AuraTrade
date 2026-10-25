@@ -18,6 +18,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 ## Progress tracker
 
+> **Re-plan pending (#146, 2026-10-25).** The strategy changed to a momentum book (`docs/strategy-change-momentum.md`). Phases 4-7 below describe the old setup-pool system and are re-planned in a separate step. **Don't start 4.1 or any later task until the user has approved the new plan.** The 1.7 / 1.8 acceptance on `paper` continues.
+
 **Phase 0: Foundations and spikes**
 - [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
 - [x] 0.2 👤 Accounts and keys + `scripts/check_keys.py` *(all keys verified 2026-10-09; local Postgres via Docker until Neon at 1.2; paper capital $5,000 confirmed)*

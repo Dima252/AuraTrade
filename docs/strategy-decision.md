@@ -1,6 +1,6 @@
 # The strategy decision after the failed baseline gate (task 3.8)
 
-**Superseded 2026-10-25.** The decision is made: see [strategy-review-2026-10-25.md](strategy-review-2026-10-25.md) (the second reading), [strategy-execution-2026-10-25.md](strategy-execution-2026-10-25.md) (the plan of work), [backtests/close-entry-preregistration.md](backtests/close-entry-preregistration.md) and decisions #144 and #145. This page is kept as the record of what was known on 2026-10-24.
+**Superseded 2026-10-25,** and then by the strategy change to a momentum book (#146, [strategy-change-momentum.md](strategy-change-momentum.md)). The decision is made: see [strategy-review-2026-10-25.md](strategy-review-2026-10-25.md) (the second reading), [strategy-execution-2026-10-25.md](strategy-execution-2026-10-25.md) (the plan of work), [backtests/close-entry-preregistration.md](backtests/close-entry-preregistration.md) and decisions #144 and #145. This page is kept as the record of what was known on 2026-10-24.
 
 **Status 2026-10-24.** Task 3.8's baseline gate failed. The diagnostics are done, one look-ahead bug is fixed (#143), and the EP proxy has been re-run: EPs are +0.21R but not distinguishable from zero, so every strategy fails. **Phase 4 is blocked until the user decides how the strategy changes.** This page is the handoff for that decision. It is written for the next session's agent and for the user. It says what was found, what the outside evidence says, which options exist, what each would cost and risk, and the plan of action we recommend.
 
