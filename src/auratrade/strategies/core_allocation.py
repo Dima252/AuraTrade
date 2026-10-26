@@ -54,7 +54,14 @@ def trend_state(
     average = sma(month_ends, cfg.sma_months)
     if average is None:
         return None
-    value = month_ends[-1]
+    return buffered_state(previous, month_ends[-1], average, cfg)
+
+
+def buffered_state(
+    previous: Trend | None, value: float, average: float, cfg: PortfolioConfig
+) -> Trend:
+    """The buffer around any average: the monthly SMA10 here, the daily 200-session SMA for
+    comparison C1."""
     if previous is None:
         return Trend.UP if value >= average else Trend.DOWN
     if value < average * (1 - cfg.buffer):
