@@ -125,6 +125,21 @@ Timing luck: the CAGR spans 8.4% across offsets.
 
 ## Reading
 
-_To be written after the report is committed (pre-registration §2 step 5)._
+_Written 2026-10-26 after the report above was committed as produced (b6b8e3e), by the pre-registration's §5, §6 and §9._
+
+**The tuning gate fails, on every condition, for the adopted configuration and for the primary.** The adopted configuration (C2 + C5, adopted by the §6 rule) made -1.9% a year against SPY's +11.0% and MTUM's +12.5%, with a 52.3% max drawdown. The primary made -14.0% a year with a 75.8% max drawdown. The primary's excess over SPY has a 90% interval of -43.9% to -1.8% a year, wholly below zero: unlike the edge the gate looked for, this loss is larger than the noise. By §9: **the holdout stays closed, no capital, no further variants on 2017-2022**, and it comes back to the user, with the options of a passive SPY/MTUM holding or a pause.
+
+**Not a bug.** Checked after the commit: the accounting closes exactly (the start plus every trade's P&L plus the open positions equals the final $2,044.72). Fills match the raw closes plus the tier slippage, and stop exits below the stop are gaps through it (ANVS 2021-07: stop near $71, open near $60). The blind check's invariants held in every configuration. One rendering slip: the Activity table's exit row is labelled "rule / stop / ..." but lists stop-outs first. The primary had **170 stop-outs and 28 rule sells**. The code is fixed; the numbers above are unchanged.
+
+**Why it lost:**
+- **The signal had no edge here.** The monthly rank correlation between 12-1 and the next month's return over the ranked set averaged 0.014 (t = 0.65, 71 months). In 2017-2022, among the 1,000 most liquid US stocks, 12-1 didn't sort next month's returns, so the book carried the volatility of its picks without a premium.
+- **The picks are the most volatile names, not MTUM's.** Raw 12-1 without a volatility adjustment chose 2016's cyclical rebounds that reversed in 2017 (X, CLF, AMD, TECK), small biotechs (2017-2018), and 2021's speculative names (MVIS, SUNW, BLNK, RIOT, AMTX). The book's volatility was 33.6% against SPY's 19.6%. MTUM, which risk-adjusts and diversifies, beat SPY over the same years.
+- **The trailing 20% stop sold the swings.** Raised every month, it was the main exit (170 of 205). Stop exits lost about $4,000 in total and rule sells gained about $1,100. A 10% stop (C2) lost less, which fits names whose swings exceed any stop.
+- **Momentum crashes in rebounds.** The book lost at a -34% annual rate in sessions after a `CORRECTION` evening, while SPY gained at +22% (Daniel & Moskowitz's momentum crashes). The overlay blocks buys there, but the holdings ride through.
+- **Costs and size aren't the cause.** At zero cost the primary still made -12.9% a year. At $100,000 (no price skips) it made -17.7%.
+
+**The comparisons:** C2 (10% stop) passed the adoption test and C5 (earnings rules) the safety test; together they still lose to SPY by 12.9% a year. None of the seven comes near the gate: the best CAGR is C1's +0.4%. Timing luck alone moves the primary's CAGR by 8.4 points across rebalance days.
+
+**What this says about the design:** the book as specified (raw 12-1, 8 equal names from the 1,000, a 20% trailing stop, monthly) didn't work on 2017-2022. Fixing it means a different book (volatility-scaled signal, more names, no tight trailing stop), and §9 doesn't allow choosing one on these years. The equal-weighted ranked set (+6.2%) and SPY both beat every configuration run here.
 
 _Run time: 61 s._

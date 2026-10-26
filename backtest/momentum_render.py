@@ -120,7 +120,7 @@ def _activity(s: Scored, result: Result) -> list[str]:
         ["Largest single weight", _pct(a.largest_weight)],
         ["Buys moved by a half day / by a retry", f"{m.half_day} / {m.retry}"],
         [
-            "Exits: rule / stop / ended with a successor / ended / earnings / open at the end",
+            "Exits: stop / rule / ended with a successor / ended / earnings / open at the end",
             " / ".join(str(exits[r]) for r in ExitReason) + f" / {open_at_end}",
         ],
     ]
