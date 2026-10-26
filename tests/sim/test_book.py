@@ -87,7 +87,7 @@ def _weekdays(first: date, last: date) -> list[date]:
     return out
 
 
-DAYS = _weekdays(date(2021, 1, 4), date(2021, 3, 31))
+DAYS = _weekdays(date(2021, 1, 4), date(2021, 4, 30))
 T = {d: i for i, d in enumerate(DAYS)}
 R1, E1 = date(2021, 1, 29), date(2021, 2, 1)
 R2, E2 = date(2021, 2, 26), date(2021, 3, 1)
@@ -379,6 +379,20 @@ class TestBlocksAndRetry:
         assert EntryBlock.DRAWDOWN_HALT in out.rebalances[-1].blocks
         assert not out.rebalances[-1].retried
         assert "D" not in by_key(out)
+
+    def test_the_drawdown_halt_re_enables_at_the_next_e_with_the_peak_reset(self) -> None:
+        s = specs()
+        s["A"].closes[E2] = 40.5  # fires the 10% halt on E2
+        for d in DAYS[T[date(2021, 3, 25)] :]:
+            s["A"].closes[d] = 45.0  # still >10% below the old peak at E3, with no new loss
+        risk = RISK.model_copy(update={"book": RISK.book.model_copy(update={"drawdown_halt": 0.1})})
+        out = run(market(s), date(2021, 4, 1), risk)
+        e2, e3 = out.rebalances[-2:]
+        assert EntryBlock.DRAWDOWN_HALT in e2.blocks
+        assert (e3.execution, e3.blocks) == (date(2021, 4, 1), frozenset())
+        assert e3.bought >= 1
+        # The peak restarts at E3 and climbs from there: E3's buys ran at its mark.
+        assert max(m.equity for m in out.marks) > out.marks[-1].equity
 
     def test_a_half_day_blocks_the_retry(self) -> None:
         s = specs()

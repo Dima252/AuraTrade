@@ -507,7 +507,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             runs.append(result.adopted)
         with (DETAIL / "scored.pickle").open("wb") as f:
             pickle.dump({r.config.name: r.run for r in runs}, f)
-    report.write_text(text + f"\n_Run time: {time.monotonic() - clock:.0f} s._\n", encoding="utf-8")
+    report.write_text(
+        text + f"\n_Run time: {time.monotonic() - clock:.0f} s._\n", encoding="utf-8", newline="\n"
+    )
     _log(f"wrote {report}")
     return 0
 

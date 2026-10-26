@@ -12,6 +12,8 @@ liquidity-tier slippage (#141). Nothing here re-implements them.
 - **On E:** the halts at E's close; the ranking on R; rule sells at the close; stop raises for
   the holdings kept; then the buys: the candidates and the rule book's picks, through the buy
   guardrail with every block in force, so a blocked session buys nothing.
+- **The drawdown halt** blocks the E it fires on and its retry, then counts as re-enabled at
+  the next E, where the peak restarts from the book's value (the user, 2026-10-26, #150).
 - **The retry:** buys blocked by a daily or weekly loss halt, or that left slots empty after
   passing over a name with no bar, are tried once more at the next session's close, with R's
   ranking and fresh sizes. An overlay or drawdown block isn't retried; a half day blocks it.
@@ -285,6 +287,7 @@ class _Book:
         self.peak = equity
         self.previous = equity
         self.week_base = equity
+        self.reenable = False
         self.limit_slippage = risk.execution.marketable_limit_slippage
 
     # --- data ---------------------------------------------------------------------------
@@ -437,6 +440,10 @@ class _Book:
 
     def rebalance(self, r: Rebalance) -> _Retry | None:
         day = r.execution
+        if self.reenable:
+            # Re-enabled by hand after the drawdown halt: the peak restarts here.
+            self.peak = self.equity()
+            self.reenable = False
         blocks = self.halts(self.equity()) | self.overlay(r.ranking)
         ranking = self.ranking(r.ranking)
         by_key = {x.key: x for x in ranking}
@@ -462,6 +469,7 @@ class _Book:
                 p.stop = stop
                 log.stop_raises += 1
         self.buy(r, tuple(ranking), blocks, log)
+        self.reenable = EntryBlock.DRAWDOWN_HALT in blocks
         self.logs.append(log)
         halted = _retried_halt(blocks)
         no_bar = not blocks and any(x.reason is SkipReason.NO_PRICE for x in log.skipped)
@@ -480,6 +488,7 @@ class _Book:
             r.ranking, r.execution, day, retry=True, blocks=blocks, ranked=len(pending.ranking)
         )
         self.buy(r, pending.ranking, blocks, log)
+        self.reenable = self.reenable or EntryBlock.DRAWDOWN_HALT in blocks
         self.logs.append(log)
         if pending.left > 1 and _retried_halt(blocks):
             log.retried = True

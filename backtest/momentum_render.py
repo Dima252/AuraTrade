@@ -371,7 +371,12 @@ def _biases() -> list[str]:
         "- A security that ends exits against **the next piece of the same ticker** when that is "
         "loaded (§3.8); a piece starting after the period isn't, and the exit takes the last "
         "close.",
-        "- The gaps the pre-registration leaves are read as in decision #150 (README §16).",
+        "- The gaps the pre-registration leaves are read as in decisions #150 and #151 "
+        "(README §16).",
+        "- **Changed after the blind check, with the user's approval (2026-10-26):** the 30% "
+        "drawdown halt re-enables at the next E with the peak reset to the book's value there. "
+        "Built first without a re-enable, it held the book in cash from late 2018 and tripped "
+        "the §7 mean-holdings stop condition (#150).",
     ]
 
 
@@ -434,6 +439,10 @@ def render_blind(b: Blind, stamp: str) -> str:
         f"{PREREGISTRATION} at commit `{PREREGISTRATION_COMMIT}`; `risk.yaml` hash "
         f"`{b.risk.config_hash[:12]}`. Tuning period: {_period(b.window)}. Counts and "
         "invariants only (§2 step 3, §7); nothing about the account's value or the gate.",
+        "",
+        "Changed after the first blind run, with the user's approval (2026-10-26): the 30% halt "
+        "counts as re-enabled at the next E, its peak restarting there (#150). The first run "
+        "held the book in cash from late 2018 and tripped the mean-holdings stop condition.",
         "",
         "## Invariants",
         "",
