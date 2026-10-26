@@ -87,6 +87,20 @@ Daily excess over the benchmark before tax, mean x 252: +1.4%; 90% block-bootstr
 
 ## Reading
 
-_To be written after this report is committed as produced._
+_Written 2026-10-27, after the report above was committed as produced (af2e621). Decision #160._
+
+**The gate passes on all three conditions** (§5.2): after Israeli tax the rules earned +9.2% a year against +8.7% for the market bought and held, with a shallower worst drawdown (68% against 85%), and finished ahead in 69% of the 1,065 ten-year windows (60% needed). By §9 the plan continues as written: Phase 4, the LLM layer. Nothing is adopted from the comparisons (§6).
+
+**How large the result is, honestly:**
+- **The edge is thin.** +0.5 point a year after tax over 98 years. Before tax it is +1.8 points (11.7% against 9.9%), and the bootstrap interval of the daily excess before tax, +0.1% to +2.6% a year, only just excludes zero.
+- **Tax took most of it.** The rules lost 2.5 points a year to tax against the benchmark's 1.2 (3.2% of equity paid a year): the drag the plan expected. The buffer and the drift band kept flips to 0.89 a year; without them the margin would likely be gone.
+- **It comes from the long bear markets.** 1929-32 (a 67% fall against 85%, back in 51 months against 160), 1937-38, 1973-74 and 2007-09; the 1920s, 1930s, 1970s and 2000s carry the lead. **It loses in V-shaped crashes:** 1987 (40% against 33%, 61 months to recover against 17) and 2020 (36% against 34%).
+- **After publication it is a tie, not a win.** Since 2007 (Faber): +9.6% against +9.4%, with a much smaller drawdown (37% against 55%). Since 2016 (Gayed & Bilello): +11.8% against +12.7%, the drawdowns about equal. The only truly out-of-sample stretch of a published rule doesn't show the long-run edge; it shows the protection.
+- **The drawdown is still deep.** "Careful" leverage still fell 68% in 1929-32 and 48% in 2000-02. G2 passes because the market's own falls were deeper, not because the strategy is safe.
+- **The parts:** the trend alone (D-a) earned +7.5% after tax with a 51% drawdown; leverage alone (D-b) +8.4% with 86%. Together, +9.2% with 68%: the combination the plan was built on, each part doing what it was meant to. The stop (C4) and the volatility cap (C5) change little; margin (C3) is worse than the 2x fund; the 200-session SMA (C1) is the same. C2 (1.5x / 0x) did slightly better, which is reported and, as pre-registered, not adopted. Timing luck is small (9.0% to 9.2%).
+
+**Caveats the result rests on:** the market is the CRSP index, not the S&P 500, and the 2x fund before 2006 is synthesized (both tracked the real funds closely from 2016: 0.99 correlation, gaps under 0.1% a year); the tax is 25% on nominal USD gains, not Israel's real gains in shekels (README §17). The first invocation crashed before writing anything (a float tolerance in the tax book, fixed with a test); this report is the one scored run.
+
+**What follows:** the twin's rules stand as specified (`risk.yaml` hash `a130ffa45bed`), and the LLM's job is now concrete: to add to a rule that, on its own, roughly matches the market after tax with shallower bear markets. The dashboard and the README state the result as above: a thin, tax-sensitive edge over a century, a tie since publication.
 
 _Run time: 129 s._
