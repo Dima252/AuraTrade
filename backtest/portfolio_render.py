@@ -92,7 +92,7 @@ def render_blind(result: pf.Blind, risk: RiskConfig, stamp: str) -> str:
         f"| R's under the cap / halted | {share(c.capped)} / {share(c.halted)} |",
         f"| Trades a year | {c.trades_a_year:.1f} |",
         f"| Stop-outs | {c.stopouts} |",
-        f"| Lots opened (buys and reinvested payouts) | {c.lots_opened} |",
+        f"| Buys (trades that opened a lot; reinvested payouts not counted) | {c.lots_opened} |",
     ]
     return "\n".join(lines) + "\n"
 
