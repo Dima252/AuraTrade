@@ -23,6 +23,9 @@ liquidity-tier slippage (#141). Nothing here re-implements them.
   first session the security has no bar.
 - **Cluster data:** each name's closes on the last ``cluster_correlation_sessions + 1`` sessions
   up to R, a session without a bar carrying the close before it.
+- **Comparison C5** (``book.earnings_rules``): no buy of a name whose next report reacts within
+  ``event_report_sessions`` after the buy session; a holding is sold at the close of the last
+  session before a report reacts if it has gained less than ``earnings_cushion_min_gain``.
 - **Invariants** (§7) are checked as the book runs; a failure raises `BookInvariantError`.
 
 Slippage is the tier of the 50-session average dollar volume up to the session before the fill.
@@ -54,7 +57,6 @@ from auratrade.strategies.momentum_book import (
     Ranked,
     Rebalance,
     SessionDay,
-    Signal,
     Skipped,
     SkipReason,
     candidates,
@@ -84,6 +86,8 @@ class ExitReason(StrEnum):
     """Ended by the history's split, with a successor piece (#130)."""
     ENDED = "ENDED"
     """Stopped trading before the period's end, without a successor: a delisting."""
+    EARNINGS = "EARNINGS"
+    """Comparison C5: sold before a report with less than the cushion's gain."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +123,8 @@ class BookMarket:
     """A security ended by the history's split -> its next piece."""
     spy_above_sma: Mapping[date, bool] = field(default_factory=dict)
     """Comparison C4: SPY's close above its long SMA, per session."""
+    reactions: Mapping[str, Sequence[date]] = field(default_factory=dict)
+    """Comparison C5: the sessions that react to each known report, oldest first."""
 
 
 @dataclass(slots=True)
@@ -177,6 +183,8 @@ class SessionMark:
     equity: float
     cash: float
     holdings: int
+    largest: float = 0.0
+    """The largest holding's share of equity."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -263,11 +271,9 @@ class _Book:
         risk: RiskConfig,
         *,
         equity: float,
-        signal: Signal,
-        clusters: bool,
     ) -> None:
         self.market, self.risk, self.cfg = market, risk, risk.book
-        self.signal, self.clusters = signal, clusters
+        self.clusters, self.earnings = self.cfg.cluster_cap, self.cfg.earnings_rules
         self.days = [s.day for s in market.sessions]
         self.position_of = {d: i for i, d in enumerate(self.days)}
         self.early = {s.day for s in market.sessions if s.is_early_close}
@@ -321,7 +327,15 @@ class _Book:
                     in_universe=True,
                 )
             )
-        return rank(securities, self.cfg, self.signal)
+        return rank(securities, self.cfg, self.cfg.signal)
+
+    def next_reaction(self, key: str, day: date) -> int | None:
+        """How many sessions after ``day`` the next report reacts; None without one."""
+        reactions = self.market.reactions.get(key, ())
+        i = bisect.bisect_right(reactions, day)
+        if i == len(reactions):
+            return None
+        return self.position_of[reactions[i]] - self.position_of[day]
 
     def equity(self) -> float:
         return self.cash + self.exposure()
@@ -389,6 +403,18 @@ class _Book:
                 continue
             if p.sell_pending:
                 self.sell_at_close(key, i, day, ExitReason.RULE)
+
+    def earnings_exits(self, day: date) -> None:
+        """Comparison C5: a holding is sold at the close of the last session before a report
+        reacts unless it has gained at least the cushion since its buy."""
+        for key in sorted(self.positions):
+            p = self.positions[key]
+            s = self.market.series[key]
+            i = _index(s, day)
+            if i is None or self.next_reaction(key, day) != 1:
+                continue
+            if p.qty * s.close[i] / p.trade.cost - 1 < self.cfg.earnings_cushion_min_gain:
+                self.sell_at_close(key, i, day, ExitReason.EARNINGS)
 
     # --- the rebalance ------------------------------------------------------------------
 
@@ -478,9 +504,16 @@ class _Book:
         holdings = [members[p.trade.symbol] for p in self.positions.values()]
         equity = self.equity()
         slot = slot_value(equity, self.cfg)
+        window = self.cfg.event_report_sessions
+        blackout = (
+            {x.key for x in ranking if (n := self.next_reaction(x.key, day)) and n <= window}
+            if self.earnings
+            else set()
+        )
         listed = candidates(
             ranking,
             held=self.positions.keys(),
+            blackout=blackout,
             prices=prices,
             slot=slot,
             limit_slippage=self.limit_slippage,
@@ -587,9 +620,23 @@ class _Book:
                 pending = self.retry(pending, day)
             elif (r := due.get(day)) is not None:
                 pending = self.rebalance(r)
+            if self.earnings:
+                self.earnings_exits(day)
             equity = self.equity()
             self.check(day)
-            self.marks.append(SessionMark(day, equity, self.cash, len(self.positions)))
+            largest = max(
+                (p.qty * self.market.series[k].close[p.last] for k, p in self.positions.items()),
+                default=0.0,
+            )
+            self.marks.append(
+                SessionMark(
+                    day,
+                    equity,
+                    self.cash,
+                    len(self.positions),
+                    largest / equity if equity > 0 else 0.0,
+                )
+            )
             self.previous = equity
             self.peak = max(self.peak, equity)
         return BookRun(tuple(self.marks), tuple(self.trades), tuple(self.logs))
@@ -602,12 +649,15 @@ def simulate_book(
     start: date,
     end: date,
     equity: float,
-    signal: Signal = Signal.TWELVE_ONE,
-    clusters: bool = True,
     offset: int = 1,
 ) -> BookRun:
     """The book from ``equity`` in cash at ``start``'s close, marked through ``end``'s close.
-    ``risk.book`` carries the stop, overlay and universe size of a comparison; ``signal`` is C1,
-    ``clusters=False`` C7, ``offset`` the timing-luck diagnostic."""
-    book = _Book(market, risk, equity=equity, signal=signal, clusters=clusters)
-    return book.run(start, end, offset)
+    ``risk.book`` carries a comparison's change (C1-C7); ``offset`` is the timing-luck
+    diagnostic's session of the month."""
+    return _Book(market, risk, equity=equity).run(start, end, offset)
+
+
+def ranking_on(market: BookMarket, risk: RiskConfig, day: date) -> list[Ranked]:
+    """The ranked set on ``day`` in rank order, as the book ranks it (for the report's
+    equal-weighted reference and signal check)."""
+    return _Book(market, risk, equity=0.0).ranking(day)

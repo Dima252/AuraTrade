@@ -27,7 +27,7 @@ from datetime import date
 from enum import StrEnum
 from typing import Protocol
 
-from auratrade.config import BookConfig, GuardrailsConfig
+from auratrade.config import BookConfig, BookSignal, GuardrailsConfig
 from auratrade.execution.prices import round_down, round_up
 from auratrade.guardrails.clusters import ClusterMember, cluster_check
 from auratrade.indicators.relative_strength import percentile_ranks
@@ -36,10 +36,7 @@ from auratrade.indicators.relative_strength import percentile_ranks
 _SHARE_TOLERANCE = 1e-9
 
 
-class Signal(StrEnum):
-    TWELVE_ONE = "TWELVE_ONE"
-    HIGH_52W = "HIGH_52W"
-    """Comparison C1 (George & Hwang 2004)."""
+Signal = BookSignal
 
 
 class SkipReason(StrEnum):
@@ -49,6 +46,8 @@ class SkipReason(StrEnum):
     CLUSTER = "CLUSTER"
     NO_CASH = "NO_CASH"
     """The rule book only: the cash left buys 0 shares."""
+    EARNINGS = "EARNINGS"
+    """Comparison C5: a report reacts within the blackout."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -252,9 +251,11 @@ def candidates(
     guard: GuardrailsConfig,
     count: int,
     clusters: bool = True,
+    blackout: Collection[str] = (),
 ) -> CandidateList:
-    """The first ``count`` buyable names in rank order (README §5.3). ``held`` and ``prices`` are
-    keyed by security key, ``members`` by symbol; ``clusters=False`` is comparison C7."""
+    """The first ``count`` buyable names in rank order (README §5.3). ``held``, ``prices`` and
+    ``blackout`` are keyed by security key, ``members`` by symbol; ``clusters=False`` is
+    comparison C7, ``blackout`` (names with a report too close) comparison C5."""
     chosen: list[Ranked] = []
     skipped: list[Skipped] = []
     for r in ranking:
@@ -265,6 +266,8 @@ def candidates(
         price = prices.get(r.key)
         if price is None or not math.isfinite(price) or price <= 0:
             skipped.append(Skipped(r.symbol, SkipReason.NO_PRICE))
+        elif r.key in blackout:
+            skipped.append(Skipped(r.symbol, SkipReason.EARNINGS))
         elif shares_for(slot, buy_limit(price, limit_slippage)) < 1:
             skipped.append(Skipped(r.symbol, SkipReason.PRICE_FIT))
         elif clusters and _clustered(r.symbol, holdings, members, guard):

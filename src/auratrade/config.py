@@ -1281,6 +1281,14 @@ class BookOverlay(StrEnum):
     OFF = "OFF"
 
 
+class BookSignal(StrEnum):
+    """What the book ranks on (README §5.3): 12-1, or nearness to the 52-week high (comparison
+    C1, George & Hwang 2004)."""
+
+    TWELVE_ONE = "TWELVE_ONE"
+    HIGH_52W = "HIGH_52W"
+
+
 class BookBacktestConfig(_Strict):
     """The momentum book's backtest (`docs/backtests/momentum-preregistration.md`)."""
 
@@ -1296,6 +1304,11 @@ class BookBacktestConfig(_Strict):
     max_drawdown: Fraction
     # The timing-luck diagnostic: the rebalance moved to these sessions of the month (1 = first).
     timing_offsets: tuple[PositiveInt, ...] = Field(min_length=1)
+    # The blind check's stop conditions (pre-registration §7).
+    blind_min_mean_holdings: Positive
+    blind_max_price_skips: Fraction
+    blind_max_cluster_skips: Fraction
+    blind_min_ranked: PositiveInt
 
 
 class BookConfig(_Strict):
@@ -1316,6 +1329,10 @@ class BookConfig(_Strict):
     buy_retry_sessions: Annotated[int, Field(ge=0)]
     overlay: BookOverlay
     overlay_sma_sessions: PositiveInt
+    # Comparisons C1, C5 and C7 as values, so a frozen configuration lives wholly in this file.
+    signal: BookSignal
+    earnings_rules: bool
+    cluster_cap: bool
     # Buys only; live it waits for a manual re-enable.
     drawdown_halt: Fraction
     # "Prove it first": slot size at the start of the paper trial and of live trading.

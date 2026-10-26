@@ -9,7 +9,7 @@ correlated. The book is shrunk to 3 holdings, 4 candidates, a 5-session 12-1 (1 
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Any
 
@@ -26,12 +26,12 @@ from auratrade.sim.book import (
     BookRun,
     BookSeries,
     ExitReason,
+    ranking_on,
     simulate_book,
 )
 from auratrade.strategies.momentum_book import (
     Ranked,
     RuleBookChoice,
-    Signal,
     Skipped,
     SkipReason,
 )
@@ -63,6 +63,13 @@ def _risk() -> RiskConfig:
 
 
 RISK = _risk()
+
+
+def with_book(**update: object) -> RiskConfig:
+    return RISK.model_copy(update={"book": RISK.book.model_copy(update=update)})
+
+
+C5 = with_book(earnings_rules=True)
 
 
 @dataclass(frozen=True, slots=True)
@@ -307,8 +314,38 @@ class TestCalendarAndSkips:
 
     def test_the_cluster_cap_off_is_comparison_c7(self) -> None:
         m = market(specs(), industries=dict.fromkeys("ABC", "SEMIS"))
-        out = simulate_book(m, RISK, start=START, end=E1, equity=10_000.0, clusters=False)
+        out = simulate_book(m, with_book(cluster_cap=False), start=START, end=E1, equity=10_000.0)
         assert sorted(by_key(out)) == ["A", "B", "C"]
+
+
+class TestEarningsComparison:
+    def test_c5_skips_a_name_whose_report_reacts_within_the_blackout(self) -> None:
+        m = replace(market(specs()), reactions={"A": [date(2021, 2, 3)]})
+        out = simulate_book(m, C5, start=START, end=E1, equity=1e4)
+        assert sorted(by_key(out)) == ["B", "C", "D"]
+        assert Skipped("A", SkipReason.EARNINGS) in out.rebalances[0].skipped
+        # Off (the primary): the report changes nothing.
+        assert sorted(by_key(simulate_book(m, RISK, start=START, end=E1, equity=1e4))) == [
+            "A",
+            "B",
+            "C",
+        ]
+
+    def test_c5_sells_before_a_report_without_the_cushion(self) -> None:
+        s = specs()
+        s["A"].closes[date(2021, 2, 9)] = 60.0  # +20% since the buy: kept through the report
+        reactions = {"A": [date(2021, 2, 10)], "B": [date(2021, 2, 10)]}
+        m = replace(market(s), reactions=reactions)
+        out = simulate_book(m, C5, start=START, end=date(2021, 2, 12), equity=1e4)
+        assert_invariants(out, RISK)
+        a, b = (next(t for t in out.trades if t.key == k) for k in "AB")
+        assert a.exited is None
+        assert (b.exited, b.reason) == (date(2021, 2, 9), ExitReason.EARNINGS)
+
+    def test_the_largest_weight_is_marked(self) -> None:
+        out = run(market(specs()), E1)
+        mark = out.marks[-1]
+        assert mark.largest == pytest.approx(25.0 * 132 / mark.equity)
 
 
 class TestBlocksAndRetry:
@@ -442,12 +479,17 @@ class TestDataEdges:
             members | {R1: members[R1] | {"G"}},
             m.regimes,
         )
-        book = book_module._Book(m, RISK, equity=1e4, signal=Signal.TWELVE_ONE, clusters=True)
+        book = book_module._Book(m, RISK, equity=1e4)
         closes = list(book.member("A", R1).closes)
         assert closes[1] == closes[2]  # 01-27 carries 01-26's close
         assert len(book.ranking(R1)) == 6
         lazy = book_module._Members(book, {"A": "A", "B": "B"}, R1)
         assert (len(lazy), list(lazy)) == (2, ["A", "B"])
+
+    def test_ranking_on_is_the_books_ranking(self) -> None:
+        ranked = ranking_on(market(specs()), RISK, R1)
+        assert [r.key for r in ranked] == list("ABCDEF")
+        assert [r.percentile for r in ranked] == [100.0, 80.0, 60.0, 40.0, 20.0, 0.0]
 
     def test_the_dollar_volume_needs_a_full_window(self) -> None:
         s = specs()["A"].series()
