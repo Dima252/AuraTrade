@@ -1,6 +1,6 @@
 # What's left: status at 2026-10-25 (the momentum book: task 3.9 done, the backtest build 3.10-3.16 next; `AuraTradePaper` keeps running the 1.8 acceptance)
 
-> **Now (2026-10-26):** the strategy is a momentum book (#146-#149). The plan is [momentum-plan.md](momentum-plan.md), the pre-registration [backtests/momentum-preregistration.md](backtests/momentum-preregistration.md). Next in the tracker: **3.15**, the one scored run, with the user (3.9-3.14 done). Phase 4 waits for the tuning gate (3.15). Sections below dated 10-24 and earlier describe the setup system's work, kept as the record. Before the next `paper` deploy: `alembic upgrade head` on the `paper` branch (0007).
+> **Now (2026-10-26):** the strategy is a momentum book (#146-#149). The plan is [momentum-plan.md](momentum-plan.md), the pre-registration [backtests/momentum-preregistration.md](backtests/momentum-preregistration.md). **The momentum book failed its tuning gate (3.15, #152, `backtests/momentum.md`):** no capital, the holdout stays closed, no more variants on 2017-2022. Next is the user's decision (a passive SPY/MTUM holding or a pause). Phase 4 waits for the tuning gate (3.15). Sections below dated 10-24 and earlier describe the setup system's work, kept as the record. Before the next `paper` deploy: `alembic upgrade head` on the `paper` branch (0007).
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
@@ -67,7 +67,7 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → ~~3.14~~ (blind check passed after the halt fix) → **3.15** the one scored run (with the user) → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → ~~3.14~~ (blind check passed after the halt fix) → ~~3.15~~ (**the gate failed**, #152) → 3.16 not run. **Next: the user's decision** (§9: a passive SPY/MTUM holding or a pause). The sections below, from 3.8 back, are the setup system's record.
 
 ### Task 3.14: the blind check stopped (2026-10-26)
 
