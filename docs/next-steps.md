@@ -1,6 +1,6 @@
 # What's left: status at 2026-10-25 (the momentum book: task 3.9 done, the backtest build 3.10-3.16 next; `AuraTradePaper` keeps running the 1.8 acceptance)
 
-> **Now (2026-10-25):** the strategy is a momentum book (#146-#149). The plan is [momentum-plan.md](momentum-plan.md), the pre-registration [backtests/momentum-preregistration.md](backtests/momentum-preregistration.md). Next in the tracker: **3.10** (the ranking, pure). Phase 4 waits for the tuning gate (3.15). Sections below dated 10-24 and earlier describe the setup system's work, kept as the record. Before the next `paper` deploy: `alembic upgrade head` on the `paper` branch (0007).
+> **Now (2026-10-26):** the strategy is a momentum book (#146-#149). The plan is [momentum-plan.md](momentum-plan.md), the pre-registration [backtests/momentum-preregistration.md](backtests/momentum-preregistration.md). Next in the tracker: **3.15**, the one scored run, with the user (3.9-3.14 done). Phase 4 waits for the tuning gate (3.15). Sections below dated 10-24 and earlier describe the setup system's work, kept as the record. Before the next `paper` deploy: `alembic upgrade head` on the `paper` branch (0007).
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) remains the source of truth for task order; this page says what blocks what right now.
 
@@ -67,7 +67,7 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → **3.14** blind check (**stopped: the drawdown halt never re-enables; the user's decision, below**) → 3.15 scored run → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → ~~3.14~~ (blind check passed after the halt fix) → **3.15** the one scored run (with the user) → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
 
 ### Task 3.14: the blind check stopped (2026-10-26)
 
@@ -78,6 +78,10 @@ Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, ab
 Checked and fine (counts only): all 49 stop-outs sit at exactly 0.80 x the entry-day close, with no split between entry and exit; each exit bar trades through its level; none is within 5 sessions of the buy; 24 were stops raised at a rebalance (the stop trails monthly).
 
 What the blind counts reveal: the primary fell at least 30% below its peak in late 2018 (the halt fired twice in 2018). The pre-registered halt counts make that visible.
+
+**The user's decision (2026-10-26): reset the peak.** The halt blocks the E it fires on and its retry, then re-enables at the next E with the peak restarted from the book's value there (#150, README §8). Fixed in `sim/book.py` with a known-answer test.
+
+**Re-run (same day): no stop condition fires.** Invariants hold in all 8 configurations; mean holdings after buys 6.58 (limit 6); price skips 3.1%, cluster skips 7.5%; every ranked set 1,000 names. Mechanics worth knowing before 3.15: 170 of 205 buys exit by the stop (the stop is raised every rebalance, so it trails monthly and is the book's main exit; few names fall out of the top decile first); the 30% halt fired 4 times (2018, twice in 2021, 2022), so the book had deep falls. Next: **3.15, the one scored run, with the user.**
 
 ### Task 3.8: stopped at the gate; the strategy decision is next (2026-10-24)
 
