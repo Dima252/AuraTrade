@@ -49,6 +49,17 @@ class TestLots:
         with pytest.raises(ValueError, match="sale of"):
             two_lots().sell("SPY", JUNE, units, proceeds)
 
+    def test_float_noise_on_a_large_holding_is_tolerated(self) -> None:
+        # The scored run's first attempt: 20.5 million units, sold 5e-9 "too many".
+        book = TaxBook(0.25)
+        for _ in range(7):
+            book.buy("BIL", JAN, 20_543_372.664204985 / 7, 1000.0)
+        held = book.units("BIL")
+        book.sell("BIL", JUNE, held + held * 3e-16 + 5e-9, 7000.0)
+        assert book.symbols() == []
+        with pytest.raises(ValueError, match="sale of"):
+            two_lots().sell("SPY", JUNE, 20 * (1 + 1e-6), 1.0)
+
     def test_a_withdrawal_removes_lots_without_realizing(self) -> None:
         book = two_lots()
         book.close_year(2020)
