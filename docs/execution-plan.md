@@ -18,7 +18,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 ## Progress tracker
 
-> **Strategy changed (#146-#149, 2026-10-25).** The system is now a momentum book (`docs/momentum-plan.md`). The setup system's Phases 4-7 are archived in `docs/archive/execution-plan-setup-system.md`; the tasks below replace them. **The book's backtest (3.10-3.16) comes first:** Phase 4 starts only after its tuning gate passes. The 1.7 / 1.8 acceptance on `paper` continues.
+> **Strategy changed again (#153-#156, 2026-10-26/27).** The system is now a portfolio manager (`docs/strategy-change-portfolio.md`, `docs/portfolio-plan.md`). The momentum book (3.9-3.16) failed its gate (#152); its Phases 4-9 are archived in `docs/archive/execution-plan-momentum-book.md`, and the setup system's in `docs/archive/execution-plan-setup-system.md`. **The portfolio's backtest (3.17-3.23) comes first:** Phase 4 starts after a pass or a near miss. The 1.7 / 1.8 live checks move into 6.1; the kill switch on `paper` is on.
 
 **Phase 0: Foundations and spikes**
 - [x] 0.1 Project tooling (uv, ruff, mypy, pytest, CI, package skeleton)
@@ -77,35 +77,33 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 - [x] 3.15 👤 The one scored run on 2017-2022 and its reading *(2026-10-26, `docs/backtests/momentum.md`: **the gate fails on every condition**, adopted (C2 + C5) -1.9% a year and primary -14.0%, against SPY +11.0% and MTUM +12.5%. Decision #152; by §9 the holdout stays closed, no capital, no more variants on 2017-2022; the user's choice next: a passive SPY/MTUM holding or a pause)*
 - [x] 3.16 (on a pass only) Freeze, open the holdout once *(not run: the gate failed; the holdout stays closed)*
 
-**Phase 4: LLM layer** (after a 3.15 pass, #149)
-- [ ] 4.1 LLM client and batch
-- [ ] 4.2 Schemas and prompts (Book Analyst, Portfolio Manager, events, weekly)
-- [ ] 4.3 Context builders and tools
-- [ ] 4.4 Jobs and skip logic (`rank`, `book_review_submit` / `collect`, `portfolio_manager`)
-- [ ] 4.5 Rule book and scorecard (live)
-- [ ] 4.6 👤 Prompt sanity set and effort decision (paid; needs your OK)
-- [ ] 4.7 👤 Deploy the evening pipeline + scorecard in `dry_run`, kept running (paid; needs your OK)
+**Phase 3 (continued): the portfolio manager and its backtest** (#153-#156; `docs/portfolio-plan.md`)
+- [x] 3.17 👤 Portfolio spec: README rewrite, CLAUDE.md (§3.5 amended), decisions #153-#156, `risk.yaml` `portfolio:`, the approved pre-registration (`docs/backtests/portfolio-preregistration.md`); the momentum book's README and Phases 4-9 archived; kill switch on `paper` *(2026-10-27; the user approved the plan, the pre-registration and the §3.5 wording; `risk.yaml` hash a130ffa45bed; kill switch on `paper` since 2026-10-27)*
+- [ ] 3.18 Long-history data (Kenneth French daily, Shiller dividends) + SPY/SSO/BIL total-return bars from 2016
+- [ ] 3.19 The pure layer: the shared rebalance calendar, `strategies/core_allocation.py`, `tax/israel.py`, `guardrails/portfolio.py`
+- [ ] 3.20 Portfolio simulation (`sim/portfolio.py`)
+- [ ] 3.21 Backtest harness and report (`backtest/portfolio.py`)
+- [ ] 3.22 Blind mechanics check (counts, invariants and the data checks only)
+- [ ] 3.23 👤 The one scored run and its reading (pass, near miss, or clear fail)
 
-**Phase 5: Guardrails and execution**
-- [ ] 5.1 Guardrail wiring (LLM actions → `guardrails/book.py` → `signals`, events, alerts)
-- [ ] 5.2 Account constraints
-- [ ] 5.3 Orders and signal lifecycle (the 15:40 rebalance, stop raises)
-- [ ] 5.4 Reconciliation and invariants
-- [ ] 5.5 Jobs (`execute_close`, `execute_open`, `stop_guard`, post-market, weekly)
-- [ ] 5.6 Public site data and showcase design (nightly snapshot: equity vs SPY, MTUM and the rule book; regime; closed positions; #134)
+**Phase 4: LLM layer** (after a 3.23 pass or near miss, #156)
+- [ ] 4.1 👤 The Claude client (structured outputs, caching, refusals); the cost estimate for your OK
+- [ ] 4.2 The Portfolio Manager: facts, tools, schema, prompt, the final ETF list, guardrail wiring, the twin fallback
+- [ ] 4.3 `allocate` + `portfolio_manager` + the twin in `simulate`, in `dry_run`; migration (targets, tax lots, twin, journal)
+- [ ] 4.4 The scorecard (book vs twin vs SPY, before and after the estimated tax)
 
-**Phase 6: AWS** (the account and a minimal stack already exist from 1.8)
-- [ ] 6.1 Complete the CDK stack (all jobs)
-- [ ] 6.2 CI/CD
-- [ ] 6.3 Data move
+**Phase 5: Execution**
+- [ ] 5.1 Rebalance orders (targets → whole-share orders, sells first, the drift band; SSO's OTO stop and its raise); the invariant and `stop_guard` for #155; chaos tests on the fake broker
+- [ ] 5.2 The daily checks (the halt and its sale), the slimmed ingest (the ETF list, macro, news), the new schedule; the earlier systems' slots retired
+- [ ] 5.3 Live tax lots from the broker's fills; the journal; the nightly snapshot
 
-**Phase 7: Paper trial** (the later of 6 rebalances or 3 months, at half slots)
-- [ ] 7.0 👤 Pre-register the go-live statistics (`docs/backtests/power.md`)
-- [ ] 7.1 👤 Trial running; weekly reviews
-- [ ] 7.2 👤 Go-live criteria met (README §15)
+**Phase 6: The paper trial and the showcase**
+- [ ] 6.1 👤 `paper` reset to $100,000; deploy the portfolio's stack; kill switch off; the carried 1.7 / 1.8 checks; three monthly rebalances unattended
+- [ ] 6.2 The public dashboard (book vs twin vs SPY, exposure, the decision journal, the backtest's result)
+- [ ] 6.3 12 months of paper; the latitude rule (B4) pre-registered before month 12
 
-**Phase 8: Live, small**
-- [ ] 8.1 👤 Live stack, starting at half slots
+**Phase 7: Optional**
+- [ ] 7.1 👤 A second broker adapter (e.g. Interactive Brokers), only if real money is ever planned
 
 ---
 
@@ -130,8 +128,8 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 | Item | When | Notes |
 |---|---|---|
-| Alpaca **paper** API keys + secrets: **two paper accounts** | Phase 0 | One for `dev` (local work, Phase 5 end-to-end tests), one for `paper` (the deployed skeleton, then the trial). Sharing one would make each system's reconciliation fight the other's positions (README §12). Set each one's equity to the capital you intend to trade live |
-| The capital you intend to trade | Phase 0 | **$5,000, confirmed 2026-10-09.** It sets the position count (§6) and whole-share sizing (README #122). The FINRA pattern-day-trader rule no longer applies (README #123) |
+| Alpaca **paper** API keys + secrets: **two paper accounts** | Phase 0 | One for `dev` (local work, Phase 5 end-to-end tests), one for `paper` (the deployed skeleton, then the trial). Sharing one would make each system's reconciliation fight the other's positions (README §12). `paper` is reset to $100,000 before the portfolio's trial (6.1) |
+| The reference capital | Phase 0; changed 2026-10-26 | **$100,000** for the portfolio manager (#153), on paper only. It was $5,000 for the earlier systems (#122). The FINRA pattern-day-trader rule no longer applies (README #123) |
 | Anthropic API key | Phase 0 | **Set a monthly spend limit in the Anthropic Console** (e.g. $40) |
 | FRED API key | Phase 0 | Free |
 | Finnhub API key | Phase 0 | Free tier |
@@ -687,186 +685,124 @@ Freeze the configuration (the book, the adopted changes, the 5-pillar regime var
 
 ---
 
-## Phase 4: LLM layer (L)
+## Phase 3 (continued): the portfolio manager and its backtest (L)
 
-**Goal:** the monthly review and the Portfolio Manager in `dry_run`, every decision logged, costed and scored. **Starts after a 3.15 pass** (#149). 4.6 and 4.7 each need your OK with a cost estimate. Load the `claude-api` skill before writing LLM code.
+**Goal:** decide, by the pre-registered backtest, whether the core rule (the twin) beats the market after Israeli tax. The rules are README §6-§8 (#154-#155); the exact backtest rules, the gate and the fail path are `docs/backtests/portfolio-preregistration.md` (#156), fixed before any portfolio code reads data. **No code prints a return of the strategy or the benchmark before 3.23.**
 
-### 4.1 LLM client and batch (M)
+### 3.17 Portfolio spec (S, with you)
 
-- `llm/client.py`:
-  - structured outputs into Pydantic
-  - adaptive thinking with explicit effort per role
-  - prompt caching on the stable prefix
-  - refusal handling with server-side fallbacks
-  - retries and timeouts
-  - usage → cost, with alerts above $1.00 for a batch and $0.50 for a real-time call (README §9)
-  - payload → storage
-  - a `llm_decisions` row for every call, with the prompt version, the requested model and the answering model (`response.model`)
-- `llm/batch.py`: build requests with an identical cached prefix, submit, poll, collect; `llm_batches` table.
+README rewrite (§1-§15, §17-§18), decisions #153-#156, CLAUDE.md (§1, §2, §3.5, §6, §7, §8), `config/risk.yaml` `portfolio:` with its typed model (`config.PortfolioConfig`), the pre-registration marked approved, this plan. The momentum book's README and its Phases 4-9 are archived in `docs/archive/`. The kill switch on `paper` is on (2026-10-27).
 
-### 4.2 Schemas and prompts (M)
+**Accept:** the PR merged; `risk.yaml` loads and its hash is recorded.
 
-- **Schemas:**
-  - `BookVerdict`: TAKE/PASS for a candidate, KEEP/EXIT for a holding, conviction 1-5, ≤ 3 risks, reasoning, note; output caps.
-  - `RebalanceDecision`: regime view limited to the computed label or below, never `EARLY_UPTREND`; buys from the candidates at 1 or ½ slot; exits; stop raises.
-  - `PositionEventDecision`.
-  - `WeeklyLessons`.
-- **Prompts:** the Book Analyst (written from the momentum sources in README §18), the Portfolio Manager, weekly; the `prompt_versions` registry.
-- Every prompt defines the four regime labels. The Analyst treats its previous verdict as context, not a default.
-- **Untrusted text** (headlines, `get_news` bodies, filing text) goes in delimited data blocks; every system prompt says to treat it as information, never as instructions. The 4.6 sanity set includes one headline carrying a planted instruction.
+### 3.18 Long-history data (M)
 
-### 4.3 Context builders and tools (M)
+- `data/` clients for Kenneth French's "Fama/French 3 Factors [Daily]" (a zipped CSV) and Robert Shiller's monthly data (a spreadsheet), with recorded fixtures; `history/` writers into the Parquet store (`parquet/long_history/`), the download date and the last session recorded.
+- SPY, SSO and BIL daily bars with all adjustments from 2016 (the `backfill.py benchmarks` path extended).
+- `scripts/backfill.py longhistory`.
 
-- The README §5.3 fact table per name: rounded facts, no raw bars, ≤ 5 headlines; the old scans' setups as facts; charts.
-- Continuity: the Analyst's previous verdict and note.
-- Event-driven position context: full detail only for holdings with events.
-- Approved lessons only (≤ 10).
-- Portfolio Manager tools: `get_news`, `get_chart`, `get_fundamentals`, `get_position_history`.
+**Accept:** fixture tests pass; the files land in the store with their sessions counted; nothing about returns is printed.
 
-### 4.4 Jobs and skip logic (M)
+### 3.19 The pure layer (M)
 
-- `rank` replaces `scan` in the evening chain (`scan`'s old-scan output stays as the Analyst's facts). It writes `book_rankings` every evening, and the candidates and review list on ranking sessions.
-- `book_review_submit` / `book_review_collect` (ranking sessions only) → `book_reviews`.
-- `premarket_check` (07:30) → macro, news and earnings events.
-- `portfolio_manager`: **skipped unless** it's an execution session (or its retry) or a holding has an event. Hard deadline 12:00: a late answer is discarded and logged, failing closed. It writes the effective regime. Proposed actions go through 3.11's guardrails and the results are logged; nothing is submitted until Phase 5.
-- `weekly_review` → the book against the rule book, SPY and MTUM; the scorecard; proposed lessons + Telegram; `auratrade lessons approve <id>`.
-- Migrations: `book_rankings`, `book_reviews`, `book_scorecard`, `rule_book_positions`.
+- **The rebalance calendar** (R / E, half days, offsets) moved out of `strategies/momentum_book.py` into `calendar/rebalance.py`; the book imports it.
+- **`strategies/core_allocation.py`:** month-end values, SMA10, the buffered state and flips, the 21-session volatility, the cap, the halt (on, act-at-once, off, peak reset), the rule level, the holdings for a level (SPY / SSO / BIL), the twin's targets, the LLM's band (the allowed shift for a state).
+- **`tax/israel.py`:** FIFO lots, realized gains, in-year offsets and carry-forward, income, the year's tax, the liquidation tax.
+- **`guardrails/portfolio.py`:** README §8 on an LLM decision → the enforced targets and the clip events.
 
-### 4.5 Rule book and scorecard, live (M)
+**Accept:** known-answer tests for every rule and edge (the buffer's edges, the first state, a cap and a halt together, both halt exits, a loss carried two years, a lot split across sales); 100% branch coverage on all three; nothing reads real data.
 
-- `journal/rule_book.py` replaces the setup baseline in `simulate`: the rule book from the same candidates, through `sim/book.py`, on its own $5,000.
-- The scorecard: each reviewed name's return to the next E, relative to the top-40 average; the monthly information coefficient; TAKE vs PASS; the Portfolio Manager's picks against the rule book's.
+### 3.20 Portfolio simulation (M)
 
-### 4.6 Prompt sanity set and effort decision (S, paid; needs your OK, under $2)
+`sim/portfolio.py` on `sim/fills.py`: the instruments of pre-registration §3.2 (or real bars, for the live twin), daily marks, the rebalance with the drift band, the stop on L2, the halt's sale, T-bill accrual, the tax model, the year-end payment, the final liquidation; the invariants of pre-registration §7 raised as errors.
 
-- 20-30 hand-checked historical review lists, checked for format, consistency and reasoning quality. It isn't a performance test.
-- Run the set at Analyst effort `medium` vs `high` and choose on quality.
+**Accept:** known-answer portfolios for a flip, a cap, a halt and its two exits, a stop-out, a loss carried forward, a dividend year, a window run; 100% branch coverage.
 
-**Accept:** pipelines run end to end in `dry_run` for one simulated rebalance and 5 ordinary sessions; every call logged with cost; skip logic verified on a quiet session; a deliberately slow call is discarded at its deadline; an out-of-list buy and a lowered stop are rejected; outputs read sensibly.
+### 3.21 Backtest harness and report (M)
 
-### 4.7 Keep the evening pipeline running (S, paid; needs your OK: about $3-8 a month)
+`backtest/portfolio.py` (+ report and render modules): the market from the long history, the primary, C1-C5, the diagnostics D-a to D-c, the rolling windows (independent runs), the gate, the near-miss rule, the reported extras of pre-registration §5.4; `--blind`.
 
-- Deploy the chained `ingest` → `simulate` → `regime` → `rank` → `book_review_submit` / `collect` and the morning `portfolio_manager` to the AWS stack from 1.8, in `dry_run` (no orders), against the `paper` Neon branch. The full `ingest` replaces the skeleton's.
-- It keeps running through Phases 5-7; a prompt change is a new prompt version, reported separately.
+**Accept:** tested end to end on a synthetic history; the blind report is tested to hold no performance words.
 
-**Accept:** one live ranking evening and 5 unattended evenings; scorecard rows accumulate; cost tracked daily; every evening job well inside Lambda's 15 minutes; a deliberately delayed `ingest` makes `regime` wait, not run on stale data.
+### 3.22 Blind mechanics check (S)
+
+`uv run python -m backtest.portfolio --blind` → `docs/backtests/portfolio-blind.md`: counts, invariants and the data checks of pre-registration §4.4 and §7.
+
+**Accept:** the report committed. A failed data check or a stop condition goes to you before 3.23.
+
+### 3.23 The one scored run (S, with you)
+
+One invocation → `docs/backtests/portfolio.md`, committed as produced, with the pre-registration's commit quoted at the top; then the reading by its §5 and §9.
+
+**Accept:** the reading is written and recorded as a decision: a pass or a near miss continues to Phase 4; a clear fail comes to you.
 
 ---
 
-## Phase 5: Guardrails, execution, monitoring and journal (L)
+## Phase 4: LLM layer (M)
 
-**Goal:** the monthly rebalance and its protection against Alpaca paper, idempotent and fully reconciled.
+**Goal:** the monthly decision, in `dry_run`, with the twin beside it. Load the `claude-api` skill before writing LLM code (CLAUDE.md §6).
 
-### 5.1 Guardrail wiring (S)
+### 4.1 The Claude client (S, with you for the cost)
 
-- every Portfolio Manager action → `guardrails/book.py` → approved actions to `signals`; nothing reaches the order layer any other way
-- `guardrail_events` migration + Telegram alerts
-- an integration test that an out-of-bounds LLM decision, replayed through the full morning job, produces a rejection and no order
+`llm/client.py`: the `anthropic` SDK, `claude-opus-5-5`, adaptive thinking with explicit effort, structured outputs into Pydantic, prompt caching, refusal handling, the deadline, the answering model stored; recorded fixtures for every path. A cost estimate per monthly call for your OK before any paid call.
 
-### 5.2 Account constraints (S)
+### 4.2 The Portfolio Manager (M)
 
-`execution/account.py` → `AccountConstraints` (equity, buying power, exposure), from the fields 0.3b found. No PDT fields (#123).
+The facts it sees (README §5.4), its tools, the schema (README §9), the versioned prompt with untrusted text as data; every output through `guardrails/portfolio.py`; the twin fallback; the final ETF list in `risk.yaml`.
 
-### 5.3 Orders and signal lifecycle (M)
+**Accept:** fixture tests for a normal month, a clip, a refusal, a timeout, invalid output, an event call.
 
-- Extends the 1.7 order-layer core (same modules).
-- **The 15:40 rebalance:**
-  - sells through the sell sequence (reduce the stop → sell → restore on failure; sell at once if the price is already through the stop, escalating within the run);
-  - then buys as **OTO marketable limits** (GTC parent) with their GTC stop legs, sized on the limit;
-  - stop raises by atomic replace; the leg-to-standalone swap before any quantity cut (#113).
-- **Partial fills** (README §5.7): a partly filled buy counts as unprotected (#115); a partly filled sell restores the stop and retries.
-- `signals` state machine; idempotency key = `client_order_id`.
-- **Corporate actions** (README §5.7 table): split stops at 09:20, cash acquisitions at 09:31, dividend-lowered stops replaced, others → `mismatches`.
-- Migrations: `signals`, `orders`, `positions`; the foreign key from `position_plans.position_id`.
+### 4.3 Jobs in `dry_run` (M)
 
-### 5.4 Reconciliation and invariants (M)
+`jobs/allocate.py` (on R), `jobs/portfolio_manager.py` (on E and events), the twin in `simulate`; the migration (`portfolio_targets`, `tax_lots`, `twin_book`, `portfolio_journal`); targets written, orders not sent.
 
-- Broker vs DB for positions, orders and fills; all order changes under the single-writer lock.
-- The invariant in every order-touching job (`execute_open` incl. its 09:31 check run, `execute_close`, `post_market`, `stop_guard`): every position's GTC stops cover its full quantity at ≥ its plan level, and a partly filled buy counts as unprotected. If not: repair, alert, block buys.
+**Accept:** each job runs locally with `--session … --dry-run`; a month replayed end to end in `dry_run`.
 
-### 5.5 Jobs (L)
+### 4.4 The scorecard (S)
 
-- `execute_open` (09:20 split stops and stop raises; 09:31 check run), `execute_close` (15:40, README §5.9), `stop_guard` (extended from 1.7).
-- `post_market`: `book_journal` (with the sim return), MAE/MFE, snapshots against SPY, MTUM and the rule book, the report, the nightly backup, cancelling unfilled buy parents.
-- `weekly_review`: the comparisons on the sim return, paper fills alongside, fallback-model answers separately.
-- Kill switch and halts wired into every **buy** path (README §5.13): never touching stops or rule exits.
-- **Operator CLI:** `kill on|off`, `halt status|reset`, `mismatches` / `resolve <id>`, `lessons approve|reject`, `flatten --confirm` (manual only).
-- **`docs/runbook.md`:** for each alert type, what it means and what to do.
-- Migrations: `book_journal`, `account_snapshots` (benchmarks added), `lessons`.
-
-**Accept:**
-- A replayed rebalance runs locally on the **`dev`** Alpaca paper account: sells fill through the sell sequence, buys fill with their stop legs attached, stops are raised, and every position is covered.
-- **Chaos tests** (extending the 1.7 suite, in CI), each producing **no duplicate orders and no unprotected position:**
-  - killing a job mid-run, or running it twice;
-  - killing a job right after it reduced a stop and before the sell;
-  - **a rebalance that dies between the sells and the buys** (the retry buys the rest, and nothing is bought twice);
-  - two order jobs at once; an API 500 during submission; a stop deleted at the broker;
-  - a marketable-limit sell at 15:40 that doesn't fill (escalated before the lock is released);
-  - a Lambda that dies holding the lock; a gap below the plan stop before a raise;
-  - a partly filled buy and sell; a split on a held position; a dividend that lowers a resting stop.
-- With the kill switch and every halt active, stops and rule exits still fire (tested).
-
-### 5.6 Public site data and showcase design (M)
-
-As planned under #134. `post_market` writes `data/snapshot.json`: equity against SPY, MTUM and the rule book (sim returns), the effective regime and pillars, **closed** positions (return, holding sessions, exit reason, the Analyst's thesis), and the scorecard summary once it has data. Never open positions, pending orders, stop levels, IDs or raw prompts.
-
-**Accept:** a test proves no open-position, stop or ID field can reach the snapshot; the page renders a recorded snapshot and the missing-snapshot case; a closed position appears the night after it closes.
+README §5.5: the after-tax excess over the twin, the tilt and shift scores, the expectations; in the journal and the snapshot.
 
 ---
 
-## Phase 6: AWS deployment (M)
+## Phase 5: Execution (M)
 
-**Goal:** the whole system running unattended in AWS against Alpaca paper.
+### 5.1 Rebalance orders (M)
 
-- **6.1 Complete the CDK stack (M):**
-  - one Lambda per job, replacing the skeleton's;
-  - EventBridge Scheduler in `America/New_York`: the evening chain, 07:30, 08:45, 09:20, 09:31, 15:40 and the 5-minute `stop_guard`; async retries on for order jobs;
-  - the 4.7 pipeline folded in without interrupting it;
-  - SSM parameters, S3 with a lifecycle rule, 30-day logs, least-privilege IAM.
-- **6.2 CI/CD (S):** GitHub Actions on merge to `main` → build → ECR → `cdk deploy`, using OIDC.
-- **6.3 Data move (S):** Parquet → S3; the Neon `paper` branch migrated and seeded.
+Targets → whole-share orders (sells first, the drift band, marketable limits on the decision price); SSO as an OTO with its stop leg and its raise; the invariant and `stop_guard` for #155 (stops on the leveraged fund only); the kill switch and the halt blocking increases only.
 
-**Accept:** 5 consecutive unattended sessions including a simulated rebalance; a holiday or half day handled correctly; the watchdog fires when a job is disabled on purpose; the nightly backup restores into a scratch Neon branch; AWS cost under $5 a month.
+**Accept:** chaos tests on the fake broker: a crash between the stop reduction and the sale, a partly filled OTO, a rejected stop with the price through it, a split on SSO, the halt's sale under the kill switch.
 
----
+### 5.2 Daily checks, ingest and schedule (M)
 
-## Phase 7: Paper-trading trial (the later of 6 rebalances or 3 months)
+The halt's daily check and its next-session sale; ingest slimmed to the ETF list, macro and news (the stock-universe steps left unwired); `jobs/schedule.py` rewritten (README §3); the earlier systems' slots retired.
 
-### 7.0 Pre-register the go-live statistics (S, with you)
+### 5.3 Live tax lots and the journal (S)
 
-Before day 1, `docs/backtests/power.md` from the 4.7 scorecard data (README §15):
-- the information coefficient's monthly standard deviation and the months needed to detect a given mean;
-- the non-inferiority margin δ against the rule book (default 1% a year) and the max-drawdown margin;
-- the inconclusive-result rule, as fixed in the README.
-
-**Accept:** you've approved the note. It isn't changed after the trial starts.
-
-### 7.1-7.2 The trial
-
-- **Start:** reset the `paper` Alpaca account and set its equity to $5,000; half slots (`book.start_slot_fraction`). The scorecard history from 4.7 is kept.
-- **Before day 1:** the power note is approved; `docs/runbook.md` is written; each operator command and the dead-man's switch has been exercised once.
-- **Weekly ritual:** the Saturday report + your review: positions and the LLM's reasoning; guardrail events; the book against the rule book, SPY and MTUM; the scorecard; the regime timeline; cost; approve or reject proposed lessons.
-- **Prompt changes:** at most one versioned change per week. **Config changes:** `risk.yaml` commits with the reason, never to the frozen backtest values without a new decision.
-- **Incidents:** `docs/incidents.md`.
-
-**Exit:** the go-live criteria in README §15 are met.
+`tax_lots` from the broker's fills and distributions; the monthly journal; `post_market`'s snapshot for the dashboard.
 
 ---
 
-## Phase 8: Live, small
+## Phase 6: The paper trial and the showcase
 
-- Separate `live` stack (Neon `live` branch, live keys, `TRADING_MODE=live` set explicitly).
-- **Harden the AWS account first** (#134): MFA on every human user, no long-lived admin access keys, least-privilege deploy permissions; consider a separate AWS account for `live`.
-- Start at half slots with reduced capital; full slots after one clean quarter, **and** only once the information coefficient's interval excludes zero if it was inconclusive at go-live (README §15).
+### 6.1 Deploy and run (M, with you)
+
+You reset `paper` to $100,000 in the Alpaca dashboard; `cdk deploy AuraTradePaper` with the portfolio's jobs (you run deploys); the kill switch off. The carried 1.7 / 1.8 checks: the stop hand check on SSO, the watchdog and dead-man's-switch tests, cost and Neon compute; `docs/runbook.md`. **Accept:** three monthly rebalances unattended, README §15's operations criteria met.
+
+### 6.2 The public dashboard (M)
+
+README §5.8 on the public site (`web/` + `data/snapshot.json`); `cdk deploy AuraTradePublicSite` (you).
+
+### 6.3 Twelve months (with you)
+
+Monthly journal reviews. Before month 12, pre-register the rule for the LLM's latitude (the plan's B4) in `docs/backtests/latitude.md`.
 
 ---
 
-## Phase 9: Extensions (later)
+## Phase 7: Optional
 
-- Telegram commands (`/status`, `/halt`, lesson approvals) via a webhook.
-- Volatility-scaled exposure (Barroso & Santa-Clara 2015) or inverse-volatility slots, each only after its own pre-registered test.
-- A wider universe or more slots as capital grows; fractional shares if the broker ever allows fractional stops.
-- A two-stage Analyst (cheap triage → full review) if costs rise.
+### 7.1 A second broker (with you)
+
+Only if real money is ever planned: an adapter behind `execution/broker.py` (e.g. Interactive Brokers, which serves Israeli residents and lists UCITS funds), a separate stack, live keys, and your explicit start (CLAUDE.md §3.1).
 
 ---
 
@@ -875,20 +811,16 @@ Before day 1, `docs/backtests/power.md` from the 4.7 scorecard data (README §15
 ```mermaid
 flowchart LR
     P0[0 Foundations + spikes] --> P1[1 Data layer]
-    P1 --> SK[1.7–1.8 Walking skeleton<br/>paper, deployed]
-    SK -. keeps running .-> P7
+    P1 --> SK[1.7–1.8 Walking skeleton<br/>paper, deployed, kill switch on]
     SK --> P2[2 Indicators + regime]
-    P2 --> P3[3 Setup system<br/>failed its gate, archived]
-    P3 --> MB[3.9–3.16 Momentum book<br/>spec · simulation · backtest]
-    MB -->|tuning gate passes| P4[4 LLM layer]
-    P4 --> EV[4.7 Evening pipeline<br/>dry_run, deployed]
-    EV -. scorecard keeps running .-> P7
-    MB --> P5[5 Guardrail wiring + execution]
-    P4 --> P5
-    P5 --> P6[6 AWS deploy]
-    P6 --> P7[7 Paper trial]
-    P7 --> P8[8 Live small]
-    P8 --> P9[9 Extensions]
+    P2 --> P3[3 Setup system<br/>failed, archived]
+    P3 --> MB[3.9–3.16 Momentum book<br/>failed, archived]
+    MB --> PF[3.17–3.23 Portfolio manager<br/>spec · data · pure layer · simulation · backtest]
+    PF -->|pass or near miss| P4[4 LLM layer, dry_run]
+    P4 --> P5[5 Execution]
+    P5 --> P6[6 Paper trial $100k + dashboard]
+    SK -. carried checks .-> P6
+    P6 -.-> P7[7 Optional second broker]
 ```
 
-The momentum book's backtest (3.9-3.16) decides whether anything after it is built: Phase 4 starts only on a tuning pass, and capital (Phase 5's live buys and the paper trial) also waits for the holdout. The setup system's code stays in the repo as facts for the Analyst; its plan is archived in `docs/archive/execution-plan-setup-system.md`. The order layer (5.3-5.4) grows from the skeleton's core (1.7), and the simulator (`sim/`) is shared by everything that replays or backtests.
+The portfolio's backtest (3.17-3.23) decides whether the rest is built as planned: a pass or a near miss continues; a clear fail comes back to you. The earlier systems' code stays in the repo, unwired; their plans are archived in `docs/archive/`. The order layer (5.1) grows from the skeleton's core (1.7), and the simulator (`sim/`) is shared by everything that replays or backtests.

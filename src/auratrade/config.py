@@ -453,6 +453,7 @@ class RiskConfig(_Strict):
     baseline: BaselineConfig
     scorecard: ScorecardConfig
     book: BookConfig
+    portfolio: PortfolioConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1352,6 +1353,88 @@ class BookConfig(_Strict):
             raise ValueError("book needs holdings <= candidates <= review_candidates")
         if self.candidates > self.universe_size:
             raise ValueError("book candidates can't exceed universe_size")
+        return self
+
+
+class PortfolioBacktestConfig(_Strict):
+    """The portfolio's backtest (`docs/backtests/portfolio-preregistration.md`, #156)."""
+
+    start_equity: Positive
+    score_start_year: PositiveInt
+    # The synthesized funds (pre-registration §3.2): fees a year, and the 2x fund's financing.
+    market_fee: Fraction
+    leveraged_fee: Fraction
+    cash_fee: Fraction
+    financing_spread: Fraction
+    market_slippage: Fraction
+    leveraged_slippage: Fraction
+    cash_slippage: Fraction
+    # The gate's G3 and the near miss (§5.2-§5.3).
+    window_years: PositiveInt
+    min_window_share: Fraction
+    near_miss_cagr: Fraction
+    bootstrap_block_sessions: PositiveInt
+    bootstrap_samples: PositiveInt
+    confidence: Fraction
+    seed: int
+    timing_offsets: tuple[PositiveInt, ...] = Field(min_length=1)
+    # The comparisons C1-C3 (§6), reported and never adopted.
+    c1_sma_sessions: PositiveInt
+    c2_up_level: Annotated[float, Field(ge=0.0)]
+    c2_down_level: Annotated[float, Field(ge=0.0)]
+    margin_spread: Fraction
+    margin_maintenance: Fraction
+    # The data checks (§4.4) and the blind check's stop conditions (§7).
+    check_min_correlation: Annotated[float, Field(ge=-1.0, le=1.0)]
+    check_max_cagr_gap: Fraction
+    max_session_gap_days: PositiveInt
+    blind_max_flips_per_year: Positive
+    blind_max_halt_share: Fraction
+
+
+class PortfolioConfig(_Strict):
+    """The portfolio manager (README §5.4, §6-§8; decisions #154-#155)."""
+
+    satellite_share: Fraction
+    sma_months: PositiveInt
+    buffer: Fraction
+    # Exposure to the S&P, as a multiple of the core's equity.
+    up_level: Positive
+    down_level: Annotated[float, Field(ge=0.0)]
+    capped_level: Positive
+    min_level: Annotated[float, Field(ge=0.0)]
+    max_level: Positive
+    max_shift: Annotated[float, Field(ge=0.0)]
+    vol_sessions: PositiveInt
+    vol_cap: Positive
+    drawdown_halt: Fraction
+    stop_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
+    drift_band: Fraction
+    max_etf_weight: Fraction
+    retry_sessions: Annotated[int, Field(ge=0)]
+    market: str
+    leveraged: str
+    leverage: Annotated[float, Field(gt=1.0)]
+    cash: str
+    satellite_list: tuple[str, ...] = Field(min_length=1)
+    tax_rate: Fraction
+    backtest: PortfolioBacktestConfig
+
+    @model_validator(mode="after")
+    def _check(self) -> Self:
+        levels = (self.min_level, self.down_level, self.capped_level, self.up_level, self.max_level)
+        if list(levels) != sorted(levels):
+            raise ValueError(
+                "portfolio needs min_level <= down_level <= capped_level <= up_level <= max_level"
+            )
+        if self.max_level > self.leverage:
+            raise ValueError("portfolio max_level can't exceed the leveraged fund's leverage")
+        if len(set(self.satellite_list)) != len(self.satellite_list):
+            raise ValueError("portfolio satellite_list has a duplicate")
+        if self.leveraged in self.satellite_list:
+            raise ValueError("portfolio satellite_list can't hold the leveraged fund")
+        if self.max_etf_weight > self.satellite_share:
+            raise ValueError("portfolio max_etf_weight can't exceed satellite_share")
         return self
 
 
