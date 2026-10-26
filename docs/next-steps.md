@@ -67,7 +67,17 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → **3.14** blind check → 3.15 scored run → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → **3.14** blind check (**stopped: the drawdown halt never re-enables; the user's decision, below**) → 3.15 scored run → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
+
+### Task 3.14: the blind check stopped (2026-10-26)
+
+`uv run python -m backtest.momentum --blind` -> `docs/backtests/momentum-blind.md` (committed as produced). Every invariant held in all 8 configurations. **One §7 stop condition fired: mean holdings after buys 2.28 < 6.** Price skips (2.3%) and cluster skips (3.0%) are far under their limits, and every ranked set has 1,000 names.
+
+**Cause: a simulator bug against the pre-registration's text.** §3.6 says the 30% drawdown halt, in the backtest, "blocks that E's buys and its retry only. It counts as re-enabled at the next E". `sim/book.py` instead re-checks it at every E against the all-time peak. After the book went to cash in late 2018 its value couldn't change, so the halt fired on all 48 rebalances from 2019 to 2022 and the book stayed in cash. The fix needs a definition the pre-registration doesn't give: what a re-enable resets. That is a risk rule, so per §2 step 3 it goes to the user before anything is re-run.
+
+Checked and fine (counts only): all 49 stop-outs sit at exactly 0.80 x the entry-day close, with no split between entry and exit; each exit bar trades through its level; none is within 5 sessions of the buy; 24 were stops raised at a rebalance (the stop trails monthly).
+
+What the blind counts reveal: the primary fell at least 30% below its peak in late 2018 (the halt fired twice in 2018). The pre-registered halt counts make that visible.
 
 ### Task 3.8: stopped at the gate; the strategy decision is next (2026-10-24)
 
