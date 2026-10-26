@@ -1,6 +1,6 @@
 # The portfolio manager: the plan (#153)
 
-**Status 2026-10-26: proposed; awaits the user's approval.** The input is [strategy-change-portfolio.md](strategy-change-portfolio.md); the user accepted every recommendation in its §4 on 2026-10-26, refining D7 (§2 below). The backtest is pre-registered in [backtests/portfolio-preregistration.md](backtests/portfolio-preregistration.md). On approval, task 3.17 writes the README, the decisions and `risk.yaml` `portfolio:` from this page.
+**Status: approved by the user 2026-10-27** (decisions #153-#156; the pre-registration and the CLAUDE.md §3.5 wording too). The input is [strategy-change-portfolio.md](strategy-change-portfolio.md); the user accepted every recommendation in its §4 on 2026-10-26, refining D7 (§2 below). The backtest is pre-registered in [backtests/portfolio-preregistration.md](backtests/portfolio-preregistration.md). On approval, task 3.17 writes the README, the decisions and `risk.yaml` `portfolio:` from this page.
 
 ## 1. The strategy in one paragraph
 

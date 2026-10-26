@@ -367,3 +367,35 @@ class TestBookConfig:
         raw["book"][field] = value  # type: ignore[index]
         with pytest.raises(ValidationError, match=error):
             RiskConfig.model_validate(raw)
+
+
+class TestPortfolioConfig:
+    def test_preregistered_values(self) -> None:
+        pf = load_risk_config().portfolio
+        assert (pf.up_level, pf.down_level, pf.capped_level) == (1.3, 0.5, 1.0)
+        assert (pf.min_level, pf.max_level, pf.max_shift) == (0.3, 1.5, 0.2)
+        assert (pf.sma_months, pf.buffer) == (10, 0.02)
+        assert (pf.vol_sessions, pf.vol_cap) == (21, 0.25)
+        assert (pf.drawdown_halt, pf.stop_fraction, pf.drift_band) == (0.25, 0.3, 0.05)
+        assert (pf.satellite_share, pf.max_etf_weight, pf.tax_rate) == (0.2, 0.1, 0.25)
+        assert (pf.market, pf.leveraged, pf.cash, pf.leverage) == ("SPY", "SSO", "BIL", 2.0)
+        assert pf.backtest.score_start_year == 1928
+        assert (pf.backtest.window_years, pf.backtest.min_window_share) == (10, 0.6)
+        assert pf.backtest.near_miss_cagr == 0.01
+
+    @pytest.mark.parametrize(
+        ("field", "value", "error"),
+        [
+            ("down_level", 1.4, "min_level <= down_level"),
+            ("max_level", 2.5, "leverage"),
+            ("satellite_list", ["QQQ", "QQQ"], "duplicate"),
+            ("satellite_list", ["QQQ", "SSO"], "leveraged fund"),
+            ("max_etf_weight", 0.5, "satellite_share"),
+            ("stop_fraction", 0.0, "stop_fraction"),
+        ],
+    )
+    def test_invalid(self, field: str, value: object, error: str) -> None:
+        raw = risk_dict()
+        raw["portfolio"][field] = value  # type: ignore[index]
+        with pytest.raises(ValidationError, match=error):
+            RiskConfig.model_validate(raw)

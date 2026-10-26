@@ -1,6 +1,7 @@
 # Every trading threshold lives here (CLAUDE.md §6), loaded into `auratrade.config.RiskConfig`.
-# The momentum book's values are under `book:` (README §5.3, §7, §8). Sections marked "archived
-# README" belong to the setup system (docs/archive/README-setup-system.md): its code stays, unwired.
+# The portfolio manager's values are under `portfolio:` (README §5.4, §6-§8, #154-#156). `book:` is the
+# momentum book's (docs/archive/README-momentum-book.md) and sections marked "archived README" belong
+# to the setup system (docs/archive/README-setup-system.md): their code stays, unwired.
 # Unknown keys are rejected. The hash of the validated values is logged with every job run,
 # so a change here is visible in every log line that follows it.
 #
@@ -547,3 +548,56 @@ book:  # README §5.3, §7, §8: the momentum book (#147); docs/backtests/moment
     blind_max_price_skips: 0.25      # more of the names the rule book reached were skipped for price,
     blind_max_cluster_skips: 0.5     # the cluster rule removed more of the candidates,
     blind_min_ranked: 800            # or any ranked set was smaller
+
+portfolio:  # README §5.4, §6-§8: the portfolio manager (#154-#155); docs/backtests/portfolio-preregistration.md
+  satellite_share: 0.20              # the LLM's part of equity; the core is the rest
+  sma_months: 10                     # the trend: month-end total-return values against their 10-month SMA
+  buffer: 0.02                       # DOWN below SMA x 0.98, UP above SMA x 1.02; between them the state stays
+  up_level: 1.3                      # S&P exposure while UP ...
+  down_level: 0.5                    # ... and while DOWN (the rest in T-bills)
+  capped_level: 1.0                  # the most while the volatility cap or the halt is on
+  min_level: 0.3                     # the LLM's shift can't take the core below this ...
+  max_level: 1.5                     # ... or above this
+  max_shift: 0.2                     # the LLM's shift of the rule level, either way (downward only when DOWN, capped or halted)
+  vol_sessions: 21                   # realized volatility of SPY's daily returns through R ...
+  vol_cap: 0.25                      # ... annualized (x sqrt(252)) above this caps the level
+  drawdown_halt: 0.25                # equity <= 75% of its peak: no leverage, at once
+  stop_fraction: 0.30                # the leveraged fund's GTC stop 30% below its last rebalance price; raised only
+  drift_band: 0.05                   # trade a holding only if its target changed or it is 5 points off it
+  max_etf_weight: 0.10               # each satellite ETF, of equity
+  retry_sessions: 1                  # a rebalance blocked on E is tried once more
+  market: SPY                        # the core's funds
+  leveraged: SSO
+  leverage: 2.0                      # the leveraged fund's daily multiple
+  cash: BIL
+  satellite_list: [QQQ, IWM, AVUV, MTUM, QUAL, VEA, VWO, GLD, IEF, TLT, DBMF, BIL, SPY]
+  tax_rate: 0.25                     # Israel: realized gains (nominal USD, FIFO), dividends and interest
+  backtest:
+    start_equity: 100000
+    score_start_year: 1928           # 1926-07 to 1927 is the warm-up
+    market_fee: 0.0009               # SPY's expense ratio, a year
+    leveraged_fee: 0.0090            # SSO's
+    cash_fee: 0.0014                 # BIL's
+    financing_spread: 0.0050         # the 2x fund borrows 1x at the T-bill rate plus this
+    market_slippage: 0.0005          # the sim: tiers by each fund's liquidity today
+    leveraged_slippage: 0.0010
+    cash_slippage: 0.0005
+    window_years: 10                 # G3: rolling windows, each an independent run ...
+    min_window_share: 0.60           # ... the strategy ahead in at least this share
+    near_miss_cagr: 0.01             # a failed gate with G2 held and the after-tax CAGR at most 1 point behind
+    bootstrap_block_sessions: 63
+    bootstrap_samples: 2000
+    confidence: 0.9
+    seed: 37
+    timing_offsets: [1, 6, 11, 16]   # diagnostic D-c
+    c1_sma_sessions: 200             # comparison C1: the 200-session SMA of the daily index on R
+    c2_up_level: 1.5                 # comparison C2
+    c2_down_level: 0.0
+    margin_spread: 0.015             # comparison C3: borrowing at the T-bill rate plus this ...
+    margin_maintenance: 0.25         # ... a margin call below 25% equity sells to 1.0x
+    # The data checks (pre-registration §4.4) and the blind check's stop conditions (§7):
+    check_min_correlation: 0.98      # daily, the proxy and the synthesis against the real funds from 2016
+    check_max_cagr_gap: 0.015
+    max_session_gap_days: 7
+    blind_max_flips_per_year: 4
+    blind_max_halt_share: 0.30

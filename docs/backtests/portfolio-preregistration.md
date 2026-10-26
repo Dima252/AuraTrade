@@ -1,6 +1,6 @@
 # The portfolio manager: pre-registration (tasks 3.18-3.23)
 
-**Written 2026-10-26, before any portfolio code exists or has read data.** **Status: proposed; awaits the user's approval.** The commit that holds the approved text is quoted at the top of `docs/backtests/portfolio.md`. From that commit:
+**Written 2026-10-26, before any portfolio code exists or has read data.** **Status: approved by the user 2026-10-27** (decision #156). The commit that holds the approved text is quoted at the top of `docs/backtests/portfolio.md`. From that commit:
 - a change after the blind mechanics check (§2 step 3) needs the user's approval and is listed in the report with its reason;
 - a change after the scored run (step 4) makes it a new trial, which this page doesn't allow (§9).
 
