@@ -8,6 +8,7 @@ CBOE); no orders.
     uv run python scripts/backfill.py bars build          # any stages, in this order
     uv run python -m auratrade.jobs.ingest --direct --session <last session>
     uv run python scripts/backfill.py postgres            # after that ingest run
+    uv run python scripts/backfill.py longhistory         # the portfolio's long history (3.18)
 
 Stages save their progress in `--work` (default var/backfill), so a stopped run picks up where
 it left off; delete a stage's folder there to redo it. The history goes to the configured
@@ -29,15 +30,22 @@ from auratrade.calendar.sessions import MarketCalendar, load_calendar
 from auratrade.config import REPO_ROOT, load_risk_config
 from auratrade.data.alpaca_data import SIP_DELAY, AlpacaDataClient, alpaca_http
 from auratrade.data.edgar import EdgarClient
+from auratrade.data.french import FrenchClient
 from auratrade.data.macro import CboeClient
 from auratrade.data.nasdaq import NasdaqDirectoryClient
 from auratrade.data.news import AlpacaNewsClient
+from auratrade.data.shiller import ShillerClient
 from auratrade.db.engine import engine_from_settings
-from auratrade.history.benchmarks import benchmark_history
+from auratrade.history.benchmarks import (
+    PORTFOLIO_FUND_SYMBOLS,
+    PORTFOLIO_FUNDS,
+    benchmark_history,
+)
 from auratrade.history.build import build_history, fetch_bars, retype_funds
 from auratrade.history.discover import Discovery, discover
 from auratrade.history.edgar import edgar_history
 from auratrade.history.load import load_postgres
+from auratrade.history.long_history import long_history
 from auratrade.history.macro import macro_history
 from auratrade.history.news import fetch_news
 from auratrade.jobs.wiring import load_runtime_settings
@@ -46,8 +54,20 @@ from auratrade.storage import make_store
 
 log = structlog.get_logger("backfill")
 
-STAGES = ("discover", "bars", "build", "macro", "benchmarks", "news", "edgar", "funds", "postgres")
-ALL = STAGES[:-1]
+STAGES = (
+    "discover",
+    "bars",
+    "build",
+    "macro",
+    "benchmarks",
+    "news",
+    "edgar",
+    "funds",
+    "postgres",
+    "longhistory",
+)
+# `all` is the 2016 history; Postgres and the portfolio's long history are asked for by name.
+ALL = STAGES[:-2]
 
 
 def last_final_session(calendar: MarketCalendar, now: datetime) -> date:
@@ -109,6 +129,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         if "benchmarks" in wanted:
             bars = benchmark_history(store, alpaca, cfg.start, through, set(sessions))
             log.info("backfill_benchmarks", **bars)
+        if "longhistory" in wanted:
+            stored = long_history(store, FrenchClient(), ShillerClient(), datetime.now(UTC))
+            log.info("backfill_long_history", **stored.details())
+            funds = benchmark_history(
+                store,
+                alpaca,
+                cfg.start,
+                through,
+                set(sessions),
+                symbols=PORTFOLIO_FUND_SYMBOLS,
+                name=PORTFOLIO_FUNDS,
+            )
+            log.info("backfill_portfolio_funds", **funds)
         if "news" in wanted:
             news = fetch_news(
                 AlpacaNewsClient(http), store, cfg.start, through, workers=cfg.workers
