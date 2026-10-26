@@ -3,7 +3,8 @@ last 2 years into Postgres. Free vendor calls only (Alpaca market data and news,
 CBOE); no orders.
 
     uv run python scripts/backfill.py all                 # discover -> bars -> build -> macro
-                                                          #   -> news -> edgar -> funds (hours)
+                                                          #   -> benchmarks -> news -> edgar
+                                                          #   -> funds (hours)
     uv run python scripts/backfill.py bars build          # any stages, in this order
     uv run python -m auratrade.jobs.ingest --direct --session <last session>
     uv run python scripts/backfill.py postgres            # after that ingest run
@@ -32,6 +33,7 @@ from auratrade.data.macro import CboeClient
 from auratrade.data.nasdaq import NasdaqDirectoryClient
 from auratrade.data.news import AlpacaNewsClient
 from auratrade.db.engine import engine_from_settings
+from auratrade.history.benchmarks import benchmark_history
 from auratrade.history.build import build_history, fetch_bars, retype_funds
 from auratrade.history.discover import Discovery, discover
 from auratrade.history.edgar import edgar_history
@@ -44,7 +46,7 @@ from auratrade.storage import make_store
 
 log = structlog.get_logger("backfill")
 
-STAGES = ("discover", "bars", "build", "macro", "news", "edgar", "funds", "postgres")
+STAGES = ("discover", "bars", "build", "macro", "benchmarks", "news", "edgar", "funds", "postgres")
 ALL = STAGES[:-1]
 
 
@@ -104,6 +106,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if "macro" in wanted:
             rows = macro_history(store, CboeClient(), set(sessions))
             log.info("backfill_macro", rows=rows)
+        if "benchmarks" in wanted:
+            bars = benchmark_history(store, alpaca, cfg.start, through, set(sessions))
+            log.info("backfill_benchmarks", **bars)
         if "news" in wanted:
             news = fetch_news(
                 AlpacaNewsClient(http), store, cfg.start, through, workers=cfg.workers

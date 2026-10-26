@@ -49,6 +49,8 @@ class Feed(StrEnum):
 class Adjustment(StrEnum):
     RAW = "raw"
     SPLIT = "split"
+    ALL = "all"
+    """Splits and dividends: total return (the book's benchmarks only)."""
 
 
 class CorporateActionKind(StrEnum):
