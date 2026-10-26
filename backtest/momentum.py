@@ -33,6 +33,7 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
+from auratrade.calendar.rebalance import rebalances
 from auratrade.calendar.sessions import Session
 from auratrade.config import (
     REPO_ROOT,
@@ -46,7 +47,6 @@ from auratrade.history.read import SecuritySeries
 from auratrade.indicators.earnings import EarningsTiming, reaction_session
 from auratrade.regime.classifier import RegimeResult
 from auratrade.sim.book import BookMarket, BookRun, BookSeries, ranking_on, simulate_book
-from auratrade.strategies.momentum_book import rebalances
 from backtest import momentum_report as mr
 from backtest.history_scan import TUNING_END, History
 

@@ -23,10 +23,9 @@ from __future__ import annotations
 import math
 from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
 from enum import StrEnum
-from typing import Protocol
 
+from auratrade.calendar.rebalance import Rebalance, SessionDay, rebalances
 from auratrade.config import BookConfig, BookSignal, GuardrailsConfig
 from auratrade.execution.prices import round_down, round_up
 from auratrade.guardrails.clusters import ClusterMember, cluster_check
@@ -34,6 +33,9 @@ from auratrade.indicators.relative_strength import percentile_ranks
 
 # Float noise in slot / limit must not floor 10.0 shares to 9.
 _SHARE_TOLERANCE = 1e-9
+
+# The calendar moved to `auratrade.calendar.rebalance` (task 3.19); re-exported for the book.
+__all__ = ["Rebalance", "SessionDay", "rebalances"]
 
 
 Signal = BookSignal
@@ -134,50 +136,6 @@ def keeps(holding: str, by_key: Mapping[str, Ranked], cfg: BookConfig) -> bool:
     left the ranked set (README §7.3)."""
     ranked = by_key.get(holding)
     return ranked is not None and ranked.percentile >= cfg.hold_percentile
-
-
-# --- the rebalance calendar --------------------------------------------------------------
-
-
-class SessionDay(Protocol):
-    @property
-    def day(self) -> date: ...
-    @property
-    def is_early_close(self) -> bool: ...
-
-
-@dataclass(frozen=True, slots=True)
-class Rebalance:
-    ranking: date
-    """R: the session the book is ranked on."""
-    execution: date
-    """E: the full session it trades on."""
-
-
-def rebalances(sessions: Sequence[SessionDay], offset: int = 1) -> list[Rebalance]:
-    """Every rebalance the calendar fully covers, oldest first.
-
-    The nominal execution session is the ``offset``-th session of each month (1 = the first;
-    the timing-luck diagnostic moves it). R is the session before it, and E is the first full
-    session from it: a half day moves E, never R. A month whose nominal session, or a full
-    session from it, isn't in ``sessions`` is left out.
-    """
-    if offset < 1:
-        raise ValueError("offset counts from 1")
-    days = sorted(sessions, key=lambda s: s.day)
-    out: list[Rebalance] = []
-    month: tuple[int, int] | None = None
-    count = 0
-    for i, s in enumerate(days):
-        key = (s.day.year, s.day.month)
-        count = count + 1 if key == month else 1
-        month = key
-        if count != offset or i == 0:
-            continue
-        execution = next((d.day for d in days[i:] if not d.is_early_close), None)
-        if execution is not None:
-            out.append(Rebalance(days[i - 1].day, execution))
-    return out
 
 
 # --- levels and sizing -------------------------------------------------------------------

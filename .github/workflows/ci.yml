@@ -58,3 +58,6 @@ jobs:
 
       - name: Guardrails coverage (100% branch, README §8)
         run: uv run coverage report --include="*/auratrade/guardrails/*" --fail-under=100
+
+      - name: Portfolio pure layer coverage (100% branch, task 3.19)
+        run: uv run coverage report --include="*/auratrade/strategies/core_allocation.py,*/auratrade/tax/*,*/auratrade/calendar/rebalance.py" --fail-under=100

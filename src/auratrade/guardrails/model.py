@@ -45,6 +45,14 @@ class GuardrailRule(StrEnum):
     WHOLE_SHARES = "WHOLE_SHARES"
     TIGHTEN_ONLY = "TIGHTEN_ONLY"
     TRANCHE_2 = "TRANCHE_2"
+    # The portfolio manager's (README §8, #155):
+    CORE_SHIFT = "CORE_SHIFT"
+    """The core level outside the LLM's band."""
+    SATELLITE_LIST = "SATELLITE_LIST"
+    SATELLITE_WEIGHT = "SATELLITE_WEIGHT"
+    SATELLITE_TOTAL = "SATELLITE_TOTAL"
+    NO_INCREASE = "NO_INCREASE"
+    """Kill switch, incomplete data or a calendar disagreement: hold or reduce."""
 
 
 type Value = float | int | str | None
