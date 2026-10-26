@@ -1,2 +1,2 @@
-"""The momentum book's ranking (`momentum_book`, README §5.3) and the setup system's registry and
-scans (archived README §5.3, §6), now facts for the Book Analyst."""
+"""The portfolio's trend dial (`core_allocation`, README §6); the setup system's registry and
+scans (archived README §5.3), still run by the walking skeleton and the regime until task 5.2."""

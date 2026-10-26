@@ -50,7 +50,7 @@ infra = [
     "constructs>=10.8.1",
 ]
 spikes = [
-    # Imported directly by spikes/edge_check (otherwise only a transitive pandas dependency).
+    # Imported directly by the Phase 0 spikes (otherwise only a transitive pandas dependency).
     "numpy>=2.5.3",
     "pandas>=3.0.6",
     # pandas-market-calendars is a main dependency (calendar cross-check).

@@ -8,7 +8,6 @@ from auratrade.config import (
     DEFAULT_MODEL,
     DEFAULT_RISK_CONFIG,
     AverageKind,
-    BookOverlay,
     Effort,
     GateKind,
     Regime,
@@ -336,37 +335,6 @@ class TestPlansConfig:
         again = RiskConfig.model_validate(risk.model_dump())
         assert again == risk
         assert again.config_hash == risk.config_hash
-
-
-class TestBookConfig:
-    def test_plan_values(self) -> None:
-        book = load_risk_config().book
-        assert (book.holdings, book.candidates, book.review_candidates) == (8, 16, 40)
-        assert (book.formation_sessions, book.skip_sessions) == (252, 21)
-        assert book.universe_size == 1000
-        assert book.hold_percentile == 90
-        assert book.stop_fraction == 0.2
-        assert book.overlay is BookOverlay.REGIME
-        assert book.drawdown_halt == 0.3
-        assert book.backtest.max_drawdown == 0.45
-        assert book.backtest.min_positive_years == 3
-
-    @pytest.mark.parametrize(
-        ("field", "value", "error"),
-        [
-            ("skip_sessions", 252, "skip_sessions"),
-            ("candidates", 4, "holdings <= candidates"),
-            ("review_candidates", 10, "holdings <= candidates"),
-            ("universe_size", 10, "universe_size"),
-            ("stop_fraction", 1.0, "stop_fraction"),
-            ("overlay", "SOMETIMES", "overlay"),
-        ],
-    )
-    def test_invalid(self, field: str, value: object, error: str) -> None:
-        raw = risk_dict()
-        raw["book"][field] = value  # type: ignore[index]
-        with pytest.raises(ValidationError, match=error):
-            RiskConfig.model_validate(raw)
 
 
 class TestPortfolioConfig:

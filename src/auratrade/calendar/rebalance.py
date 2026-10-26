@@ -1,6 +1,5 @@
 """The monthly rebalance calendar (README §6-§7): the ranking session R (the last session of
-each month) and the execution session E (the next full session). Shared by the portfolio manager
-and the momentum book (archived); moved here from `strategies/momentum_book.py` in task 3.19.
+each month) and the execution session E (the next full session).
 """
 
 from __future__ import annotations
@@ -21,7 +20,7 @@ class SessionDay(Protocol):
 @dataclass(frozen=True, slots=True)
 class Rebalance:
     ranking: date
-    """R: the session the book is ranked on."""
+    """R: the session the trend is read on."""
     execution: date
     """E: the full session it trades on."""
 

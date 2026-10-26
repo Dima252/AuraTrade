@@ -3,8 +3,7 @@ last 2 years into Postgres. Free vendor calls only (Alpaca market data and news,
 CBOE); no orders.
 
     uv run python scripts/backfill.py all                 # discover -> bars -> build -> macro
-                                                          #   -> benchmarks -> news -> edgar
-                                                          #   -> funds (hours)
+                                                          #   -> news -> edgar -> funds (hours)
     uv run python scripts/backfill.py bars build          # any stages, in this order
     uv run python -m auratrade.jobs.ingest --direct --session <last session>
     uv run python scripts/backfill.py postgres            # after that ingest run
@@ -59,7 +58,6 @@ STAGES = (
     "bars",
     "build",
     "macro",
-    "benchmarks",
     "news",
     "edgar",
     "funds",
@@ -126,9 +124,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         if "macro" in wanted:
             rows = macro_history(store, CboeClient(), set(sessions))
             log.info("backfill_macro", rows=rows)
-        if "benchmarks" in wanted:
-            bars = benchmark_history(store, alpaca, cfg.start, through, set(sessions))
-            log.info("backfill_benchmarks", **bars)
         if "longhistory" in wanted:
             stored = long_history(store, FrenchClient(), ShillerClient(), datetime.now(UTC))
             log.info("backfill_long_history", **stored.details())
