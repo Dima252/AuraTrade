@@ -23,7 +23,10 @@ def test_total_return_bars_are_fetched_and_stored_apart(tmp_path: Path) -> None:
     store = LocalStore(tmp_path)
     # 09-22 isn't a session here: the stage keeps calendar sessions only.
     sessions = set(SESSIONS[:4])
-    counts = benchmark_history(store, client(server), SESSIONS[0], SESSIONS[-1], sessions)
+    # The recorded fixture holds SPY and MTUM; any symbols the stage is given work the same.
+    counts = benchmark_history(
+        store, client(server), SESSIONS[0], SESSIONS[-1], sessions, symbols=("SPY", "MTUM")
+    )
     params = server.params(0)
     assert params["adjustment"] == "all"
     assert params["symbols"] == "MTUM,SPY"
@@ -48,13 +51,11 @@ def test_a_missing_benchmark_fails_the_stage(tmp_path: Path) -> None:
 
 
 def test_loading_without_the_stage_says_how_to_run_it(tmp_path: Path) -> None:
-    with pytest.raises(FileNotFoundError, match=r"backfill.py benchmarks"):
-        load_benchmarks(LocalStore(tmp_path))
     with pytest.raises(FileNotFoundError, match=r"backfill.py longhistory"):
-        load_benchmarks(LocalStore(tmp_path), PORTFOLIO_FUNDS)
+        load_benchmarks(LocalStore(tmp_path))
 
 
-def test_the_portfolio_funds_go_to_their_own_table(tmp_path: Path) -> None:
+def test_a_named_table(tmp_path: Path) -> None:
     server = Server(ok(fixture_json("alpaca/bars_daily_all.json")))
     store = LocalStore(tmp_path)
     benchmark_history(
@@ -64,8 +65,8 @@ def test_the_portfolio_funds_go_to_their_own_table(tmp_path: Path) -> None:
         SESSIONS[-1],
         set(SESSIONS),
         symbols=("SPY",),
-        name=PORTFOLIO_FUNDS,
+        name="other",
     )
-    assert list(load_benchmarks(store, PORTFOLIO_FUNDS)) == ["SPY"]
+    assert list(load_benchmarks(store, "other")) == ["SPY"]
     with pytest.raises(FileNotFoundError):
-        load_benchmarks(store)
+        load_benchmarks(store, PORTFOLIO_FUNDS)

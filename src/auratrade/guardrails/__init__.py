@@ -14,5 +14,5 @@ threshold comes from ``config/risk.yaml`` (``guardrails:``, ``regimes:``, ``entr
 - ``earnings``: the earnings blackout, including the estimated date
 - ``positions``: tranche 2, tighten-only, exits
 - ``blocks``: the kill switch, halts, crisis override, early close, data integrity
-- ``book``: the momentum book's limits (#148): its halts and overlay, buys, exits, stop raises
+- ``portfolio``: the portfolio manager's limits (#155): the core band, the satellite, no increase
 """

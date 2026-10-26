@@ -1,7 +1,7 @@
 # Every trading threshold lives here (CLAUDE.md §6), loaded into `auratrade.config.RiskConfig`.
-# The portfolio manager's values are under `portfolio:` (README §5.4, §6-§8, #154-#156). `book:` is the
-# momentum book's (docs/archive/README-momentum-book.md) and sections marked "archived README" belong
-# to the setup system (docs/archive/README-setup-system.md): their code stays, unwired.
+# The portfolio manager's values are under `portfolio:` (README §5.4, §6-§8, #154-#156). Sections
+# marked "archived README" belong to the setup system (docs/archive/README-setup-system.md): its
+# code still runs in the walking skeleton and the regime's inputs until task 5.2 retires it (#161).
 # Unknown keys are rejected. The hash of the validated values is logged with every job run,
 # so a change here is visible in every log line that follows it.
 #
@@ -210,7 +210,7 @@ bases:  # archived README §5.3 base count (IBD); see indicators/bases.py
   pivot_min_position: 0.5            # the final contraction's high is the pivot only in the upper half
   new_stage_advance: 0.20            # a new stage needs >= 20% from the prior base's pivot
 
-regime:  # README §5.2; provisional 4-pillar thresholds (#135); task 3.16 freezes the 5-pillar variant the book's backtest uses
+regime:  # README §5.2; provisional 4-pillar thresholds (#135); a fact for the LLM, no rule reads it
   indexes: [SPY, QQQ]                # both for +1, either for -1; distribution counted per index
   index_trend:
     short_sma: 50
@@ -330,7 +330,7 @@ plans:  # archived README §7.1-7.4; see auratrade.plans. Defaults change only o
     EMERGING_LEADER: {trigger: PIVOT, stop: STRUCTURAL, tranches: 2, gate: BREAKOUT}
     MOMENTUM_BREAKOUT: {trigger: CONSOLIDATION_OR_RANGE_HIGH, stop: LOW_OF_DAY, tranches: 1}
     EPISODIC_PIVOT: {trigger: OPENING_RANGE_HIGH, stop: LOW_OF_DAY, tranches: 1}
-  # The close-entry candidates (#144, docs/backtests/close-entry-preregistration.md): the
+  # The close-entry candidates (#144, docs/backtests/archive/close-entry-preregistration.md): the
   # backtest swaps them into `entry`; nothing live reads them until one passes the gate.
   entry_candidates:
     CLOSE:
@@ -485,7 +485,7 @@ charts:  # README §5.3 "Charts" (task 3.4); see auratrade.charts. Image tokens 
     40-week SMA: {kind: SMA, window: 40}
   dpi: 100
 
-sim:  # README §5.12 fill model (task 3.6, #141); see auratrade.sim. The book's backtest uses these tiers as they are.
+sim:  # the fill model (task 3.6, #141); see auratrade.sim. The portfolio's slippage is set in portfolio.backtest.
   # Liquidity-scaled slippage: a fraction of the price, by the 50-session average dollar
   # volume (the universe floor is $10M). The first tier the stock reaches applies.
   slippage:
@@ -511,43 +511,6 @@ scorecard:  # archived README §5.12 Analyst verdict scorecard (task 3.7); see a
   bootstrap_samples: 2000            # session-block bootstrap
   confidence: 0.9                    # 90% intervals (README §15)
   seed: 37
-
-book:  # README §5.3, §7, §8: the momentum book (#147); docs/backtests/momentum-preregistration.md
-  holdings: 8                        # equal slots of equity x max_exposure / 8
-  candidates: 16                     # the LLM picks from the first 16 eligible names (2N)
-  review_candidates: 40              # the Book Analyst reviews 40, for the scorecard
-  universe_size: 1000                # the most liquid by 50-session average raw dollar volume
-  formation_sessions: 252            # 12-1: close 21 bars back / close 252 bars back - 1
-  skip_sessions: 21
-  hold_percentile: 90                # kept while in the top decile; sold at the rebalance below it
-  stop_fraction: 0.20                # GTC stop 20% below the entry, raised at each rebalance
-  max_exposure: 1.0                  # no margin
-  buy_retry_sessions: 1              # buys blocked by a loss halt or no price: one retry
-  overlay: REGIME                    # CORRECTION or the crisis override blocks buys
-  overlay_sma_sessions: 200          # comparison C4: SPY above its 200-session SMA
-  signal: TWELVE_ONE                 # comparison C1: HIGH_52W (nearness to the 52-week high)
-  earnings_rules: false              # comparison C5: the blackout and the cushion; the book holds through reports
-  cluster_cap: true                  # comparison C7: false
-  drawdown_halt: 0.30                # buys only, manual re-enable (#148; the setups' halts.drawdown stays)
-  start_slot_fraction: 0.5           # half slots at the start of the trial and of live trading
-  event_report_sessions: 5           # position event: a report within 5 sessions
-  event_drop: 0.10                   # position event: a one-session fall of 10% or more
-  earnings_cushion_min_gain: 0.10    # comparison C5 only: sell before a report below +10%
-  backtest:
-    start_equity: 5000               # the paper account's capital (#122)
-    notional_equity: 100000          # the no-price-skips diagnostic
-    bootstrap_block_sessions: 63     # non-overlapping blocks of daily excess returns
-    bootstrap_samples: 2000
-    confidence: 0.9
-    seed: 39
-    min_positive_years: 3            # G3: of the 6 tuning years
-    max_drawdown: 0.45               # G4
-    timing_offsets: [1, 6, 11, 16]   # the rebalance-timing-luck diagnostic
-    # The blind check stops for the user (pre-registration §7) if:
-    blind_min_mean_holdings: 6       # mean holdings after buys are below this,
-    blind_max_price_skips: 0.25      # more of the names the rule book reached were skipped for price,
-    blind_max_cluster_skips: 0.5     # the cluster rule removed more of the candidates,
-    blind_min_ranked: 800            # or any ranked set was smaller
 
 portfolio:  # README §5.4, §6-§8: the portfolio manager (#154-#155); docs/backtests/portfolio-preregistration.md
   satellite_share: 0.20              # the LLM's part of equity; the core is the rest

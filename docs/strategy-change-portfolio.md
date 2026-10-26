@@ -1,6 +1,6 @@
 # The strategy change: from a momentum book to a portfolio manager (#153)
 
-**Status 2026-10-26: decided; the plan is proposed.** The user accepted every recommendation in §4 (D7 refined: a near miss continues the plan, so the LLM's reasoning can be shown). The plan is [portfolio-plan.md](portfolio-plan.md) and the backtest's pre-registration [backtests/portfolio-preregistration.md](backtests/portfolio-preregistration.md), both approved 2026-10-27. This page records the decision, why it was made, the strategy we start from, the decisions still open, and how the documents and the code will change. Nothing below is a rule unless it says "decided". It plays the role [strategy-change-momentum.md](strategy-change-momentum.md) played for #146: the input to a plan and a pre-registration, both approved by the user before any code is built.
+**Status 2026-10-26: decided; the plan is proposed.** The user accepted every recommendation in §4 (D7 refined: a near miss continues the plan, so the LLM's reasoning can be shown). The plan is [portfolio-plan.md](portfolio-plan.md) and the backtest's pre-registration [backtests/portfolio-preregistration.md](backtests/portfolio-preregistration.md), both approved 2026-10-27. This page records the decision, why it was made, the strategy we start from, the decisions still open, and how the documents and the code will change. Nothing below is a rule unless it says "decided". It plays the role [strategy-change-momentum.md](archive/strategy-change-momentum.md) played for #146: the input to a plan and a pre-registration, both approved by the user before any code is built.
 
 ## 1. The decision
 
@@ -28,9 +28,9 @@ Three strategies tested, all on 2017-2022, all failing their gates:
 
 | Strategy | Result | Source |
 |---|---|---|
-| Chart-pattern setups, entered at 09:36 | the pool -0.11R a trade over 4,052 trades | `docs/backtests/baseline.md` |
-| The same setups, entered at the close (#144) | the pool -0.30R over 1,003 trades | `docs/backtests/close-entry.md` |
-| The momentum book (#146-#149) | -1.9% a year (adopted) and -14.0% (primary) against SPY +11.0%; max drawdown 52-76% | `docs/backtests/momentum.md`, #152 |
+| Chart-pattern setups, entered at 09:36 | the pool -0.11R a trade over 4,052 trades | `docs/backtests/archive/baseline.md` |
+| The same setups, entered at the close (#144) | the pool -0.30R over 1,003 trades | `docs/backtests/archive/close-entry.md` |
+| The momentum book (#146-#149) | -1.9% a year (adopted) and -14.0% (primary) against SPY +11.0%; max drawdown 52-76% | `docs/backtests/archive/momentum.md`, #152 |
 
 **The lesson:** both strategies tried to beat the market by **choosing stocks**, and the selection signal had no measurable edge here. The 12-1 ranking's monthly rank correlation with the next month's return was 0.014 (t = 0.65). Concentration and tight stops then turned a weak signal into a large loss.
 
@@ -157,7 +157,7 @@ Grouped by the stage that needs them. Each lists the options and my recommendati
 
 ## 7. Codebase changes
 
-The rule from #146 holds: code from a dropped strategy stays, unwired, citing its archived README; nothing new depends on it.
+The rule from #146 held when this was written: code from a dropped strategy stays, unwired, citing its archived README. **Superseded by #161 (2026-10-27):** the momentum book's code and the earlier backtest harnesses are deleted, and the setup system's remaining code goes in task 5.2.
 
 ### 7.1 Kept as is (the foundation)
 
@@ -216,6 +216,6 @@ The rule from #146 holds: code from a dropped strategy stays, unwired, citing it
 
 ## 9. A prompt for the next session
 
-> We're on AuraTrade. On 2026-10-26 the user decided to turn it from a stock trader into a portfolio manager that aims to beat the S&P 500 over 10 years, after Israeli tax, on a $100k paper account (decision #153). Read `docs/strategy-change-portfolio.md` first, then CLAUDE.md, the decision log from #146, and `docs/backtests/momentum.md`. Don't run anything on real data.
+> We're on AuraTrade. On 2026-10-26 the user decided to turn it from a stock trader into a portfolio manager that aims to beat the S&P 500 over 10 years, after Israeli tax, on a $100k paper account (decision #153). Read `docs/strategy-change-portfolio.md` first, then CLAUDE.md, the decision log from #146, and `docs/backtests/archive/momentum.md`. Don't run anything on real data.
 >
 > Then walk me through the decisions in its §4, groups A, C and D first: for each, the options, the sources and your recommendation, and record my answers. When they are settled, write `docs/portfolio-plan.md` and the pre-registration for my approval. Build nothing until I approve them.

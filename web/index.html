@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AuraTrade</title>
-  <meta name="description" content="An autonomous momentum book for US stocks: Claude chooses among the strongest stocks, and code enforces hard risk limits it cannot override. Paper trading, in development.">
+  <meta name="description" content="An autonomous portfolio manager aiming to beat the S&amp;P 500 over 10 years after tax: a trend rule sets how much of the market to own, Claude allocates a satellite, and code enforces limits it cannot override. Paper trading, in development.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -29,18 +29,19 @@
     <section class="hero">
       <div class="wrap">
         <p class="badge"><span class="dot" aria-hidden="true"></span>Paper trading only · in development</p>
-        <h1>An LLM momentum book<br>on a short leash.</h1>
+        <h1>An LLM portfolio manager<br>on a short leash.</h1>
         <p class="lede">
-          Once a month, AuraTrade ranks the 1,000 most liquid US stocks by their
-          past-year return and holds a handful of the strongest. Claude chooses which
-          of the top-ranked names to hold and when to step aside. Python computes the
-          ranking and every price level, keeps a stop at the broker for every share
-          and enforces hard limits the model cannot override.
+          AuraTrade manages a whole account with one goal: beat the S&amp;P 500 over
+          10 years, after tax. It doesn't pick stocks. A trend rule decides how much
+          of the market to own: a little more than all of it while the trend is up, half
+          while it is down. Claude allocates a fifth of the account among approved ETFs
+          and may nudge the rest, with a written reason every month. Code computes
+          every target and price and enforces limits the model cannot override.
         </p>
         <ul class="facts" aria-label="Key facts">
-          <li><strong>12-1</strong><span>momentum: the past year's return, skipping the last month</span></li>
-          <li><strong>8</strong><span>equal positions, rebalanced monthly</span></li>
-          <li><strong>20%</strong><span>protective stop at the broker on every position</span></li>
+          <li><strong>1.3x / 0.5x</strong><span>S&amp;P 500 exposure in an up-trend / a down-trend</span></li>
+          <li><strong>10</strong><span>months: the moving average the trend is read from, once a month</span></li>
+          <li><strong>20%</strong><span>of the account allocated by Claude among approved ETFs</span></li>
           <li><strong>&lt;$150</strong><span>monthly running cost, serverless on AWS</span></li>
         </ul>
       </div>
@@ -54,74 +55,73 @@
           <article class="card">
             <h3><span class="tag tag-llm">Claude</span> decides</h3>
             <ul>
-              <li>Which of the 16 top-ranked candidates fill the book's empty slots</li>
-              <li>Whether a position gets a full slot or half</li>
-              <li>When to exit early, for example before an earnings report or on bad news</li>
-              <li>Its own, more conservative, read of the market regime</li>
-              <li>Whether to raise a stop, never lower it</li>
+              <li>How the 20% satellite is spread over 13 approved ETFs: Nasdaq, small caps, value, quality, international, gold, bonds, managed futures, cash</li>
+              <li>Whether to shift the core's exposure by up to 0.2x, and only down when the rules say to hold less</li>
+              <li>A written reason for every change, and what it expects to happen</li>
+              <li>What to make of the regime, macro data and news</li>
             </ul>
           </article>
           <article class="card">
             <h3><span class="tag tag-code">Code</span> enforces</h3>
             <ul>
-              <li>The ranking, the candidate list and every price level</li>
-              <li>Share counts, slot sizes and the exposure cap</li>
-              <li>A protective stop resting at the broker for every share held</li>
-              <li>The rule exits: a holding that drops out of the top 10% is sold</li>
-              <li>Fail closed: on any doubt, no new positions</li>
+              <li>The trend, the volatility cap and the drawdown halt, so the core's rule level</li>
+              <li>Every target weight, share count and order price</li>
+              <li>Leverage only through a 2x S&amp;P fund, never margin, with a stop at the broker</li>
+              <li>Each ETF at most 10% of the account; no leveraged or inverse funds in the satellite</li>
+              <li>Fail closed: on any doubt, never more risk; a failed decision takes the rules' allocation</li>
             </ul>
           </article>
         </div>
 
         <h2 class="sub">A month, and a day</h2>
         <ol class="timeline">
-          <li><time>Every evening</time><div><strong>Ingest, regime, ranking.</strong> Daily bars, macro and earnings data come in; five market-health pillars set the regime; the universe is ranked by momentum.</div></li>
-          <li><time>Month end</time><div><strong>Book Analyst.</strong> Claude reviews the top 40 names and every holding overnight in one batch, with charts, fundamentals and news.</div></li>
-          <li><time>08:45</time><div><strong>Portfolio Manager.</strong> On the first session of the month, Claude picks from the top 16 for the empty slots. No valid decision by noon means no new buys that day.</div></li>
-          <li><time>15:40</time><div><strong>Rebalance.</strong> Holdings that left the top 10% are sold, then the new buys go in as limit orders, each with its stop attached.</div></li>
-          <li><time>09:35–16:00</time><div><strong>Stop guard.</strong> Every 5 minutes, code checks that every position has a full-size stop at the broker.</div></li>
+          <li><time>Every evening</time><div><strong>Ingest, journal, twin.</strong> ETF bars, macro data and news come in; the rules-only twin is played forward; the drawdown is checked.</div></li>
+          <li><time>Month end</time><div><strong>The trend.</strong> The market's month-end value is read against its 10-month average; the volatility cap and the halt set the rule level.</div></li>
+          <li><time>08:45</time><div><strong>Portfolio Manager.</strong> On the first session of the month, Claude sets the satellite and the core's shift, with its reasons. No valid decision by noon means the rules' allocation.</div></li>
+          <li><time>15:40</time><div><strong>Rebalance.</strong> Holdings more than 5 points off target are traded back to it: sales first, then buys, as limit orders.</div></li>
+          <li><time>09:35–16:00</time><div><strong>Stop guard.</strong> Every 5 minutes, code checks that the leveraged fund's stop at the broker covers every share.</div></li>
         </ol>
-        <p class="note">Times are US Eastern. Every job first checks the market calendar. Between rebalances, only the stops and Claude's early exits act.</p>
+        <p class="note">Times are US Eastern. Every job first checks the market calendar. The trend flips about once a year, so most months change little.</p>
       </div>
     </section>
 
     <section class="band alt">
       <div class="wrap">
-        <h2>Market regimes</h2>
-        <p class="section-lede">An IBD-style market read decides whether the book may buy. It never forces a sale.</p>
+        <h2>The trend dial</h2>
+        <p class="section-lede">How much of the S&amp;P 500 the core owns. A 2% buffer around the average keeps it from flipping on noise, and from selling, and paying tax, more than it must.</p>
         <div class="table-scroll">
           <table class="regimes">
             <thead>
-              <tr><th scope="col">Regime</th><th scope="col">New buys</th><th scope="col">Holdings</th></tr>
+              <tr><th scope="col">State</th><th scope="col">Exposure</th><th scope="col">Held as</th></tr>
             </thead>
             <tbody>
-              <tr><th scope="row"><span class="pill pill-up">Confirmed uptrend</span></th><td>Allowed</td><td>Kept by the rules</td></tr>
-              <tr><th scope="row"><span class="pill pill-press">Under pressure</span></th><td>Allowed; Claude may buy smaller or hold cash</td><td>Kept by the rules</td></tr>
-              <tr><th scope="row"><span class="pill pill-early">Early uptrend</span></th><td>Allowed; Claude may buy smaller or hold cash</td><td>Kept by the rules</td></tr>
-              <tr><th scope="row"><span class="pill pill-corr">Correction</span></th><td>None</td><td>Kept by the rules; stops stay</td></tr>
+              <tr><th scope="row"><span class="pill pill-up">Up-trend</span></th><td>1.3x</td><td>70% S&amp;P fund, 30% 2x S&amp;P fund</td></tr>
+              <tr><th scope="row"><span class="pill pill-press">Turbulent</span></th><td>1.0x at most</td><td>Volatility above 25% a year: no leverage</td></tr>
+              <tr><th scope="row"><span class="pill pill-early">Halted</span></th><td>1.0x at most</td><td>25% below the peak: the 2x fund sold the next day</td></tr>
+              <tr><th scope="row"><span class="pill pill-corr">Down-trend</span></th><td>0.5x</td><td>50% S&amp;P fund, 50% T-bills</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="note">A volatility crisis override also blocks new buys while it lasts.</p>
+        <p class="note">The core is 80% of the account; Claude's satellite is the other 20%.</p>
       </div>
     </section>
 
     <section id="limits" class="band">
       <div class="wrap">
         <h2>Limits the model can't override</h2>
-        <p class="section-lede">Guardrails are pure functions with full branch coverage. They run on every action the model proposes, and anything outside them is clipped or rejected.</p>
+        <p class="section-lede">Guardrails are pure functions with full branch coverage. They run on every decision the model proposes, and anything outside them is clipped or rejected.</p>
         <div class="grid">
-          <div class="limit"><strong>16</strong><span>candidates: the only names that can be bought</span></div>
-          <div class="limit"><strong>1/8</strong><span>of equity at most in a new position</span></div>
-          <div class="limit"><strong>100%</strong><span>max exposure: no margin, ever</span></div>
-          <div class="limit"><strong>2</strong><span>max positions per correlated cluster</span></div>
-          <div class="limit"><strong>−2% / −5%</strong><span>daily / weekly loss halts on new buys</span></div>
-          <div class="limit"><strong>−30%</strong><span>drawdown halt on new buys, re-enabled only by hand</span></div>
+          <div class="limit"><strong>1.5x</strong><span>the most S&amp;P exposure the core can ever reach</span></div>
+          <div class="limit"><strong>±0.2x</strong><span>Claude's shift of the core, downward only when the rules say hold less</span></div>
+          <div class="limit"><strong>10%</strong><span>of the account at most in any satellite ETF</span></div>
+          <div class="limit"><strong>0</strong><span>margin: leverage only through the 2x fund</span></div>
+          <div class="limit"><strong>−30%</strong><span>stop at the broker on the 2x fund, raised monthly</span></div>
+          <div class="limit"><strong>−25%</strong><span>drawdown halt: no leverage until the trend turns up again</span></div>
         </div>
         <ul class="principles">
-          <li><strong>Price levels come from code.</strong> The model may raise a stop. It never supplies an unchecked price.</li>
-          <li><strong>Stops always rest at the broker.</strong> No halt, kill switch or error path ever cancels a protective stop or blocks an exit.</li>
-          <li><strong>Plans only tighten.</strong> The model can exit earlier or raise a stop, never hold past a rule exit or lower a stop.</li>
+          <li><strong>Prices come from code.</strong> The model chooses weights; it never names a price.</li>
+          <li><strong>The leveraged fund's stop always rests at the broker.</strong> No halt, kill switch or error path ever cancels it or blocks a sale.</li>
+          <li><strong>On doubt, less risk.</strong> Missing data, a model error or a calendar mismatch can only hold or reduce exposure.</li>
         </ul>
       </div>
     </section>
@@ -129,22 +129,22 @@
     <section id="validation" class="band alt">
       <div class="wrap">
         <h2>How it's judged</h2>
-        <p class="section-lede">The rule book is backtested under rules fixed in advance; the LLM's decisions can't be honestly backtested, so that evidence is built forward and every decision is logged.</p>
+        <p class="section-lede">The rules were backtested under a test fixed in advance; the LLM can't be honestly backtested, so its value is measured forward against a rules-only twin, and every decision is logged.</p>
         <div class="split three">
           <article class="card">
-            <h3>Backtest gate</h3>
-            <p>The rule-only book must beat SPY and the MTUM momentum ETF on 2017&ndash;2022, after costs, in whole shares at $5,000, then once more on 2023 onward, opened a single time.</p>
+            <h3>Backtest: passed</h3>
+            <p>1928&ndash;2026, after Israeli tax: +9.2% a year against +8.7% for the S&amp;P held, a worst drawdown of 68% against 85%, and ahead in 69% of ten-year windows. A thin edge, from the long bear markets; since the rules were published, a tie.</p>
           </article>
           <article class="card">
-            <h3>Rule book</h3>
-            <p>A rule-only book takes the same candidates in rank order, on the same fill model. The LLM book has to be no worse.</p>
+            <h3>The twin</h3>
+            <p>The same rules on the whole account, simulated beside the real book every day. Whatever the LLM does shows up as the difference.</p>
           </article>
           <article class="card">
             <h3>Scorecard</h3>
-            <p>Every name Claude reviews is scored by how it does until the next rebalance, so its convictions are tested, including the names it passed on.</p>
+            <p>Each month's tilts and expectations are scored against what happened, before and after the estimated tax.</p>
           </article>
         </div>
-        <p class="note">Live trading starts only after a paper trial of at least 6 rebalances or 3 months, whichever is later, passes criteria set in advance.</p>
+        <p class="note">The test was written down before any data was read, and run once. Two earlier stock-picking designs failed theirs and were dropped.</p>
       </div>
     </section>
 
@@ -153,24 +153,23 @@
         <h2>Build status</h2>
         <ol class="phases">
           <li class="done"><span aria-label="Phase 0, done">&#10003;</span>Foundations and spikes</li>
-          <li class="active"><span>1</span>Data layer and skeleton</li>
+          <li class="done"><span aria-label="Phase 1, done">&#10003;</span>Data layer and skeleton</li>
           <li class="done"><span aria-label="Phase 2, done">&#10003;</span>Indicators and regime</li>
-          <li class="active"><span>3</span>Momentum book and its backtest</li>
-          <li><span>4</span>LLM layer</li>
-          <li><span>5</span>Guardrails and execution</li>
-          <li><span>6</span>AWS deployment</li>
-          <li><span>7</span>Paper trial</li>
+          <li class="done"><span aria-label="Phase 3, done">&#10003;</span>The portfolio rules and their backtest</li>
+          <li class="active"><span>4</span>LLM layer</li>
+          <li><span>5</span>Execution</li>
+          <li><span>6</span>Paper trial and dashboard</li>
         </ol>
-        <p class="note">The first design, chart-pattern breakouts in the style of Minervini, O'Neil and Kullamägi, failed three backtests in October 2026, so the system became a momentum book. A rule-only skeleton runs on AWS on its schedule against an Alpaca paper account.</p>
-        <p class="note">Performance, regime and trade-journal panels will appear here once the system is trading on paper. Trades will be published after they close, not while they are open.</p>
+        <p class="note">The first designs picked stocks: chart-pattern breakouts in the style of Minervini, O'Neil and Kullamägi, then a momentum book. Both failed their backtests in October 2026, so the system became a portfolio manager.</p>
+        <p class="note">Performance, exposure and the monthly decision journal will appear here once the system runs on a $100,000 paper account, against the twin and the S&amp;P 500, before and after tax.</p>
       </div>
     </section>
   </main>
 
   <footer class="foot">
     <div class="wrap">
-      <p><strong>Not financial advice.</strong> AuraTrade is an experimental personal project. It trades an Alpaca paper account; nothing on this page is a recommendation to buy or sell any security.</p>
-      <p class="muted">Method sources: Jegadeesh &amp; Titman (1993) and the momentum literature since; practitioners Gray &amp; Vogel (<em>Quantitative Momentum</em>) and Clenow (<em>Stocks on the Move</em>); IBD for the market regime.</p>
+      <p><strong>Not financial advice.</strong> AuraTrade is an experimental personal project. It trades an Alpaca paper account; nothing on this page is a recommendation to buy or sell any security, and its tax figures are estimates, not tax advice.</p>
+      <p class="muted">Method sources: Faber (2007) for the 10-month average; Gayed &amp; Bilello (2016) for leverage with a trend filter; Hurst, Ooi &amp; Pedersen (2017) on a century of trend-following; Moreira &amp; Muir (2017) on volatility.</p>
     </div>
   </footer>
 </body>

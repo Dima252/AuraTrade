@@ -1,6 +1,5 @@
 """Backfill stage: total-return daily bars (`adjustment=all`: dividends reinvested) for the
-momentum book's benchmarks, SPY and MTUM (`docs/backtests/momentum-preregistration.md` §4), and for
-the portfolio's data checks, SPY, SSO and BIL (`docs/backtests/portfolio-preregistration.md` §4.3).
+portfolio's data checks, SPY, SSO and BIL (`docs/backtests/portfolio-preregistration.md` §4.3).
 
 They sit in their own table, apart from the split-only bars every other reader uses, so no
 signal or fill ever reads a dividend-adjusted price. Free calls; fetched once, re-fetched whole
@@ -20,8 +19,6 @@ from auratrade.data.alpaca_data import Adjustment, DailyBar
 from auratrade.history.store import get_table, put_table, table_key
 from auratrade.storage import ObjectStore
 
-BENCHMARKS = "benchmarks"
-BENCHMARK_SYMBOLS = ("SPY", "MTUM")
 PORTFOLIO_FUNDS = "portfolio_funds"
 PORTFOLIO_FUND_SYMBOLS = ("SPY", "SSO", "BIL")
 BENCHMARK_SCHEMA = pa.schema(
@@ -49,8 +46,8 @@ def benchmark_history(
     start: date,
     end: date,
     sessions: Collection[date],
-    symbols: Sequence[str] = BENCHMARK_SYMBOLS,
-    name: str = BENCHMARKS,
+    symbols: Sequence[str] = PORTFOLIO_FUND_SYMBOLS,
+    name: str = PORTFOLIO_FUNDS,
 ) -> dict[str, int]:
     """Fetch and store the benchmarks' bars of ``sessions`` in [start, end]; the bars stored per
     symbol. A symbol the vendor doesn't return is an error: the gate can't run without it."""
@@ -84,12 +81,11 @@ class Benchmark:
     """Total-return closes, oldest first."""
 
 
-def load_benchmarks(store: ObjectStore, name: str = BENCHMARKS) -> dict[str, Benchmark]:
+def load_benchmarks(store: ObjectStore, name: str = PORTFOLIO_FUNDS) -> dict[str, Benchmark]:
     table = get_table(store, table_key(name))
     if table is None:
-        stage = "longhistory" if name == PORTFOLIO_FUNDS else "benchmarks"
         raise FileNotFoundError(
-            f"no {name} table in the history: run `scripts/backfill.py {stage}`"
+            f"no {name} table in the history: run `scripts/backfill.py longhistory`"
         )
     out: dict[str, Benchmark] = {}
     ordered = table.sort_by([("symbol", "ascending"), ("session_date", "ascending")])
