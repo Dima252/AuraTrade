@@ -92,13 +92,15 @@ class TaxBook:
     def _take(self, symbol: str, units: float) -> float:
         """Close ``units`` FIFO, splitting the last lot pro rata; the cost of what was closed."""
         held = self.units(symbol)
-        if not units > 0 or units > held + UNITS_TOLERANCE:
+        # Relative: on a holding of millions of units, float noise exceeds any fixed tolerance.
+        tolerance = UNITS_TOLERANCE * max(1.0, held)
+        if not units > 0 or units > held + tolerance:
             raise ValueError(f"sale of {units} {symbol} with {held} held")
         lots = self._lots[symbol]
         left, cost = min(units, held), 0.0
-        while left > UNITS_TOLERANCE:
+        while left > tolerance and lots:
             lot = lots[0]
-            if lot.units <= left + UNITS_TOLERANCE:
+            if lot.units <= left + tolerance:
                 cost += lot.cost
                 left -= lot.units
                 lots.popleft()
