@@ -49,6 +49,15 @@ class TestLots:
         with pytest.raises(ValueError, match="sale of"):
             two_lots().sell("SPY", JUNE, units, proceeds)
 
+    def test_a_withdrawal_removes_lots_without_realizing(self) -> None:
+        book = two_lots()
+        book.close_year(2020)
+        assert book.withdraw("SPY", 12) == 1000.0 + 300.0
+        assert book.lots("SPY") == [Lot(JUNE, 8, 1200.0)]
+        assert book.realized(2020) == 0.0
+        with pytest.raises(ValueError, match="sale of"):
+            book.withdraw("SPY", 9)
+
     @pytest.mark.parametrize(
         ("units", "cost"), [(0, 10.0), (1, -1.0), (float("inf"), 1.0), (1, float("nan"))]
     )

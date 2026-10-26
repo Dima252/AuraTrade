@@ -58,12 +58,22 @@ def slippage(dollar_volume: float | None, config: SimConfig) -> float:
     )
 
 
+def buy_price(price: float, slip: float) -> float:
+    """A buy's price with slippage, before the tick: the portfolio backtest trades its synthetic
+    funds, index levels rather than tradable prices, at this (pre-registration §3.5-§3.6)."""
+    return price * (1 + slip)
+
+
+def sell_price(price: float, slip: float) -> float:
+    return price * (1 - slip)
+
+
 def buy_fill(price: float, slip: float) -> float:
-    return round_up(price * (1 + slip))
+    return round_up(buy_price(price, slip))
 
 
 def sell_fill(price: float, slip: float) -> float:
-    return round_down(price * (1 - slip))
+    return round_down(sell_price(price, slip))
 
 
 @dataclass(frozen=True, slots=True)

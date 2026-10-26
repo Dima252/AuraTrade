@@ -77,10 +77,23 @@ class TaxBook:
         self._lots.setdefault(symbol, deque()).append(Lot(day, units, cost))
 
     def sell(self, symbol: str, day: date, units: float, proceeds: float) -> Sale:
-        held = self.units(symbol)
-        if not (units > 0 and proceeds >= 0) or units > held + UNITS_TOLERANCE:
-            raise ValueError(f"sale of {units} {symbol} with {held} held")
+        if proceeds < 0:
+            raise ValueError(f"sale of {units} {symbol} for {proceeds}")
         self._open(day.year)
+        sale = Sale(symbol, day, units, proceeds, self._take(symbol, units))
+        self._realized[day.year] = self._realized.get(day.year, 0.0) + sale.gain
+        return sale
+
+    def withdraw(self, symbol: str, units: float) -> float:
+        """Remove ``units`` FIFO without realizing a gain: the backtest's tax payment, sold
+        without the further tax the sale would owe (pre-registration §3.8). The cost removed."""
+        return self._take(symbol, units)
+
+    def _take(self, symbol: str, units: float) -> float:
+        """Close ``units`` FIFO, splitting the last lot pro rata; the cost of what was closed."""
+        held = self.units(symbol)
+        if not units > 0 or units > held + UNITS_TOLERANCE:
+            raise ValueError(f"sale of {units} {symbol} with {held} held")
         lots = self._lots[symbol]
         left, cost = min(units, held), 0.0
         while left > UNITS_TOLERANCE:
@@ -97,9 +110,7 @@ class TaxBook:
                 left = 0.0
         if not lots:
             del self._lots[symbol]
-        sale = Sale(symbol, day, units, proceeds, cost)
-        self._realized[day.year] = self._realized.get(day.year, 0.0) + sale.gain
-        return sale
+        return cost
 
     def add_income(self, day: date, amount: float) -> None:
         if amount < 0:
