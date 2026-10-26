@@ -524,6 +524,9 @@ book:  # README §5.3, §7, §8: the momentum book (#147); docs/backtests/moment
   buy_retry_sessions: 1              # buys blocked by a loss halt or no price: one retry
   overlay: REGIME                    # CORRECTION or the crisis override blocks buys
   overlay_sma_sessions: 200          # comparison C4: SPY above its 200-session SMA
+  signal: TWELVE_ONE                 # comparison C1: HIGH_52W (nearness to the 52-week high)
+  earnings_rules: false              # comparison C5: the blackout and the cushion; the book holds through reports
+  cluster_cap: true                  # comparison C7: false
   drawdown_halt: 0.30                # buys only, manual re-enable (#148; the setups' halts.drawdown stays)
   start_slot_fraction: 0.5           # half slots at the start of the trial and of live trading
   event_report_sessions: 5           # position event: a report within 5 sessions
@@ -539,3 +542,8 @@ book:  # README §5.3, §7, §8: the momentum book (#147); docs/backtests/moment
     min_positive_years: 3            # G3: of the 6 tuning years
     max_drawdown: 0.45               # G4
     timing_offsets: [1, 6, 11, 16]   # the rebalance-timing-luck diagnostic
+    # The blind check stops for the user (pre-registration §7) if:
+    blind_min_mean_holdings: 6       # mean holdings after buys are below this,
+    blind_max_price_skips: 0.25      # more of the names the rule book reached were skipped for price,
+    blind_max_cluster_skips: 0.5     # the cluster rule removed more of the candidates,
+    blind_min_ranked: 800            # or any ranked set was smaller

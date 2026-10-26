@@ -239,6 +239,22 @@ class TestCandidates:
             Skipped("D", SkipReason.CLUSTER),
         )
 
+    def test_a_blacked_out_name_is_skipped_for_earnings(self) -> None:
+        out = candidates(
+            [ranked("E", n=1), ranked("F", n=2)],
+            held=set(),
+            prices={"E": 50.0, "F": 50.0},
+            slot=625.0,
+            limit_slippage=SLIP,
+            holdings=[],
+            members={"E": member("E"), "F": member("F")},
+            guard=GUARD,
+            count=2,
+            blackout={"E"},
+        )
+        assert [r.symbol for r in out.candidates] == ["F"]
+        assert out.skipped == (Skipped("E", SkipReason.EARNINGS),)
+
     def test_missing_member_counts_as_linked_and_count_stops_early(self) -> None:
         ranking = [ranked("D", n=1), ranked("E", n=2), ranked("F", n=3)]
         prices = {"D": 50.0, "E": 50.0, "F": 50.0}

@@ -67,7 +67,7 @@ The code is merged so `main` matches AWS; 1.7 and 1.8 stay **unticked** until th
 
 ## 2. The build continues in plan order
 
-Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → **3.13** backtest harness and report → 3.14 blind check → 3.15 scored run → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
+Next tasks: **1.8** early AWS deploy of the skeleton (acceptance in progress, above) → ~~3.8~~ (closed, gate failed) → ~~3.9~~, ~~3.10~~, ~~3.11~~ (the momentum book's spec, ranking and guardrails, merged 2026-10-25) → ~~3.12~~ (portfolio simulation, #150) → ~~3.13~~ (harness and report, #151) → **3.14** blind check → 3.15 scored run → 3.16 holdout (on a pass). The sections below, from 3.8 back, are the setup system's record.
 
 ### Task 3.8: stopped at the gate; the strategy decision is next (2026-10-24)
 
