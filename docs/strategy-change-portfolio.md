@@ -1,6 +1,6 @@
 # The strategy change: from a momentum book to a portfolio manager (#153)
 
-**Status 2026-10-26: direction decided by the user, plan not yet written.** This page records the decision, why it was made, the strategy we start from, the decisions still open, and how the documents and the code will change. Nothing below is a rule unless it says "decided". It plays the role [strategy-change-momentum.md](strategy-change-momentum.md) played for #146: the input to a plan and a pre-registration, both approved by the user before any code is built.
+**Status 2026-10-26: decided; the plan is proposed.** The user accepted every recommendation in §4 (D7 refined: a near miss continues the plan, so the LLM's reasoning can be shown). The plan is [portfolio-plan.md](portfolio-plan.md) and the backtest's pre-registration [backtests/portfolio-preregistration.md](backtests/portfolio-preregistration.md), both awaiting approval. This page records the decision, why it was made, the strategy we start from, the decisions still open, and how the documents and the code will change. Nothing below is a rule unless it says "decided". It plays the role [strategy-change-momentum.md](strategy-change-momentum.md) played for #146: the input to a plan and a pre-registration, both approved by the user before any code is built.
 
 ## 1. The decision
 
@@ -76,7 +76,7 @@ A starting point for the discussion, agreed in the brainstorm of 2026-10-26. Eve
 
 ## 4. The decisions to make
 
-Grouped by the stage that needs them. Each lists the options and my recommendation. The user decides; the plan records the answers as decisions #154 onwards.
+Grouped by the stage that needs them. Each lists the options and my recommendation. **Answered 2026-10-26: the user accepted every recommendation.** D7 was refined: if the result is a small miss, the plan continues as written rather than falling back to the S&P alone, because the project exists to show the LLM's reasoning (`portfolio-plan.md` §2 makes "small" exact). The plan records the answers as decisions #154 onwards.
 
 ### A. The core strategy (before the pre-registration)
 
