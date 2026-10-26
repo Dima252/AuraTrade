@@ -79,7 +79,7 @@ Tasks marked 👤 need you (accounts, keys, approvals).
 
 **Phase 3 (continued): the portfolio manager and its backtest** (#153-#156; `docs/portfolio-plan.md`)
 - [x] 3.17 👤 Portfolio spec: README rewrite, CLAUDE.md (§3.5 amended), decisions #153-#156, `risk.yaml` `portfolio:`, the approved pre-registration (`docs/backtests/portfolio-preregistration.md`); the momentum book's README and Phases 4-9 archived; kill switch on `paper` *(2026-10-27; the user approved the plan, the pre-registration and the §3.5 wording; `risk.yaml` hash a130ffa45bed; kill switch on `paper` since 2026-10-27)*
-- [ ] 3.18 Long-history data (Kenneth French daily, Shiller dividends) + SPY/SSO/BIL total-return bars from 2016
+- [x] 3.18 Long-history data (Kenneth French daily, Shiller dividends) + SPY/SSO/BIL total-return bars from 2016 *(`data/french.py`, `data/shiller.py`, `history/long_history.py`, `backfill.py longhistory`; recorded fixtures. First run 2026-10-27: 26,317 sessions 1926-07-01 to 2026-08-31 (CRSP 202608), 1,869 Shiller months with dividends to 2023-06, 2,719 sessions each of SPY, SSO, BIL; no return printed. Readings #157)*
 - [ ] 3.19 The pure layer: the shared rebalance calendar, `strategies/core_allocation.py`, `tax/israel.py`, `guardrails/portfolio.py`
 - [ ] 3.20 Portfolio simulation (`sim/portfolio.py`)
 - [ ] 3.21 Backtest harness and report (`backtest/portfolio.py`)

@@ -1,5 +1,6 @@
-"""Backfill stage: the momentum book's benchmarks, SPY and MTUM, as total-return daily bars
-(`adjustment=all`: dividends reinvested; `docs/backtests/momentum-preregistration.md` §4).
+"""Backfill stage: total-return daily bars (`adjustment=all`: dividends reinvested) for the
+momentum book's benchmarks, SPY and MTUM (`docs/backtests/momentum-preregistration.md` §4), and for
+the portfolio's data checks, SPY, SSO and BIL (`docs/backtests/portfolio-preregistration.md` §4.3).
 
 They sit in their own table, apart from the split-only bars every other reader uses, so no
 signal or fill ever reads a dividend-adjusted price. Free calls; fetched once, re-fetched whole
@@ -21,6 +22,8 @@ from auratrade.storage import ObjectStore
 
 BENCHMARKS = "benchmarks"
 BENCHMARK_SYMBOLS = ("SPY", "MTUM")
+PORTFOLIO_FUNDS = "portfolio_funds"
+PORTFOLIO_FUND_SYMBOLS = ("SPY", "SSO", "BIL")
 BENCHMARK_SCHEMA = pa.schema(
     [
         ("symbol", pa.string()),
@@ -47,6 +50,7 @@ def benchmark_history(
     end: date,
     sessions: Collection[date],
     symbols: Sequence[str] = BENCHMARK_SYMBOLS,
+    name: str = BENCHMARKS,
 ) -> dict[str, int]:
     """Fetch and store the benchmarks' bars of ``sessions`` in [start, end]; the bars stored per
     symbol. A symbol the vendor doesn't return is an error: the gate can't run without it."""
@@ -68,7 +72,7 @@ def benchmark_history(
         for b in bars[symbol]
         if b.session in sessions
     ]
-    put_table(store, table_key(BENCHMARKS), pa.Table.from_pylist(rows, BENCHMARK_SCHEMA))
+    put_table(store, table_key(name), pa.Table.from_pylist(rows, BENCHMARK_SCHEMA))
     return {symbol: sum(1 for r in rows if r["symbol"] == symbol) for symbol in symbols}
 
 
@@ -80,11 +84,12 @@ class Benchmark:
     """Total-return closes, oldest first."""
 
 
-def load_benchmarks(store: ObjectStore) -> dict[str, Benchmark]:
-    table = get_table(store, table_key(BENCHMARKS))
+def load_benchmarks(store: ObjectStore, name: str = BENCHMARKS) -> dict[str, Benchmark]:
+    table = get_table(store, table_key(name))
     if table is None:
+        stage = "longhistory" if name == PORTFOLIO_FUNDS else "benchmarks"
         raise FileNotFoundError(
-            "no benchmarks table in the history: run `scripts/backfill.py benchmarks`"
+            f"no {name} table in the history: run `scripts/backfill.py {stage}`"
         )
     out: dict[str, Benchmark] = {}
     ordered = table.sort_by([("symbol", "ascending"), ("session_date", "ascending")])

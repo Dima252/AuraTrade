@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from auratrade.data.alpaca_data import AlpacaDataClient, alpaca_http
-from auratrade.history.benchmarks import benchmark_history, load_benchmarks
+from auratrade.history.benchmarks import PORTFOLIO_FUNDS, benchmark_history, load_benchmarks
 from auratrade.storage import LocalStore
 from tests.data_clients.fake import Server, fixture_json, ok
 
@@ -50,3 +50,22 @@ def test_a_missing_benchmark_fails_the_stage(tmp_path: Path) -> None:
 def test_loading_without_the_stage_says_how_to_run_it(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError, match=r"backfill.py benchmarks"):
         load_benchmarks(LocalStore(tmp_path))
+    with pytest.raises(FileNotFoundError, match=r"backfill.py longhistory"):
+        load_benchmarks(LocalStore(tmp_path), PORTFOLIO_FUNDS)
+
+
+def test_the_portfolio_funds_go_to_their_own_table(tmp_path: Path) -> None:
+    server = Server(ok(fixture_json("alpaca/bars_daily_all.json")))
+    store = LocalStore(tmp_path)
+    benchmark_history(
+        store,
+        client(server),
+        SESSIONS[0],
+        SESSIONS[-1],
+        set(SESSIONS),
+        symbols=("SPY",),
+        name=PORTFOLIO_FUNDS,
+    )
+    assert list(load_benchmarks(store, PORTFOLIO_FUNDS)) == ["SPY"]
+    with pytest.raises(FileNotFoundError):
+        load_benchmarks(store)

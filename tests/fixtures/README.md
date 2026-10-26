@@ -12,6 +12,8 @@ Real vendor responses, recorded once from free endpoints, so tests and CI never 
 | `edgar/` | 2026-10-15 | `company_tickers.json`, Apple's submissions and its first older page, Apple's company facts | tickers to 4; filings to 14 recent and 6 older; facts to 3 tags × 8 values |
 | `finnhub/` | 2026-10-15 | earnings calendar for 2026-10-20, AAPL surprises and profile, an unknown symbol's profile (`{}`) | calendar to 6 rows |
 | `nasdaq/` | 2026-10-15 | `nasdaqlisted.txt`, `otherlisted.txt` | to 4 and 6 symbols, header and footer kept |
+| `french/` | 2026-10-27 | Kenneth French's `F-F_Research_Data_Factors_daily.csv` (unzipped; the tests zip it) | to the notes, the header, the first 5 and last 6 rows and the footer |
+| `shiller/` | 2026-10-27 | the Open Knowledge `s-and-p-500` `data.csv` (Shiller's monthly data) | to the first 3 rows, 2023-05 to 08 and the last 2 |
 | `bases/` | 2026-10-10 | daily bars for the base-count tests (task 2.2) | |
 
 To re-record after a vendor changes a format, fetch the same endpoint, trim it the same way, and check that no key appears in the body.
