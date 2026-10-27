@@ -4,7 +4,7 @@ An autonomous **portfolio manager** for a US brokerage account. Its goal is to *
 
 Python computes the trend, every target and every price, and enforces hard risk limits the LLM cannot override. The system runs serverless on AWS, on a budget of **under $150/month** (about $3-10/month expected, §12).
 
-> **Strategy change (#153-#156, 2026-10-26/27):** three stock-selection strategies failed their pre-registered tests: the chart-pattern setups (twice) and a momentum book (#152). The system became the portfolio manager this README describes ([docs/strategy-change-portfolio.md](docs/strategy-change-portfolio.md), [docs/portfolio-plan.md](docs/portfolio-plan.md)). The earlier specs are archived in [docs/archive/](docs/archive/) (`README-setup-system.md`, `README-momentum-book.md`). The momentum book's code is deleted (#161); the setup system's code still runs in the walking skeleton and the regime's inputs until task 5.2 removes it.
+> **Strategy change (#153-#156, 2026-10-26/27):** three stock-selection strategies failed their pre-registered tests: the chart-pattern setups (twice) and a momentum book (#152). The system became the portfolio manager this README describes ([docs/strategy-change-portfolio.md](docs/strategy-change-portfolio.md), [docs/portfolio-plan.md](docs/portfolio-plan.md)). The earlier specs are archived in [docs/archive/](docs/archive/) (`README-setup-system.md`, `README-momentum-book.md`). The momentum book's code is deleted (#161), and the setup system's went in task 5.2 (#169).
 >
 > **Status:** the backtest passed its pre-registered gate ([docs/backtests/portfolio.md](docs/backtests/portfolio.md), #160): after Israeli tax +9.2% a year against +8.7% for the S&P proxy held, 1928-2026, with a shallower worst drawdown; a thin edge, and a tie since the rules were published. Next: the LLM layer. Sections that describe components not built yet are the spec they will be built to. The build plan and progress tracker are in [docs/execution-plan.md](docs/execution-plan.md); the builder's working rules are in [CLAUDE.md](CLAUDE.md).
 >
@@ -132,7 +132,7 @@ All times are US/Eastern (EventBridge Scheduler, `America/New_York`). **Every jo
 | **Other** | | |
 | Every 15 min, 07:00–22:00 on weekdays | `watchdog` | Alert if an expected heartbeat is missing, a run is stuck or a schedule is disabled; each run pings an external dead-man's switch (§5.9) |
 
-One module, `jobs/schedule.py`, holds this schedule; the AWS schedules, the watchdog's expectations and the local stand-in are all built from it (#133). Until task 5.2 replaces them, the walking skeleton's jobs (1.7) stay in the module; on `paper` the kill switch is on (2026-10-27), so they place nothing. `execute_close` (task 5.1) runs by hand until 5.2 adds it.
+One module, `jobs/schedule.py`, holds this schedule; the AWS schedules, the watchdog's expectations and the local stand-in are all built from it (#133). It replaced the walking skeleton's schedule in task 5.2 (#169); the deployed stack still runs the skeleton's until task 6.1 redeploys it, with the kill switch on.
 - **Fallbacks.** A chained job's time above is a fallback: its schedule fires every 10 minutes from that time to its deadline (`jobs.chain_wait_minutes`, 30). A run that finds the predecessor not done records `WAITING_PREDECESSOR` and exits; a run at the deadline without one fails closed and alerts (§4).
 - **Retries.** A rebalance that didn't finish on E (no decision price, a blocked buy, a sale or buy that didn't fill) is tried once more at 15:40 on the next session with the same targets (`portfolio.retry_sessions`); each run is recorded on its `portfolio_targets` row, and a finished one isn't run again (#168).
 
@@ -178,15 +178,15 @@ if session is None:
 
 ### 5.1 Ingest (`ingest`)
 
-- **What it fetches** (from task 5.2): daily bars (Alpaca SIP, `adjustment=split` plus the raw close, as built in 1.5) for **the ETF list**: SPY, SSO, BIL, SGOV, QQQ, the satellite list (§5.4) and the regime's index ETFs; the macro series (VIX, VIX3M from CBOE, FRED series, #117); news for the ETF list on demand.
-- **The stock-universe ingest** (2,761 tracked tickers, EDGAR earnings and fundamentals, industries, Finnhub) stays in the code and keeps running in the chain until task 5.2 removes it; its spec is `docs/archive/README-momentum-book.md` §5.1. Dropping it frees most of Neon's 0.5 GB and most of the run time.
-- **Validation:** coverage of the ETF list, OHLC sanity, the split re-fetch (a held fund can split: SSO has), idempotent upserts. A missing SPY bar makes the session `INCOMPLETE`.
-- **Failure policy:** the calendar re-sync and SPY's bar fail the job (no increase of exposure next session); news and the secondary macro series degrade with an alert.
+- **What it fetches** (task 5.2, #169): daily bars (Alpaca SIP, `adjustment=split` plus the raw close, as built in 1.5) for **the ETF list** (`ingest.bar_ingest.tracked_symbols`): SPY, SSO, BIL, the satellite list (§5.4) and the regime's index ETFs (SPY, QQQ); their corporate actions; the macro series (VIX, VIX3M from CBOE, FRED series, #117). News is fetched by the Portfolio Manager on demand, not stored. Each fund needs an active `tickers` row (the stock-universe refresh made them); one missing fails the job.
+- **The stock-universe ingest** (2,761 tracked tickers, EDGAR earnings and fundamentals, industries, Finnhub, the Nasdaq directory) was removed in task 5.2 with its code (#169); its spec is `docs/archive/README-momentum-book.md` §5.1. Its tables are kept, no longer written (§10), and its bars age out of Postgres into Parquet.
+- **Validation:** coverage of the ETF list (a fund missing is fetched once more), OHLC sanity, the split re-fetch (a held fund can split: SSO has), idempotent upserts. A missing bar for SPY or an index makes the session `INCOMPLETE`; another fund's is alerted (no buy of it, §4).
+- **Failure policy:** the calendar re-sync and the bars step fail the job (no increase of exposure next session); the corporate actions, the macro series and retention degrade with an alert.
 - **The long history** (backtest only, task 3.18, #157): Kenneth French's daily market and T-bill returns from 1926 (`data/french.py`) and Robert Shiller's monthly S&P dividends (`data/shiller.py`, through the Open Knowledge CSV of his file), stored in the Parquet history (`history/long_history.py`, tables `long_history_market` and `long_history_dividends`); SPY, SSO and BIL total-return bars from 2016 in `portfolio_funds` for the data checks (pre-registration §4). `scripts/backfill.py longhistory` fetches all of it.
 
 ### 5.2 Regime classifier (`regime`, a fact)
 
-The five-pillar regime (index trend, breadth, volatility, distribution, leadership health) and its state machine stay as built in 2.3 (#135; full spec in `docs/archive/README-momentum-book.md` §5.2). **No rule reads it.** It is one of the facts the Portfolio Manager sees. The breadth and leadership pillars need the stock universe; once task 5.2 removes it from ingest, those pillars score 0 and the regime is labelled as running on three pillars.
+The five-pillar regime (index trend, breadth, volatility, distribution, leadership health) and its state machine stay as built in 2.3 (#135; full spec in `docs/archive/README-momentum-book.md` §5.2). **No rule reads it.** It is one of the facts the Portfolio Manager sees. The breadth and leadership pillars need the stock universe and the breakout tracker; since task 5.2 removed both (#169) they have no inputs and score 0, so the regime runs on three pillars (index trend, volatility, distribution), and its row still carries all five.
 
 ### 5.3 The trend dial (`allocate`, `strategies/core_allocation.py`)
 
@@ -239,7 +239,7 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
 
 The order layer built in 1.7 carries over; its full mechanics (OTO legs, partial fills, the sell-at-once path, corporate actions, and the broker behaviours spike 0.3b found) are specified in `docs/archive/README-momentum-book.md` §5.7 and still apply. What it does for the portfolio:
 
-1. **Reconcile.** **Invariant (every job that touches orders):** **every stopped position** (the leveraged fund, §7.2) has resting broker sell stops that are **GTC**, together cover its **full quantity**, and each sits at or above its plan level (`fund_stops`, #168): one stop, or one OTO leg per buy. A partly filled buy counts as unprotected (#115). Otherwise repair at once, alert, and block increases of exposure. Unleveraged ETFs carry no stop (#155): the invariant and `stop_guard` leave them alone.
+1. **Reconcile.** The broker's positions in the funds are the book; any other position is a mismatch, alerted once, left alone (its stops too), and blocks increases until resolved (`auratrade resolve`). Every order seen is mirrored into `orders`. **Invariant (every job that touches orders):** **every stopped position** (the leveraged fund, §7.2) has resting broker sell stops that are **GTC**, together cover its **full quantity**, and each sits at or above its plan level (`fund_stops`, #168): one stop, or one OTO leg per buy. A partly filled buy counts as unprotected (#115). Otherwise repair at once, alert, and block increases of exposure. Unleveraged ETFs carry no stop (#155): the invariant and `stop_guard` leave them alone.
    - **`stop_guard`** (every 5 minutes, 09:35–16:00) checks existence, quantity and GTC from the broker alone, and repairs under the lock only when something is missing.
    - Order jobs run with Lambda's async retries (idempotent through `client_order_id`).
 2. **Sell sequencing** for a stopped position: reduce the stop (an OTO leg is first swapped for a standalone stop), sell, restore it on failure; if the price is already through the stop level, sell at once (marketable limit, re-priced once, then market). Positions without a stop sell directly.
@@ -260,7 +260,7 @@ The order layer built in 1.7 carries over; its full mechanics (OTO legs, partial
 - **`tax_lots`:** every buy opens a lot (date, units, cost in USD); every sale closes lots **FIFO** and records the realized gain. Distributions and T-bill interest are income. The year's tax is estimated as in the pre-registration §3.8: 25% on realized gains net of the year's losses and the loss carried forward, and 25% on income. On paper no tax is paid; the estimate is what the after-tax comparisons use.
 - **`portfolio_journal`:** one row per month: the rule level, the LLM's decision and reasons, the guardrail clips, the trades, the twin, and the month's results (before and after the estimated tax).
 - **`account_snapshots`:** equity, drawdown, and SPY and the twin on the same day, each before and after the estimated tax.
-- **The drawdown check** at each close (§7.3).
+- **The drawdown check** at each close (§7.3, `execution/halt.py`): the halt and its running peak are the `halt_drawdown` flag and its details in `system_flags`; on `paper` the close turns it on (alerted), in `dry_run` the check is reported only (the account is the simulated book, whose halt is simulated, #166).
 - The Telegram daily report, and the public dashboard's snapshot (§5.8).
 
 ### 5.8 The public dashboard
@@ -319,7 +319,7 @@ The rules (#154), all in `risk.yaml` `portfolio:`; the backtest's exact versions
 
 - **One GTC stop at the broker** covering SSO's full quantity (CLAUDE.md §3.5 as amended, #155), at **70% of SSO's decision price** at its last purchase (`portfolio.stop_fraction` 0.30), rounded down to the tick.
 - **Raised on each later E** to 70% of that E's decision price if higher. Never lowered.
-- **After it fills,** the proceeds wait in BIL until the next E. The Portfolio Manager runs on the event to explain; it can't buy SSO back.
+- **After it fills,** the proceeds wait in BIL until the next E: `execute_close` buys BIL with them at the next 15:40 (whole shares at a marketable limit; what earlier runs bought counts against them, so the rebalance's change stays cash). The sale at once when the price is already through the level counts as the stop. A run that blocks increases (the kill switch while BIL isn't held, a repaired invariant, incomplete data) leaves them in cash for the next run (#169). The Portfolio Manager runs on the event to explain; it can't buy SSO back.
 - **Why only there:** a stop on a broad ETF would sell it on noise and realize taxed gains; the trend rule and the halt are those funds' exits. A 2x fund at −30% means the market fell ~15% within the month: the case the stop exists for.
 - **Gaps go through it** (§17).
 
@@ -327,7 +327,7 @@ The rules (#154), all in `risk.yaml` `portfolio:`; the backtest's exact versions
 
 - **On** at any close where equity ≤ 75% of its running peak (`portfolio.drawdown_halt` 0.25). **It acts at once:** at 15:40 on the next session, SSO is sold into SPY (the one trade outside E).
 - **While on:** the level is at most 1.0x, and the LLM may only shift down. An E whose targets still hold SSO (the halt came after R) puts SSO's weight in SPY (#168).
-- **Off** at the first R where the trend flips DOWN → UP (the peak is reset to the equity then), or where equity is back at its old peak.
+- **Off** at the first R where the trend flips DOWN → UP (the peak is reset to the equity then), or where equity is back at its old peak: `allocate` checks it on `paper` against R's snapshot before it reads the rule level, and without a snapshot the halt stays on (fail closed). `auratrade halt reset` turns it off with the peak at the broker's equity (after a paper account reset).
 
 ### 7.4 Exits and tax
 
@@ -361,7 +361,7 @@ Guardrails are pure Python functions (`auratrade/guardrails/portfolio.py`) with 
 | Data integrity | `INCOMPLETE` session or calendar disagreement | No increase of exposure |
 | LLM failure | Error, timeout, refusal, invalid schema, missed deadline | Hold: no shift, last month's satellite (fail closed, #164) |
 
-The setup system's guardrails (`guardrails/evaluate.py` and the rest) still serve the walking skeleton and go in task 5.2 (#161).
+The setup system's guardrails went with its code in task 5.2 (#169).
 
 ---
 
@@ -413,9 +413,9 @@ PostgreSQL on Neon. SQLAlchemy 2.0, Alembic. The tables built so far stay; the p
 | `twin_book` | The twin's simulated holdings, trades and equity per session (§5.5), in `dry_run` the book's own decisions replayed (`SIM`, #166), and SPY bought and held (`SPY`); each with the tax a sale would owe at the close (`tax_owed`, #167) |
 | `portfolio_journal` | One row per month: decisions, reasons, clips, trades, results (the scorecard's month, §5.5, §5.7) |
 
-Kept and used: `market_sessions`, `daily_bars` (for the ETF list), `corporate_actions`, `macro_series`, `market_regime`, `llm_batches`, `prompt_versions`, `llm_decisions`, `signals`, `guardrail_events`, `orders`, `positions`, `position_plans`, `account_snapshots`, `job_runs`, `system_flags`, `mismatches`. Kept, no longer written once task 5.2 retires their jobs: the stock-universe and setup-system tables (`tickers`, `industry_groups`, `fundamentals`, `earnings_events`, `bases`, `daily_watchlist`, `breakout_tracker`, `setups`, `ep_candidates`, `verdict_outcomes`, `baseline_signals`, `trade_journal`, `bar_corrections`); their spec is in the archived READMEs.
+Kept and used: `market_sessions`, `tickers` (the ETF list's rows), `daily_bars` (for the ETF list), `bar_corrections`, `corporate_actions`, `macro_series`, `market_regime`, `prompt_versions`, `llm_decisions`, `orders`, `account_snapshots`, `job_runs`, `system_flags` (the kill switch; the halt and its peak), `mismatches`. Kept, no longer written since task 5.2 retired their code (#169): the stock-universe and setup-system tables (`industry_groups`, `fundamentals`, `earnings_events`, `bases`, `daily_watchlist`, `breakout_tracker`, `baseline_signals`, `verdict_outcomes`, `signals`, `positions`, `position_plans`, `position_events`, `trade_journal`); their spec is in the archived READMEs.
 
-**Retention:** `daily_bars` 2 years in Postgres, older bars in Parquet (#130). Everything the portfolio adds is small and kept forever: it is the validation record (principle 8). **Backup:** `post_market` exports the kept tables to S3 nightly.
+**Retention:** `daily_bars` 2 years in Postgres, older bars in Parquet (#130). Everything the portfolio adds is small and kept forever: it is the validation record (principle 8). **Backup:** `post_market` exports the kept tables to S3 nightly (the portfolio's, `orders`, `account_snapshots`, `market_regime`, `mismatches`, `system_flags`; `journal/backup.py`).
 
 ---
 
@@ -447,7 +447,7 @@ Kept and used: `market_sessions`, `daily_bars` (for the ETF list), `corporate_ac
 
 - **Region** `us-east-1`. One ECR image; one Lambda per job. Neon over TLS, so no VPC or NAT.
 - **Least-privilege IAM** per function; secrets in SSM. Environments: `dev`, `paper`.
-- **The trading stack** (`AuraTradePaper`, `infra/stacks/trading.py`, #133): one x86_64 container image built by `cdk deploy`; one function per job; order jobs get 15 minutes and Lambda's 2 async retries; secrets as SecureStrings under `/auratrade/<env>/`, read once per container; `TRADING_MODE` a deploy-time choice, `dry_run` by default, `live` refused; each evening job may invoke only its successor. The stack deployed in 1.8 runs the setup skeleton's jobs with the kill switch on until task 6.1 redeploys it with the portfolio's jobs.
+- **The trading stack** (`AuraTradePaper`, `infra/stacks/trading.py`, #133): one x86_64 container image built by `cdk deploy`; one function per job; order jobs get 15 minutes and Lambda's 2 async retries; secrets as SecureStrings under `/auratrade/<env>/`, read once per container; `TRADING_MODE` a deploy-time choice, `dry_run` by default, `live` refused; each evening job may invoke only its successor. The stack deployed in 1.8 runs the setup skeleton's jobs with the kill switch on until task 6.1 redeploys it with the portfolio's jobs (`FUNCTIONS` in the stack, from task 5.2).
 - **Each environment has its own Alpaca paper account and Neon branch** (`dev`: `.env`; `paper`: `.env.paper`), so reconciliations never fight. **The `paper` account is reset to $100,000** before the trial (task 6.1).
 - **AWS budget alarms** at $10 and $25.
 - **Public site** (`AuraTradePublicSite`, #108): static files from `web/` in a private S3 bucket behind CloudFront, HTTPS only, strict security headers, no backend. The dashboard (§5.8) reads one allow-listed `data/snapshot.json`.
@@ -475,35 +475,31 @@ AuraTrade/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── alembic/
-├── config/risk.yaml              # portfolio: (the rules), halts, execution, the fill model, ingest;
-│                                 # the setup system's sections (until 5.2, #161)
+├── config/risk.yaml              # portfolio: (the rules), execution, ingest, regime, llm, …
 ├── src/auratrade/
 │   ├── config.py
 │   ├── cli.py                    # operator commands (§5.9)
 │   ├── calendar/                 # sessions, sync, the R / E rebalance calendar
 │   ├── db/
-│   ├── data/                     # alpaca_data, macro, news; long-history clients (French, Shiller);
-│   │                             # edgar, finnhub, nasdaq (the stock universe's, removed in 5.2)
-│   ├── ingest/                   # the evening ingest (slimmed to the ETF list in 5.2)
-│   ├── history/                  # the Parquet history: bars since 2016, benchmarks, the long history
-│   ├── indicators/               # moving averages, volatility, relative strength (facts)
+│   ├── data/                     # alpaca_data, macro, news; long-history clients (French, Shiller)
+│   ├── ingest/                   # the evening ingest for the ETF list (5.2)
+│   ├── history/                  # the Parquet store (archived bars), benchmarks, the long history
+│   ├── indicators/               # moving averages, volume, distribution days (the regime's, the charts')
 │   ├── regime/                   # the regime classifier (a fact for the LLM)
-│   ├── strategies/               # core_allocation (the trend dial, #154); the setup scans, ranking,
-│   │                             # verdict cache, watchlist (the skeleton's and the regime's, until 5.2)
+│   ├── strategies/               # core_allocation (the trend dial, #154)
 │   ├── tax/                      # israel: FIFO lots, realized gains, offsets, carry-forward, income
-│   ├── guardrails/               # portfolio (#155); the setup system's rules (the skeleton's, until 5.2)
+│   ├── guardrails/               # portfolio (#155)
 │   ├── llm/                      # the Claude client, the Portfolio Manager's schema and prompt (Phase 4)
 │   ├── execution/                # broker interface + Alpaca adapter, orders, the stop invariant,
 │   │                             # the single-writer lock, reconciliation; rebalance.py (targets →
-│   │                             # orders, pure), portfolio.py (the rebalance, the halt's sale), funds.py
-│   │                             # (the leveraged fund's level, splits); signals, sizing (the skeleton's)
+│   │                             # orders, pure), portfolio.py (the rebalance, the halt's sale, the stop's
+│   │                             # proceeds), funds.py (the leveraged fund's level, splits), halt.py (5.2)
 │   ├── journal/                  # portfolio.py (the books, the facts on R), decisions.py (the decision on E
-│   │                             # and events, recorded), portfolio_scorecard.py (4.4); the setup system's (until 5.2)
+│   │                             # and events, recorded), portfolio_scorecard.py (4.4), report, backup
 │   ├── sim/                      # the one fill model (fills.py), the fake broker (the order layer's
 │   │                             # chaos tests), portfolio.py (3.20), funds.py (the market from the real
-│   │                             # funds' bars, 4.3); trade.py, minutes.py (the skeleton's)
-│   ├── plans/                    # plan versioning (tighten-only stop levels); the setup system's menus
-│   ├── charts.py
+│   │                             # funds' bars, 4.3)
+│   ├── charts.py                 # the Portfolio Manager's get_chart
 │   ├── storage/
 │   ├── notify/
 │   └── jobs/
@@ -522,8 +518,8 @@ AuraTrade/
 - **`ENVIRONMENT`:** `dev` | `paper`; names the Alpaca account and Neon branch a process belongs to, and prefixes its alerts.
 - **`TRADING_MODE`:** `dry_run` | `paper` | `live` (the settings refuse `live` outright). A job's `--dry-run` flag forces `dry_run` for that run; nothing can raise the mode.
 - **Kill switch:** `system_flags.trading_enabled` in the database (§5.9), flipped with `auratrade kill on|off`. A new database starts with it on.
-- **Models / effort:** `PM_MODEL`, `PM_EFFORT`. The earlier systems' `ANALYST_*`, `EOD_*` and `WEEKLY_*` settings are removed in Phase 4.
-- **`config/risk.yaml`:** **`llm:`** (the Claude client's limits, its cost alert and the token prices), **`portfolio_manager:`** (the windows of the satellite ETFs' facts, the headlines and the tools' limits, the bars before the trial, the dry-run book's equity, the 12:00 deadline), **`portfolio:`** (the trend dial, the levels, the cap, the halt, the stop, the satellite and its list, the drift band, the LLM's band, the backtest's values), `halts:`, `execution:`, `sim:` (the fill model), `ingest:`, `jobs:`, `regime:`; and the setup system's sections, marked "archived README", until task 5.2 removes them (#161). Its hash is logged with every run and quoted in every backtest report.
+- **Models / effort:** `PM_MODEL`, `PM_EFFORT`. The earlier systems' `ANALYST_*`, `EOD_*` and `WEEKLY_*` settings, `FINNHUB_API_KEY` and `EDGAR_USER_AGENT` went in task 5.2 (#169).
+- **`config/risk.yaml`:** **`llm:`** (the Claude client's limits, its cost alert and the token prices), **`portfolio_manager:`** (the windows of the satellite ETFs' facts, the headlines and the tools' limits, the bars before the trial, the dry-run book's equity, the 12:00 deadline), **`portfolio:`** (the trend dial, the levels, the cap, the halt, the stop, the satellite and its list, the drift band, the LLM's band, the backtest's values), `execution:`, `ingest:`, `jobs:`, `regime:`, `charts:`, `data:`, `history:`. The setup system's sections went with its code in task 5.2 (#169). Its hash is logged with every run and quoted in every backtest report.
 - **Paper account:** reset to **$100,000** before the trial (task 6.1). It was $5,000 for the earlier systems (#122).
 
 ---
@@ -740,6 +736,7 @@ The earlier systems' backtest rules and gates are archived (`docs/archive/README
 | 166 | The jobs in `dry_run` (4.3) | *Taken under the user's delegation.* **The account in `dry_run` is the simulated book:** no orders are sent until task 5.1, so the paper account would never follow the targets; the book's decided targets are replayed through `sim/portfolio.py` (README §5.5's sim return) from the trial's first R (the first R `allocate` runs on) from $100,000, beside the twin, and the Portfolio Manager sees that account. **One simulator, extended without changing the backtest:** `book` (targets per E, satellite funds priced), `sell_at_end=False` (the account at T), `rank_at_end` (R ranked on its own evening), all off in the backtest; the scored run's path is unchanged and its tests pass. **The book's replay trades each holding on its own** (its target changed, or it drifted past the 5-point band, README §7.1): rebalancing the whole account on any change would trade every satellite fund whenever the core moved and void the hold rule (#163); the twin keeps the backtest's rule. An E with no decision (a gap) takes the rules' targets. **The market from the real funds:** split-adjusted closes are the price, the distributions are the total-return closes' excess over them (both free Alpaca calls, 300 sessions before the trial). **The deadline** (12:00 ET) applies on E; a replay of an earlier session has none. **Increases** are allowed only with the kill switch off, R's data COMPLETE and E's calendar cross-checked, in every mode; the setup system's halt flags aren't read. **Events** are run by hand (`--event`) until task 5.x raises them: the book through the last close, the trend from the last R, increases blocked. **`llm_decisions` is kept forever** (README §10) and left out of the 90-session archive, which would also have broken `portfolio_targets`' reference to it. Each decision's satellite tax is recorded; the year's budget sums them. The history's excess over the twin is left empty until the scorecard (4.4). **The first real run** (dev, R 2026-09-30, E 2026-10-01, the user's OK for the call): the trend UP, the rule level 1.3x; the model kept the neutral (SPY 20%, no shift: "recent returns alone are weak evidence, and any tilt opened now would cost tax to undo later"), so the book equalled the twin to the cent ($101,375.65 on 2026-10-21); $0.058. **It also caught a look-ahead in the replay:** the headlines' window ended at the time of the run, so a replay of 2026-10-01 was handed news from 2026-10-27 (it set them aside and said so); the window now ends at E's open at the latest. |
 | 167 | The scorecard's readings (4.4) | *Taken under the user's delegation.* **An expectation needs a number to be scored:** README §5.5 checks "right direction, roughly right size", which a free-text line can't be checked against without another model call, so each satellite entry also states `expected_vs_market` (its return less SPY's to the next E, as a fraction); the prompt is `pm-2`. **The rules:** within ±1 point says "level" and is right only if the outcome is level too; otherwise the direction is the sign and the size is within 2x either way; scored only on a complete month, never for SPY itself. **After the estimated tax** is equity less the tax a sale of everything would owe at that close (net of the loss carried forward, the year's income included), the backtest's final-sale measure at every close; so realizing a gain isn't a cost at once, and the deferral's value shows up as the tax paid at each year's end stops compounding. **A month** runs from its E's close (after its trades) to the next E's, so the next E's trading costs close it. **SPY is a third simulated book** (bought at the first E and held, the backtest's benchmark, through the same simulator and tax model), so the three lines are like for like. **The realized tax per decision** is the book's realized gains on its E at 25%, before the year's offsets, with the twin's beside it. **The interval** is a block bootstrap of the monthly after-tax excess (3-month blocks, 10,000 draws, 90%), from 24 complete months. **The journal is rescored whole each evening,** like `twin_book`. All in `risk.yaml` `portfolio_manager.scorecard`. |
 | 168 | The rebalance orders' readings (5.1) | *Taken under the user's delegation.* **The leveraged fund's stop level lives in `fund_stops`,** not `position_plans` (§10 named it): a plan row needs a setup position, a pivot, a trail and a strategy that a fund has none of, and `plans/` goes in 5.2; the table is append-only, the latest row in force, a raise below it ignored, a buy from flat or a split setting it. **Each run decides afresh from the broker:** it cancels what an earlier run left working in the funds, then plans; buys carry random-suffixed ids (`at-…-b-…`), since a re-run that finds its earlier buy cancelled must not collide with it. **A rebalance that didn't finish** (no price, a blocked buy, an unfilled sale or buy) is tried by its retry at the next session's 15:40, not the 09:31 check run, so it trades in the close's liquidity with the same targets; each run is recorded on `portfolio_targets` (`executions`, `executed_at`). A buy the cash can't pay for after the sales (rounding, slippage) isn't owed. **Unfilled orders are cancelled after the wait** (30 s for buys, `execution.buy_wait_seconds`; the sell wait for sales): nothing rests past the run. **While increases are blocked** the only buys are the cash fund, if already held (README §5.9's "no fund not already held"), and the halt's swap into SPY. **The halt's sale** sells all of SSO through the sell sequence and buys SPY with the sale's shares at the decision price, within the cash; on an E whose targets still hold SSO, SSO's weight goes to SPY. **A sale at once through the stop level alerts** like a stop fill. **The stop is raised by every run that trades the rebalance,** the retry included (to that session's price, never down). **Splits** scale the level by the ratio and block buys and sales at once in the fund until the mismatch is resolved (#116). |
+| 169 | The daily checks, the schedule and the retirement (5.2) | *Taken under the user's delegation.* **The live halt** is the `halt_drawdown` flag with its running peak (and the session it turned on) in the flag's details, moved only by `core_allocation`'s `halt_at_close` / `halt_on_ranking`: `post_market` turns it on at the close from the broker's equity, `allocate` turns it off on R (DOWN → UP flip, or equity back at the peak) from R's snapshot before it reads the rule level; without a stored peak it starts at the equity first seen; without R's snapshot it stays on. **`dry_run` keeps the simulated book's halt** (#166): the checks are reported and nothing is written; on `paper` the row's rule level and the facts' `halted` are the account's. **The stop's proceeds go into BIL at the next 15:40**, not at once: no buy rests overnight and buys go in only at the decision price; a sale at once through the level counts as the stop; what earlier runs bought of BIL since the fill counts against the proceeds; a run that blocks increases leaves them in cash. **The schedule:** `allocate` ends the evening chain (17:35); `portfolio_manager` at 08:45 every session (it finds nothing to decide except on E: a paid call on E only); `execute_close` at 15:40 on full sessions; `scan`, `analyst_submit`, `execute_entries` and `eod_review` left it. **The ETF list is derived, not listed:** the core funds, the satellite list and the regime's indexes (SGOV, which no config named, is dropped from §5.1); a missing bar for SPY or an index is `INCOMPLETE`, another fund's an alert. **Retired with its tests** (#161's list): the setup jobs, `execution/skeleton|triggers|signals|sizing`, `strategies/` but `core_allocation`, `plans/` (`reached` moved into `sim/fills`), the setup guardrails, `sim/trade|minutes|sessions`, the setup `journal/` modules, the setup indicators (and the unused volatility and relative strength), the stock-universe ingest, EDGAR, Finnhub, the Nasdaq directory and the 2016 universe history (`backfill.py` keeps `longhistory`), the regime's universe and tracker inputs, `risk.yaml`'s archived sections and fields with their models, the Analyst/EOD/weekly settings, `fetch_base_fixtures.py`. **Reconciliation is the funds':** a position outside them is a mismatch, left alone (the invariant no longer checks it); setup positions, plans and signals are no longer read or written. **Found in passing:** the nightly backup still listed the setup tables and none of the portfolio's; it now backs up the portfolio's tables. **Not done here:** events (the halt, a stop fill) still reach the Portfolio Manager by hand (`portfolio_manager --event`), so no unplanned paid call is scheduled; a fresh database needs the funds' `tickers` rows (the existing `dev` and `paper` ones have them). |
 
 ---
 

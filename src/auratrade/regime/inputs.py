@@ -1,21 +1,21 @@
-"""Build ``SessionInputs`` from loaded histories (pure; the store and the backtest load them).
+"""Build ``SessionInputs`` from loaded histories (pure; the store loads them).
 
 Missing index data fails closed: ``MissingDataError`` stops the regime job, so no regime is
-written and the evening chain stops before the scan.
+written and the evening chain stops before `allocate`. Breadth and leadership health have no
+inputs since task 5.2 (the stock universe and the breakout tracker are retired): they score 0.
 """
 
 import bisect
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
-from auratrade.config import RegimeConfig, UniverseConfig
+from auratrade.config import RegimeConfig
 from auratrade.indicators.bars import Bar
 from auratrade.indicators.moving_averages import falling, rising, sma
 from auratrade.indicators.volume import normalize_session_volumes
-from auratrade.regime.breadth import TickerHistory, breadth_inputs, session_breadth
 from auratrade.regime.classifier import SessionInputs
-from auratrade.regime.pillars import IndexTrend, TrackedBreakout, quarterly_expiration_sessions
+from auratrade.regime.pillars import IndexTrend, quarterly_expiration_sessions
 
 FULL_SESSION_MINUTES = 390
 VIX, VIX3M = "VIX", "VIX3M"
@@ -23,6 +23,18 @@ VIX, VIX3M = "VIX", "VIX3M"
 
 class MissingDataError(RuntimeError):
     """Data the regime can't be computed without (fail closed)."""
+
+
+@dataclass(frozen=True, slots=True)
+class TickerHistory:
+    """One index ETF's split-adjusted bars, oldest first; ``raw_closes`` are as traded."""
+
+    dates: Sequence[date]
+    highs: Sequence[float]
+    lows: Sequence[float]
+    closes: Sequence[float]
+    raw_closes: Sequence[float]
+    volumes: Sequence[float]
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +55,6 @@ class LoadedData:
     """Every session of the loaded range, consecutive, oldest first."""
     session_minutes: Mapping[date, int]
     indexes: Mapping[str, TickerHistory]
-    universe: Sequence[TickerHistory]
     macro: Mapping[str, MacroSeries]
 
 
@@ -84,12 +95,7 @@ def _sessions_after(sessions: Sequence[date], since: date, until: date) -> int:
 
 
 def build_inputs(
-    data: LoadedData,
-    targets: Sequence[date],
-    cfg: RegimeConfig,
-    universe: UniverseConfig,
-    *,
-    breakouts: Callable[[date], Sequence[TrackedBreakout]] = lambda _: (),
+    data: LoadedData, targets: Sequence[date], cfg: RegimeConfig
 ) -> list[SessionInputs]:
     """One ``SessionInputs`` per target session (each must be in ``data.sessions`` with a
     session before it)."""
@@ -97,11 +103,6 @@ def build_inputs(
         if name not in data.indexes:
             raise MissingDataError(f"no bars for index {name}")
     series = {i: _index_series(i, data.indexes[i], data, cfg) for i in cfg.indexes}
-    first = data.sessions.index(targets[0]) - cfg.breadth.net_new_highs_sessions + 1
-    window = list(data.sessions[max(first, 0) : data.sessions.index(targets[-1]) + 1])
-    breadth = breadth_inputs(
-        session_breadth(data.universe, window, cfg.breadth, universe), window, cfg.breadth
-    )
     expirations = quarterly_expiration_sessions(data.sessions)
 
     def macro_at(day: date) -> tuple[float | None, float | None, int | None]:
@@ -129,18 +130,17 @@ def build_inputs(
         for back in range(cfg.crisis.vix_ratio_sessions - 1, 0, -1):
             pv, pv3m, _ = macro_at(data.sessions[max(k - back, 0)])
             prior_ratios.append(None if pv is None or pv3m is None else pv / pv3m)
-        fraction_above, net = breadth.get(day, (None, None))
         out.append(
             SessionInputs(
                 session=day,
                 index_bars=index_bars,
                 index_trend={name: s.trend[day] for name, s in series.items()},
-                fraction_above=fraction_above,
-                net_new_highs=net,
+                fraction_above=None,
+                net_new_highs=None,
                 vix=vix,
                 vix3m=vix3m,
                 macro_stale_sessions=stale,
-                breakouts=breakouts(day),
+                breakouts=(),
                 expiration_session=day in expirations,
                 prior_vix_ratios=tuple(prior_ratios),
             )

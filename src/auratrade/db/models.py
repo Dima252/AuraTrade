@@ -442,8 +442,8 @@ class MarketRegimeRow(Base):
 
 
 # --- Position plans (task 3.5a, archived README §7.3; README §10) ---------------------------------
-# These value lists mirror the enums in `auratrade.config` and `auratrade.plans` (a test
-# checks they match), so the database rejects a value the code can't produce.
+# The setup system's tables, kept and no longer written since task 5.2 (#161): these value lists
+# are the check constraints migration 0004 created, so the rows already stored stay valid.
 
 STRATEGIES = (
     "VCP_BREAKOUT",

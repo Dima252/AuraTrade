@@ -3,8 +3,9 @@
 Alpaca's feed filters on the **process date**, not the ex-date, and lists announced splits ahead
 (spike 0.3b): the request window is padded by sessions on both sides and every action is keyed
 on its ex-date (`effective_date`). Splits, reverse splits, mergers, spin-offs and symbol changes
-of known tickers are stored; cash dividends need nothing (#116). A re-run, or an action seen
-again on later evenings, updates its row only if the vendor changed it; `handled` is left alone.
+of the ETF list (`symbols`, task 5.2) are stored; cash dividends need nothing (#116). A re-run,
+or an action seen again on later evenings, updates its row only if the vendor changed it;
+`handled` is left alone.
 """
 
 from __future__ import annotations
@@ -60,6 +61,8 @@ def ingest_corporate_actions(
     calendar: MarketCalendar,
     risk: RiskConfig,
     session: date,
+    *,
+    symbols: Iterable[str] | None = None,
 ) -> CorporateActionReport:
     cfg = risk.ingest
     start = calendar.n_sessions_back(session, cfg.corporate_actions_lookback_sessions).day
@@ -67,7 +70,8 @@ def ingest_corporate_actions(
     for _ in range(cfg.corporate_actions_lookahead_sessions):
         end = calendar.next_session(end).day
     report = CorporateActionReport((start, end))
-    actions = source.corporate_actions(start, end, kinds=KINDS)
+    wanted = None if symbols is None else sorted(set(symbols))
+    actions = source.corporate_actions(start, end, symbols=wanted, kinds=KINDS)
     report.fetched = len(actions)
     found = conn.execute(
         select(Ticker.symbol, Ticker.id).where(

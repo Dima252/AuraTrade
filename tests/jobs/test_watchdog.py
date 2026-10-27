@@ -57,7 +57,7 @@ def test_an_at_start_heartbeat_needs_a_run_from_its_slot_on() -> None:
 
 def test_a_by_end_heartbeat_takes_any_run_of_its_job() -> None:
     expected = [Expected("ingest", None, ny(DAY, 17, 45))]
-    assert watchdog.missing_heartbeats(expected, [("scan", ny(DAY, 17))], ny(DAY, 18)) == [
+    assert watchdog.missing_heartbeats(expected, [("simulate", ny(DAY, 17))], ny(DAY, 18)) == [
         "missing: ingest by 17:45"
     ]
     assert watchdog.missing_heartbeats(expected, [("ingest", ny(DAY, 16, 25))], ny(DAY, 18)) == []
@@ -172,9 +172,9 @@ def watch(pg_engine: Engine, tmp_path: Path) -> Watch:
 
 
 def morning(watch: Watch, day: date = DAY) -> None:
+    watch.record("portfolio_manager", ny(day, 8, 45) + timedelta(seconds=2), session=day)
     for hour, minute, job in ((9, 20, "execute_open"), (9, 31, "execute_open")):
         watch.record(job, ny(day, hour, minute) + timedelta(seconds=2), session=day)
-    watch.record("execute_entries", ny(day, 9, 36) + timedelta(seconds=2), session=day)
 
 
 def test_all_present_means_no_alert_and_a_ping(watch: Watch) -> None:
@@ -189,14 +189,14 @@ def test_a_missing_heartbeat_is_alerted_once_per_session(watch: Watch) -> None:
     watch.record("execute_open", ny(DAY, 9, 20))
     watch.record("execute_open", ny(DAY, 9, 31))
     out = watch.run()
-    assert out["alerted"] == ["missing: execute_entries 09:36"]
+    assert out["alerted"] == ["missing: portfolio_manager 08:45"]
     (text,) = watch.alerts.texts
     assert "[AuraTrade dev] watchdog:" in text
-    assert "- missing: execute_entries 09:36" in text
+    assert "- missing: portfolio_manager 08:45" in text
 
     watch.now = ny(DAY, 10, 15)
     out = watch.run()
-    assert out["findings"] == ["missing: execute_entries 09:36"]
+    assert out["findings"] == ["missing: portfolio_manager 08:45"]
     assert out["alerted"] == []
     assert len(watch.alerts.texts) == 1
 
@@ -209,20 +209,19 @@ def test_a_failed_watchdog_run_still_counts_as_reported(watch: Watch) -> None:
         assert watchdog._reported(conn, ctx) == {"x"}
 
 
-def test_the_half_day_expects_the_early_review(watch: Watch) -> None:
+def test_the_half_day_expects_no_execute_close(watch: Watch) -> None:
     morning(watch, HALF_DAY)
-    watch.now = ny(HALF_DAY, 13, 30)
-    out = watch.run(session=HALF_DAY)
-    assert out["findings"] == ["missing: eod_review 12:40"]
-    watch.record("eod_review", ny(HALF_DAY, 12, 40), session=HALF_DAY)
     watch.now = ny(HALF_DAY, 16, 0)
     assert watch.run(session=HALF_DAY)["findings"] == []
+    morning(watch)
+    watch.now = ny(DAY, 16, 0)
+    assert watch.run()["findings"] == ["missing: execute_close 15:40"]
 
 
 def test_a_stuck_run_is_found_on_any_day(watch: Watch) -> None:
     watch.now = ny(SATURDAY, 10)
     watch.record("ingest", ny(SATURDAY, 9, 30), session=DAY, status="RUNNING")
-    watch.record("scan", ny(SATURDAY, 9, 55), session=DAY, status="RUNNING")
+    watch.record("simulate", ny(SATURDAY, 9, 55), session=DAY, status="RUNNING")
     out = watch.run(session=SATURDAY)
     assert out["session"] is False
     (finding,) = out["findings"]
@@ -252,7 +251,7 @@ def test_no_ping_url_means_no_ping(watch: Watch) -> None:
 def test_the_watchdog_expects_what_the_schedule_says(watch: Watch) -> None:
     risk = load_risk_config()
     expected = schedule.expected_heartbeats(
-        schedule.skeleton_slots(risk.jobs.chain_wait_minutes),
+        schedule.weekday_slots(risk.jobs.chain_wait_minutes),
         DAY,
         early_close=False,
         grace_minutes=risk.jobs.watchdog_grace_minutes,

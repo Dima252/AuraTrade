@@ -6,18 +6,20 @@
 The first form goes through the job runner (calendar guard, heartbeat, chaining: it waits for
 `post_market`). The second runs the steps directly, without the runner.
 
-Steps, each in its own transaction, in this order:
+Steps, each in its own transaction, in this order (slimmed to the ETF list in task 5.2; the
+stock universe's steps are gone):
 
 1. **Calendar** re-sync and cross-check (a disagreement alerts; README §4).
-2. **Universe:** `tickers` from Alpaca's asset list and the Nasdaq Trader directory.
-3. **Bars:** gap-fill, T-1 re-fetch, splits, outliers, coverage → `market_sessions.data_status`.
-4. **Corporate actions**, 5. **macro** (evening VIX), 6. **companies** (CIK, SIC, industries,
-   listing dates), 7. **earnings**, 8. **fundamentals**, 9. **retention** and the database size.
+2. **Bars** for the ETF list: gap-fill, T-1 re-fetch, splits, outliers, coverage →
+   `market_sessions.data_status`.
+3. **Corporate actions** of the ETF list, 4. **macro** (evening VIX, FRED), 5. **retention** and
+   the database size.
 
-Steps 1-3 are what the regime and the scan can't run without: their failure fails the job, and
-the chain stops (no new entries next session). Steps 4-9 degrade: a failure is recorded in the
-run's details and alerted, the stored data stays as it was, and the chain continues (the regime
-has its own staleness rule for macro data, and the earnings blackout its estimated dates).
+Steps 1-2 are what the rest of the chain can't run without: their failure fails the job, and
+the chain stops (no increase of exposure next session). Steps 3-5 degrade: a failure is
+recorded in the run's details and alerted, the stored data stays as it was, and the chain
+continues (the regime has its own staleness rule for macro data). News is fetched on demand by
+the Portfolio Manager, not here.
 """
 
 from __future__ import annotations
@@ -38,27 +40,13 @@ from auratrade.calendar.sessions import load_calendar
 from auratrade.calendar.sources import SessionTimes
 from auratrade.calendar.sync import HISTORY_START, alert_text, sync_market_sessions
 from auratrade.config import RiskConfig, Settings, load_risk_config
-from auratrade.data.alpaca_data import SIP_DELAY, AlpacaDataClient, Asset
-from auratrade.data.edgar import EdgarClient
-from auratrade.data.finnhub import FinnhubClient
+from auratrade.data.alpaca_data import SIP_DELAY, AlpacaDataClient
 from auratrade.data.macro import CboeClient, FredClient
-from auratrade.data.nasdaq import Listing, NasdaqDirectoryClient
-from auratrade.data.news import AlpacaNewsClient
 from auratrade.db.engine import engine_from_settings
-from auratrade.ingest.bar_ingest import INCOMPLETE, BarSource, ingest_bars
-from auratrade.ingest.companies import (
-    CompanyTickersFetch,
-    ProfileFetch,
-    SubmissionsCache,
-    SubmissionsFetch,
-    ingest_companies,
-)
+from auratrade.ingest.bar_ingest import INCOMPLETE, BarSource, ingest_bars, tracked_symbols
 from auratrade.ingest.corporate_actions import CorporateActionSource, ingest_corporate_actions
-from auratrade.ingest.earnings import FinnhubSource, NewsSource, ingest_earnings
-from auratrade.ingest.fundamentals import FactsSource, ingest_fundamentals
 from auratrade.ingest.macro import CboeSource, FredSource, ingest_macro
 from auratrade.ingest.retention import run_retention
-from auratrade.ingest.universe import listed_securities, refresh_tickers
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
 from auratrade.notify.alerts import Alerter
 from auratrade.storage import ObjectStore
@@ -72,18 +60,7 @@ class IngestError(RuntimeError):
     pass
 
 
-class AlpacaSource(BarSource, CorporateActionSource, Protocol):
-    def assets(self, *, status: str | None = ...) -> list[Asset]: ...
-
-
-class DirectorySource(Protocol):
-    def listings(self) -> list[Listing]: ...
-
-
-class EdgarSource(SubmissionsFetch, CompanyTickersFetch, FactsSource, Protocol): ...
-
-
-class FinnhubFullSource(FinnhubSource, ProfileFetch, Protocol): ...
+class AlpacaSource(BarSource, CorporateActionSource, Protocol): ...
 
 
 @dataclass(frozen=True)
@@ -91,14 +68,10 @@ class Sources:
     """The vendors, as the steps use them (the clients in production, fakes in tests)."""
 
     alpaca: AlpacaSource
-    news: NewsSource
-    nasdaq: DirectorySource
     cboe: CboeSource
     calendar_primary: CalendarFetch
     calendar_check: CalendarFetch
     fred: FredSource | None = None
-    edgar: EdgarSource | None = None
-    finnhub: FinnhubFullSource | None = None
 
 
 def build_sources(settings: Settings, risk: RiskConfig) -> Sources:
@@ -109,18 +82,13 @@ def build_sources(settings: Settings, risk: RiskConfig) -> Sources:
         raise IngestError("ALPACA_API_KEY / ALPACA_SECRET_KEY not set")
     key = settings.alpaca_api_key.get_secret_value()
     secret = settings.alpaca_secret_key.get_secret_value()
-    fred_key, finnhub_key = settings.fred_api_key, settings.finnhub_api_key
-    http = alpaca_http(key, secret)
+    fred_key = settings.fred_api_key
     return Sources(
-        alpaca=AlpacaDataClient(http, workers=risk.ingest.http_workers),
-        news=AlpacaNewsClient(http),
-        nasdaq=NasdaqDirectoryClient(),
+        alpaca=AlpacaDataClient(alpaca_http(key, secret), workers=risk.ingest.http_workers),
         cboe=CboeClient(),
         calendar_primary=AlpacaCalendarClient(key, secret).fetch,
         calendar_check=exchange_calendar_sessions,
         fred=FredClient(fred_key.get_secret_value()) if fred_key else None,
-        edgar=EdgarClient(settings.edgar_user_agent) if settings.edgar_user_agent else None,
-        finnhub=FinnhubClient(finnhub_key.get_secret_value()) if finnhub_key else None,
     )
 
 
@@ -166,44 +134,27 @@ def run_ingest(
     if now < today.close_at + SIP_DELAY:
         # SIP is 15 minutes delayed: before then session T's bar is still forming.
         raise IngestError(f"{session}'s bars are not final until {today.close_at + SIP_DELAY}")
-    # Half days: downstream volume rules normalise by `market_sessions.minutes` (README §4).
     details["calendar"] |= {"early_close": today.is_early_close, "minutes": today.minutes}
 
     seconds["calendar"] = round(time.monotonic() - clock, 1)
 
-    # 2. Universe (critical).
-    securities = listed_securities(sources.alpaca.assets(), sources.nasdaq.listings())
-    with engine.begin() as conn:
-        refreshed = refresh_tickers(
-            conn,
-            securities,
-            calendar,
-            session,
-            now=now,
-            max_delistings=risk.ingest.max_delistings,
-        )
-    details["universe"] = {
-        "listed": len(securities),
-        "inserted": refreshed.inserted,
-        "updated": refreshed.updated,
-        "delisted": list(refreshed.delisted),
-    }
-
-    seconds["universe"] = round(time.monotonic() - clock - sum(seconds.values()), 1)
-
-    # 3. Bars (critical).
+    # 2. Bars for the ETF list (critical).
     with _transaction(engine, risk) as conn:
         bars = ingest_bars(conn, sources.alpaca, calendar, risk, session, now)
     details["bars"] = bars.details()
     seconds["bars"] = round(time.monotonic() - clock - sum(seconds.values()), 1)
     if bars.status == INCOMPLETE:
         alerts.append(
-            f"ingest {session}: bars INCOMPLETE (coverage {bars.coverage:.1%}, "
-            f"{bars.received}/{bars.expected}; missing indexes {bars.missing_indexes or 'none'}). "
-            "No new entries next session."
+            f"ingest {session}: bars INCOMPLETE (no bar for {', '.join(bars.missing_required)}). "
+            "No increase of exposure next session."
+        )
+    elif bars.missing:
+        alerts.append(
+            f"ingest {session}: no bar for {', '.join(bars.missing)} (halted or delisted?): "
+            "no buy of it; held units are marked at the last close."
         )
 
-    # 4-9 degrade.
+    # 3-5 degrade.
     def step(name: str, call: Callable[[], Any]) -> Any:
         started = time.monotonic()
         try:
@@ -225,10 +176,13 @@ def run_ingest(
 
         return run
 
+    funds = tracked_symbols(risk)
     step(
         "corporate_actions",
         in_transaction(
-            lambda c: ingest_corporate_actions(c, sources.alpaca, calendar, risk, session)
+            lambda c: ingest_corporate_actions(
+                c, sources.alpaca, calendar, risk, session, symbols=funds
+            )
         ),
     )
     macro = step(
@@ -241,38 +195,6 @@ def run_ingest(
         alerts.append(
             f"ingest {session}: no value for {', '.join(macro.missing)} tonight "
             "(CBOE quote not final, history file and FRED behind). The regime uses the latest."
-        )
-    edgar = sources.edgar
-    workers = risk.ingest.http_workers
-    cache = SubmissionsCache(edgar, session, workers=workers) if edgar is not None else None
-    if edgar is not None and cache is not None:
-        step(
-            "companies",
-            in_transaction(
-                lambda c: ingest_companies(
-                    c, edgar, cache, sources.finnhub, calendar, risk, session
-                )
-            ),
-        )
-    else:
-        details["companies"] = {"skipped": "EDGAR_USER_AGENT not set"}
-    if sources.finnhub is not None and cache is not None:
-        finnhub = sources.finnhub
-        submissions = cache  # one EDGAR fetch per company per run
-        step(
-            "earnings",
-            in_transaction(
-                lambda c: ingest_earnings(
-                    c, finnhub, submissions, sources.news, calendar, risk, session, now
-                )
-            ),
-        )
-    else:
-        details["earnings"] = {"skipped": "FINNHUB_API_KEY or EDGAR_USER_AGENT not set"}
-    if edgar is not None:
-        step(
-            "fundamentals",
-            in_transaction(lambda c: ingest_fundamentals(c, edgar, calendar, risk, session)),
         )
     retention = step(
         "retention",
@@ -343,8 +265,7 @@ handler = lambda_handler(JOB)
 
 def direct_main(argv: Sequence[str]) -> int:
     """Run the steps outside the job runner: no heartbeat, no chain check, no alerts (the
-    output is logged). For runs before the evening chain exists end to end (task 1.7), and by
-    hand."""
+    output is logged). By hand."""
     from auratrade.jobs.wiring import load_runtime_settings
     from auratrade.log import configure_logging
     from auratrade.storage import make_store

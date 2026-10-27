@@ -18,6 +18,12 @@
 all of it through the sell sequence, then the market fund bought with the proceeds. Neither the
 kill switch nor any other block stops it: it lowers exposure (README §5.9).
 
+**The stop's proceeds** (any session after the rebalance finished, until the next E): when the
+leveraged fund's stop filled since then, the proceeds go into the cash fund (README §7.2), as far
+as the cash left pays for whole shares; the buy follows the same blocks as the rebalance's (under
+the kill switch only if the cash fund is already held). What earlier runs bought of the cash
+fund since the fill counts against the proceeds, so a later run buys only what is still owed.
+
 In dry_run nothing is sent: the plan is reported.
 """
 
@@ -26,17 +32,18 @@ from __future__ import annotations
 import math
 from collections.abc import Collection, Mapping
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime, time, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Connection, select, update
 
 from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import PortfolioConfig
 from auratrade.db.flags import read_flags
-from auratrade.db.models import PortfolioTarget
-from auratrade.execution import funds, store
-from auratrade.execution.broker import Broker
+from auratrade.db.models import FundStop, PortfolioTarget
+from auratrade.execution import funds, ids, store
+from auratrade.execution.broker import Broker, BrokerOrder, Side
 from auratrade.execution.orders import BuyResult, SaleResult, SaleStatus
 from auratrade.execution.prices import marketable_buy_limit
 from auratrade.execution.rebalance import (
@@ -44,6 +51,7 @@ from auratrade.execution.rebalance import (
     Blocks,
     Move,
     allow_buys,
+    buy_block,
     fit_buys,
     halted_targets,
     leveraged_stop,
@@ -54,6 +62,11 @@ from auratrade.strategies.core_allocation import WEIGHT_TOLERANCE
 
 REBALANCE = "REBALANCE"
 HALT = "HALT"
+NY = ZoneInfo("America/New_York")
+# A stop placed a little before its ENTRY row's session (a broker timestamp) is still found.
+STOP_LOOKBACK_MARGIN = timedelta(days=1)
+# Orders are listed by creation after a time: a buy placed in the second of the fill counts.
+FILL_MARGIN = timedelta(seconds=1)
 
 
 @dataclass(frozen=True)
@@ -318,4 +331,100 @@ def halt_sale(section: Section) -> dict[str, Any] | None:
     shares = math.floor(spend / limit) if spend > 0 else 0
     if shares > 0:
         out["buy"] = _bought(desk.buy(market, shares, limit, stop=None))
+    return out
+
+
+def last_finished(conn: Connection) -> datetime | None:
+    """When the latest decided rebalance finished; None while it is owed (or before any)."""
+    row = conn.execute(
+        select(PortfolioTarget.executed_at)
+        .where(PortfolioTarget.kind == "REBALANCE", PortfolioTarget.status == "DECIDED")
+        .order_by(PortfolioTarget.execution_session.desc())
+        .limit(1)
+    ).first()
+    return None if row is None else row.executed_at
+
+
+def bought_from_flat(conn: Connection, symbol: str) -> date | None:
+    """The session the fund was last bought from flat (its ENTRY level): no stop of the
+    holding was placed before it."""
+    day: date | None = conn.scalar(
+        select(FundStop.session_date)
+        .where(FundStop.symbol == symbol, FundStop.change == "ENTRY")
+        .order_by(FundStop.id.desc())
+        .limit(1)
+    )
+    return day
+
+
+def stopped_out(order: BrokerOrder) -> bool:
+    """A sale by the stop: the stop order itself, or the sale at once the invariant makes when
+    the price is already through the level (`OrderDesk.protect`)."""
+    if order.side is not Side.SELL:
+        return False
+    if order.is_sell_stop:
+        return True
+    parsed = ids.parse(order.client_order_id)
+    return parsed is not None and parsed.purpose is ids.Purpose.EXIT and parsed.detail == "STOP"
+
+
+def stop_proceeds(section: Section, invariant: InvariantReport) -> dict[str, Any] | None:
+    """The leveraged fund's stop fills since the rebalance finished, into the cash fund (README
+    §7.2). None when no stop filled."""
+    ctx, deps, desk = section.ctx, section.deps, section.desk
+    cfg = ctx.risk.portfolio
+    lev, cash_fund = cfg.leveraged, cfg.cash
+    with deps.engine.connect() as conn:
+        since = last_finished(conn)
+        entry = bought_from_flat(conn, lev)
+    if since is None or entry is None:
+        return None
+    # Orders are listed by creation: the stop that filled may rest from an earlier E.
+    created_after = datetime.combine(entry, time(0), tzinfo=NY) - STOP_LOOKBACK_MARGIN
+    fills = [
+        o
+        for o in deps.broker.orders_since(created_after, [lev])
+        if stopped_out(o) and o.filled_qty > 0 and o.filled_at is not None and o.filled_at >= since
+    ]
+    if not fills:
+        return None
+    proceeds = math.fsum(o.filled_qty * (o.filled_avg_price or 0.0) for o in fills)
+    first_fill = min(o.filled_at for o in fills if o.filled_at is not None)
+    # What earlier runs already put in: only the proceeds go in, never the rebalance's change.
+    bought = math.fsum(
+        o.filled_qty * (o.filled_avg_price or 0.0)
+        for o in deps.broker.orders_since(first_fill - FILL_MARGIN, [cash_fund])
+        if o.side is Side.BUY and o.filled_qty > 0
+    )
+    out: dict[str, Any] = {
+        "symbol": lev,
+        "stopped": sum(o.filled_qty for o in fills),
+        "proceeds": round(proceeds, 2),
+        "already_in": round(bought, 2),
+        "into": cash_fund,
+    }
+    held = holdings(deps.broker, [cash_fund]).get(cash_fund, 0)
+    blocks = Blocks(
+        increases=tuple(increase_blocks(section, invariant)),
+        mismatched=frozenset(desk.blocked_sales),
+    )
+    block = buy_block(cash_fund, held, blocks, cfg)
+    if block is not None:
+        desk.alert(f"the stop's proceeds stay in cash: {block}")
+        return {**out, "skipped": block}
+    if not desk.market_open:
+        return {**out, "skipped": "market closed"}
+    price = deps.prices.prices([cash_fund])[cash_fund]
+    if price is None:
+        desk.alert(f"no price for {cash_fund}: the stop's proceeds stay in cash")
+        return {**out, "skipped": "no price"}
+    limit = marketable_buy_limit(price, ctx.risk.execution.marketable_limit_slippage)
+    spend = min(proceeds - bought, deps.broker.account().cash)
+    shares = math.floor(spend / limit) if spend > 0 else 0
+    out |= {"shares": shares, "limit": limit}
+    if shares <= 0:
+        return out
+    if section.dry_run:
+        return {**out, "dry_run": True}
+    out["buy"] = _bought(desk.buy(cash_fund, shares, limit, stop=None))
     return out

@@ -11,7 +11,6 @@ SECRETS = {
     "ALPACA_SECRET_KEY": "alpaca-secret-456",
     "ANTHROPIC_API_KEY": "sk-ant-secret-789",
     "FRED_API_KEY": "fredkey0123456789",
-    "FINNHUB_API_KEY": "finnhubkey012",
     "TELEGRAM_BOT_TOKEN": "123456:telegramtoken",
     "DATABASE_URL": "postgresql+psycopg://user:dbpassword@db.example.net/app",
 }
@@ -19,7 +18,6 @@ FULL_ENV = {
     **SECRETS,
     "TRADING_MODE": "dry_run",
     "TELEGRAM_CHAT_ID": "42",
-    "EDGAR_USER_AGENT": "AuraTrade research owner@realmail.net",
 }
 OPTS = ck.Options()
 
@@ -80,14 +78,6 @@ def test_alpaca_data_sends_keys_as_headers() -> None:
     assert result.status is ck.Status.OK
     assert seen[0].headers["APCA-API-KEY-ID"] == SECRETS["ALPACA_API_KEY"]
     assert seen[0].url.params["feed"] == "iex"
-
-
-def test_edgar_rejects_placeholder_agent_without_request() -> None:
-    def fail(request: httpx.Request) -> httpx.Response:
-        raise AssertionError("no request expected")
-
-    env = {"EDGAR_USER_AGENT": "AuraTrade research you@example.com"}
-    assert ck.check_edgar(env, client(fail), OPTS).status is ck.Status.FAIL
 
 
 def test_telegram_test_message_only_on_request() -> None:

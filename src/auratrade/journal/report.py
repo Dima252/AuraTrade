@@ -1,18 +1,16 @@
-"""The account snapshot and the Telegram daily report written by `post_market` (README §5.10)."""
+"""The account snapshot and the Telegram daily report written by `post_market` (README §5.7)."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
-from typing import Any
 
 from sqlalchemy import Connection, func, select
 from sqlalchemy.dialects.postgresql import insert
 
-from auratrade.db.models import AccountSnapshot, TradeJournalRow
+from auratrade.db.models import AccountSnapshot
 from auratrade.execution.broker import Account, BrokerPosition
-from auratrade.execution.store import entities
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,10 +70,6 @@ def write_snapshot(
     )
 
 
-def closed_today(conn: Connection, session: date) -> list[TradeJournalRow]:
-    return entities(conn, select(TradeJournalRow).where(TradeJournalRow.exit_session == session))
-
-
 def _money(value: float) -> str:
     return f"${value:,.2f}"
 
@@ -84,10 +78,9 @@ def daily_report(
     snapshot: Snapshot,
     positions: Iterable[BrokerPosition],
     levels: Mapping[str, float],
-    closed: Iterable[TradeJournalRow],
     *,
-    entries: Iterable[Mapping[str, Any]] = (),
     invariant_ok: bool,
+    halted: bool = False,
     alerts: Sequence[str] = (),
     mode: str,
 ) -> str:
@@ -101,23 +94,16 @@ def daily_report(
         f"Equity {_money(snapshot.equity)}{change}; cash {_money(snapshot.cash)}; "
         f"drawdown {snapshot.drawdown:.1%} from {_money(snapshot.peak_equity)}",
     ]
+    if halted:
+        lines.append("Drawdown halt ON: no leverage (README §7.3)")
     held = [p for p in positions if p.qty > 0]
     lines.append(f"Positions: {len(held)}")
     for p in sorted(held, key=lambda x: x.symbol):
         price = f" @ {p.current_price:.2f}" if p.current_price else ""
         stop = levels.get(p.symbol)
-        stop_text = f", stop {stop:.2f}" if stop is not None else ", NO PLAN"
+        stop_text = f", stop {stop:.2f}" if stop is not None else ""
         lines.append(f"  {p.symbol} {p.qty} sh, cost {p.avg_entry_price:.2f}{price}{stop_text}")
-    entered = list(entries)
-    if entered:
-        lines.append("Entries: " + ", ".join(str(e.get("symbol")) for e in entered))
-    trades = list(closed)
-    if trades:
-        lines.append("Closed:")
-        for t in trades:
-            r = "" if t.r_multiple is None else f" {t.r_multiple:+.2f}R"
-            lines.append(f"  {t.symbol} {t.exit_reason}{r}")
-    lines.append("Stops: every position covered" if invariant_ok else "Stops: CHECK THE ALERTS")
+    lines.append("Stops: the leveraged fund covered" if invariant_ok else "Stops: CHECK THE ALERTS")
     if alerts:
         lines.append(f"Alerts today: {len(alerts)}")
     return "\n".join(lines)

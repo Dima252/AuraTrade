@@ -211,19 +211,18 @@ class TestSchedule:
             "ingest",
             "simulate",
             "regime",
-            "scan",
-            "analyst_submit",
+            "allocate",
         ]
         starts = [link.fallback_start for link in schedule.EVENING_CHAIN]
         assert starts == sorted(starts)
 
     def test_neighbours(self) -> None:
         assert schedule.predecessor("post_market") is None
-        assert schedule.successor("analyst_submit") is None
-        assert schedule.predecessor("scan") == "regime"
-        assert schedule.successor("scan") == "analyst_submit"
-        assert schedule.predecessor("analyst_collect") is None
-        assert schedule.successor("analyst_collect") is None
+        assert schedule.successor("allocate") is None
+        assert schedule.predecessor("allocate") == "regime"
+        assert schedule.successor("regime") == "allocate"
+        assert schedule.predecessor("execute_close") is None
+        assert schedule.successor("execute_close") is None
         assert schedule.chain_link("watchdog") is None
 
 

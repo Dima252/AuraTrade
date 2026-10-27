@@ -1,10 +1,8 @@
-"""The fill model on hand-built bars with known fills (README §5.12)."""
+"""The fill model on hand-built bars with known fills (the fake broker's and the portfolio
+simulator's)."""
 
 from datetime import timedelta
 
-import pytest
-
-from auratrade.config import SimConfig, load_risk_config
 from auratrade.indicators.bars import Bar
 from auratrade.sim.fills import (
     between,
@@ -12,35 +10,14 @@ from auratrade.sim.fills import (
     entry_on_bar,
     last_price,
     sell_limit_on_bar,
-    slippage,
     stop_fill,
     stop_on_bar,
 )
 from tests.sim.helpers import at, bars, flat
 
-SIM = load_risk_config().sim
-
 
 def b(o: float, h: float, low: float, c: float) -> Bar:
     return Bar(o, h, low, c, 1000)
-
-
-class TestSlippage:
-    @pytest.mark.parametrize(
-        ("dollar_volume", "fraction"),
-        [(2e9, 0.0005), (5e8, 0.0005), (1e8, 0.001), (3e7, 0.002), (1.2e7, 0.003), (None, 0.003)],
-    )
-    def test_tiers_by_dollar_volume(self, dollar_volume: float | None, fraction: float) -> None:
-        assert slippage(dollar_volume, SIM) == fraction
-
-    def test_tiers_must_run_from_the_highest_down_to_zero(self) -> None:
-        raw = SIM.model_dump()
-        with pytest.raises(ValueError, match="highest dollar volume down"):
-            SimConfig.model_validate({**raw, "slippage": list(reversed(raw["slippage"]))})
-        with pytest.raises(ValueError, match="start at 0"):
-            SimConfig.model_validate({**raw, "slippage": raw["slippage"][:-1]})
-        with pytest.raises(ValueError, match="delayed_entry_minutes"):
-            SimConfig.model_validate({**raw, "delayed_entry_minutes": raw["entry_minutes"]})
 
 
 class TestBuyStopLimit:

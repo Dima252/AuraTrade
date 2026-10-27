@@ -21,13 +21,15 @@ RISK = load_risk_config(DEFAULT_RISK_CONFIG)
 NOW = datetime(2026, 10, 15, 21, 30, tzinfo=UTC)
 
 
+# The ETF list of `small_risk`: the core funds, a short satellite list and the regime's indexes.
+FUNDS = ("BIL", "GLD", "QQQ", "SPY", "SSO")
+
+
 def small_risk(**ingest: Any) -> RiskConfig:
-    """Short windows: 20 sessions of bars, 5-session dollar volume, 1 to 10 dollar filters."""
-    universe = RISK.universe.model_copy(
-        update={"dollar_volume_sessions": 5, "min_price": 10.0, "min_dollar_volume": 100_000.0}
-    )
+    """Short windows (20 sessions of bars) and a short ETF list (`FUNDS`)."""
+    portfolio = RISK.portfolio.model_copy(update={"satellite_list": ("QQQ", "GLD", "BIL", "SPY")})
     cfg = RISK.ingest.model_copy(update={"bar_history_sessions": 20, **ingest})
-    return RISK.model_copy(update={"universe": universe, "ingest": cfg})
+    return RISK.model_copy(update={"portfolio": portfolio, "ingest": cfg})
 
 
 def sync_calendar(engine: Engine) -> MarketCalendar:

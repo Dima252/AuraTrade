@@ -21,12 +21,12 @@ def at(hour: int, minute: int = 0) -> datetime:
 
 
 def slots_for(job: str) -> list[Slot]:
-    return [s for s in schedule.skeleton_slots(CHAIN_WAIT) if s.job == job]
+    return [s for s in schedule.weekday_slots(CHAIN_WAIT) if s.job == job]
 
 
 def test_a_single_slot_fires_once() -> None:
-    assert Slot("execute_entries", time(9, 36)).times() == [time(9, 36)]
-    assert Slot("execute_entries", time(9, 36)).last == time(9, 36)
+    assert Slot("execute_close", time(15, 40)).times() == [time(15, 40)]
+    assert Slot("execute_close", time(15, 40)).last == time(15, 40)
 
 
 def test_a_repeating_slot_includes_its_end() -> None:
@@ -65,8 +65,8 @@ def test_slots_apply_by_the_kind_of_close(close: Close, regular: bool, early: bo
 
 
 def test_the_day_schedule() -> None:
+    assert [s.start for s in slots_for("portfolio_manager")] == [time(8, 45)]
     assert [s.start for s in slots_for("execute_open")] == [time(9, 20), time(9, 31)]
-    assert [s.start for s in slots_for("execute_entries")] == [time(9, 36)]
     (guard,) = slots_for("stop_guard")
     times = guard.times()
     assert (times[0], times[-1], len(times)) == (time(9, 35), time(16, 0), 78)
@@ -74,8 +74,7 @@ def test_the_day_schedule() -> None:
     (watchdog,) = slots_for("watchdog")
     assert (watchdog.start, watchdog.last, len(watchdog.times())) == (time(7), time(22), 61)
     assert watchdog.heartbeat is Heartbeat.NONE
-    assert [(s.start, s.close) for s in slots_for("eod_review")] == [
-        (time(12, 40), Close.EARLY),
+    assert [(s.start, s.close) for s in slots_for("execute_close")] == [
         (time(15, 40), Close.REGULAR),
     ]
 
@@ -99,46 +98,47 @@ def test_the_chain_head_fires_once_and_the_rest_fall_back_until_their_deadline()
     assert ingest.times() == [time(17, 0), time(17, 10), time(17, 20), time(17, 30)]
 
 
-def test_every_skeleton_job_is_scheduled() -> None:
-    jobs = {s.job for s in schedule.skeleton_slots(CHAIN_WAIT)}
-    chain = {link.job for link in schedule.EVENING_CHAIN}
-    assert jobs == chain | {
+def test_every_job_is_scheduled() -> None:
+    jobs = {s.job for s in schedule.weekday_slots(CHAIN_WAIT)}
+    chain = [link.job for link in schedule.EVENING_CHAIN]
+    assert chain == ["post_market", "ingest", "simulate", "regime", "allocate"]
+    assert jobs == set(chain) | {
         "watchdog",
+        "portfolio_manager",
         "execute_open",
-        "execute_entries",
         "stop_guard",
-        "eod_review",
+        "execute_close",
     }
 
 
 def test_expected_heartbeats_on_a_regular_day() -> None:
     expected = schedule.expected_heartbeats(
-        schedule.skeleton_slots(CHAIN_WAIT), DAY, early_close=False, grace_minutes=GRACE
+        schedule.weekday_slots(CHAIN_WAIT), DAY, early_close=False, grace_minutes=GRACE
     )
     assert [e.label for e in expected] == [
+        "portfolio_manager 08:45",
         "execute_open 09:20",
         "execute_open 09:31",
-        "execute_entries 09:36",
-        "eod_review 15:40",
+        "execute_close 15:40",
         "post_market 16:20",
         "ingest by 17:45",
         "simulate by 18:00",
         "regime by 18:10",
-        "scan by 18:20",
-        "analyst_submit by 18:35",
+        "allocate by 18:20",
     ]
-    assert expected[0] == Expected("execute_open", at(9, 20), at(9, 35))
+    assert expected[1] == Expected("execute_open", at(9, 20), at(9, 35))
     assert expected[5] == Expected("ingest", None, at(17, 45))
     assert [e.due for e in expected] == sorted(e.due for e in expected)
 
 
-def test_a_half_day_expects_the_early_eod_review_instead() -> None:
+def test_a_half_day_expects_no_execute_close() -> None:
     expected = schedule.expected_heartbeats(
-        schedule.skeleton_slots(CHAIN_WAIT), DAY, early_close=True, grace_minutes=GRACE
+        schedule.weekday_slots(CHAIN_WAIT), DAY, early_close=True, grace_minutes=GRACE
     )
-    reviews = [e for e in expected if e.job == "eod_review"]
-    assert reviews == [Expected("eod_review", at(12, 40), at(12, 55))]
-    assert not any(e.job in ("stop_guard", "watchdog") for e in expected)
+    assert not any(e.job in ("execute_close", "stop_guard", "watchdog") for e in expected)
+    early = Slot("x", time(12, 40), close=Close.EARLY)
+    [only] = schedule.expected_heartbeats((early,), DAY, early_close=True, grace_minutes=GRACE)
+    assert only == Expected("x", at(12, 40), at(12, 55))
 
 
 def test_labels_are_in_new_york_time() -> None:

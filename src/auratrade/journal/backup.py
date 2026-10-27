@@ -20,18 +20,20 @@ from sqlalchemy import Connection, MetaData, Table, inspect, select
 from auratrade.storage import ObjectStore
 
 BACKUP_PREFIX = "backup"
-# The tables README §10 keeps forever. Bars, the scanner output and the LLM output have their
-# own retention (Parquet archives), and job_runs is operational.
+# The tables README §10 keeps forever: the portfolio's (the validation record) and the order
+# layer's. Bars have their own retention (Parquet archives), and job_runs is operational. The
+# setup system's tables are no longer written (task 5.2): their last backups stay.
 KEPT_FOREVER: tuple[str, ...] = (
-    "signals",
-    "positions",
+    "portfolio_targets",
+    "portfolio_journal",
+    "llm_decisions",
+    "prompt_versions",
+    "twin_book",
+    "tax_lots",
+    "fund_stops",
     "orders",
-    "position_plans",
-    "position_events",
-    "trade_journal",
     "account_snapshots",
     "market_regime",
-    "bases",
     "mismatches",
     "system_flags",
 )

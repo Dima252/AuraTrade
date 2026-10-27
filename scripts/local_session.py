@@ -1,12 +1,12 @@
-"""Run the walking skeleton's jobs on this PC at their scheduled times (task 1.7).
+"""Run the portfolio's jobs on this PC at their scheduled times (tasks 1.7, 5.2).
 
     TRADING_MODE=paper uv run python scripts/local_session.py --until 2026-10-26
 
 A stand-in for EventBridge, from the same schedule as the AWS stack (`jobs.schedule`), all
-America/New_York on weekdays: `execute_open` 09:20 and 09:31, `execute_entries` 09:36,
-`stop_guard` every 5 minutes 09:35-16:00, `eod_review` 12:40 and 15:40 (it runs only near the
-day's close), and `post_market --chain` at 16:20, which runs the rest of the evening chain in
-this process, so the chain's fallback slots and the watchdog are left out.
+America/New_York on weekdays: `portfolio_manager` 08:45 (a paid Claude call on E),
+`execute_open` 09:20 and 09:31, `stop_guard` every 5 minutes 09:35-16:00, `execute_close` 15:40,
+and `post_market --chain` at 16:20, which runs the rest of the evening chain in this process, so
+the chain's fallback slots and the watchdog are left out.
 
 Each job is its own process, run one after another, so a slow job delays the next rather than
 overlapping it, and a `stop_guard` slot at the same minute as another job is dropped; the jobs'
@@ -41,7 +41,7 @@ def day_plan(day: date) -> list[Run]:
     head = schedule.EVENING_CHAIN[0].job
     chain_wait = load_risk_config().jobs.chain_wait_minutes
     runs: list[Run] = []
-    for slot in schedule.skeleton_slots(chain_wait):
+    for slot in schedule.weekday_slots(chain_wait):
         if slot.job in LEFT_OUT or schedule.predecessor(slot.job) is not None:
             continue
         extra = ("--chain",) if slot.job == head else ()

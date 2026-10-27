@@ -8,9 +8,10 @@ The first form is the evening step: it continues the state machine from the prev
 starts `regime.replay_warmup_sessions` before `--from` in `CORRECTION` and writes the rows from
 `--from` through `--session`. The replay doesn't go through the job runner (no heartbeat).
 
-The leadership-health pillar reads the breakout tracker (`simulate`, task 3.7): the results
-complete through T. The LLM view and the effective regime's downgrade come in Phase 4 (README
-§5.2); until then the effective regime is the computed one.
+A fact for the Portfolio Manager; no rule reads it (README §5.2). Since task 5.2 it runs on three
+pillars (index trend, volatility, distribution): breadth and leadership health read the stock
+universe and the breakout tracker, both retired, and score 0. The effective regime is the
+computed one.
 """
 
 from __future__ import annotations
@@ -24,11 +25,9 @@ from datetime import date
 import structlog
 from sqlalchemy import Engine
 
-from auratrade.calendar.sessions import load_calendar
 from auratrade.config import Settings, load_risk_config
 from auratrade.db.engine import engine_from_settings
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
-from auratrade.journal.evening import tracked_for_regime
 from auratrade.notify.alerts import Alerter
 from auratrade.regime.compute import replay, run_session
 
@@ -49,19 +48,13 @@ def make_job(
     def run(ctx: JobContext) -> JobOutput:
         engine = engine_factory(ctx.settings)
         with engine.begin() as conn:
-            calendar = load_calendar(conn)
-            result = run_session(
-                conn,
-                ctx.risk,
-                ctx.session_date,
-                breakouts=lambda day: tracked_for_regime(conn, calendar, day, ctx.risk),
-            )
+            result = run_session(conn, ctx.risk, ctx.session_date)
         if "macro_stale" in result.crisis.reasons:
             limit = ctx.risk.data.macro_stale_sessions
             alerter_factory(ctx.settings).alert(
                 f"[AuraTrade {ctx.settings.environment}] regime {ctx.session_date}: VIX/VIX3M "
-                f"more than {limit} sessions stale in CBOE and FRED. Crisis override on: no new "
-                "entries next session."
+                f"more than {limit} sessions stale in CBOE and FRED: the crisis override is on in "
+                "the regime the Portfolio Manager sees."
             )
         details = {
             "computed_regime": result.regime.value,

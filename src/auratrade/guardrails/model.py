@@ -1,10 +1,8 @@
 """What every guardrail returns: a finding per rule that clipped or rejected (README §8).
 
-Findings become ``guardrail_events`` rows (rule, proposed vs enforced value) when Phase 5 wires
-the guardrails into the live path.
+Findings are recorded with each decision (`llm_decisions`, the journal's `clips`).
 """
 
-import math
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -86,7 +84,3 @@ def outcome_of(findings: tuple[Finding, ...] | list[Finding]) -> Outcome:
     if Outcome.REJECT in outcomes:
         return Outcome.REJECT
     return Outcome.CLIP if outcomes else Outcome.APPROVE
-
-
-def finite_positive(*values: float | None) -> bool:
-    return all(v is not None and math.isfinite(v) and v > 0 for v in values)

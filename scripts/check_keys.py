@@ -36,7 +36,6 @@ SECRET_VARS = (
     "ALPACA_SECRET_KEY",
     "ANTHROPIC_API_KEY",
     "FRED_API_KEY",
-    "FINNHUB_API_KEY",
     "TELEGRAM_BOT_TOKEN",
     "DATABASE_URL",
 )
@@ -46,8 +45,6 @@ TIMEOUT_S = 15.0
 
 ALPACA_DATA_URL = "https://data.alpaca.markets/v2/stocks/bars/latest"
 FRED_URL = "https://api.stlouisfed.org/fred/series/observations"
-FINNHUB_URL = "https://finnhub.io/api/v1/stock/profile2"
-EDGAR_URL = "https://data.sec.gov/submissions/CIK0000320193.json"
 TELEGRAM_URL = "https://api.telegram.org/bot{token}/{method}"
 
 
@@ -193,28 +190,6 @@ def check_fred(env: Env, http: httpx.Client, opts: Options) -> Result:
     return Result("fred", Status.OK, f"VIXCLS {latest['date']} = {latest['value']}")
 
 
-def check_finnhub(env: Env, http: httpx.Client, opts: Options) -> Result:
-    (key,) = require(env, "FINNHUB_API_KEY")
-    response = http.get(FINNHUB_URL, params={"symbol": "AAPL"}, headers={"X-Finnhub-Token": key})
-    if response.status_code != 200:
-        return Result("finnhub", Status.FAIL, http_failure(response))
-    name = response.json().get("name")
-    if not name:
-        return Result("finnhub", Status.FAIL, "empty AAPL profile")
-    return Result("finnhub", Status.OK, f"AAPL profile: {name}")
-
-
-def check_edgar(env: Env, http: httpx.Client, opts: Options) -> Result:
-    (agent,) = require(env, "EDGAR_USER_AGENT")
-    if "example.com" in agent or "@" not in agent:
-        return Result("edgar", Status.FAIL, "EDGAR_USER_AGENT needs your real contact email")
-    response = http.get(EDGAR_URL, headers={"User-Agent": agent})
-    if response.status_code != 200:
-        return Result("edgar", Status.FAIL, http_failure(response))
-    body = response.json()
-    return Result("edgar", Status.OK, f"{body.get('name')}, SIC {body.get('sic')}")
-
-
 class TelegramError(Exception):
     pass
 
@@ -261,8 +236,6 @@ CHECKS: dict[str, Check] = {
     "alpaca_data": check_alpaca_data,
     "anthropic": check_anthropic,
     "fred": check_fred,
-    "finnhub": check_finnhub,
-    "edgar": check_edgar,
     "telegram": check_telegram,
     "database": check_database,
 }

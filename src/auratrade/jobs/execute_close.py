@@ -10,11 +10,11 @@ buys), then
   finish: toward the decided targets (`execution.portfolio`). Each run is recorded on its
   `portfolio_targets` row; one that finished sets `executed_at`, so a second run that day, or
   the retry, does nothing.
+- **the stop's proceeds**, on any session after the rebalance finished: a stop fill of the
+  leveraged fund since then goes into the cash fund until the next E (README §7.2).
 
 No trades on a half day: its 15:40 is after the close, and E has moved past it. In dry_run the
 plan is reported and recorded, and no order is sent.
-
-Until task 5.2 rewrites the schedule this job isn't in it; it runs by hand.
 """
 
 from __future__ import annotations
@@ -24,7 +24,13 @@ from typing import Any
 
 from auratrade.config import TradingMode
 from auratrade.db.flags import read_flags
-from auratrade.execution.portfolio import due_rebalance, halt_sale, rebalance, record_execution
+from auratrade.execution.portfolio import (
+    due_rebalance,
+    halt_sale,
+    rebalance,
+    record_execution,
+    stop_proceeds,
+)
 from auratrade.execution.runtime import (
     DepsFactory,
     enforce_invariant,
@@ -73,6 +79,10 @@ def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
                         "the book holds where it is until the next E"
                     )
                 out["rebalance"] = result
+            elif not halted:
+                proceeds = stop_proceeds(section, invariant)
+                if proceeds is not None:
+                    out["stop_proceeds"] = proceeds
             return {**out, "actions": section.desk.actions, "alerts": section.alerts}
 
     return JobSpec(name="execute_close", policy=GuardPolicy.SESSION_TODAY, run=run)

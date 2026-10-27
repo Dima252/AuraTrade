@@ -20,8 +20,9 @@ from auratrade.calendar.sessions import load_calendar
 from auratrade.config import Settings, TradingMode, load_risk_config
 from auratrade.data.alpaca_data import Adjustment, DailyBar
 from auratrade.data.news import NewsItem
-from auratrade.db.flags import TRADING_ENABLED
+from auratrade.db.flags import HALT_DRAWDOWN, TRADING_ENABLED, read_flags
 from auratrade.db.models import (
+    AccountSnapshot,
     BookMark,
     LlmDecision,
     MarketSession,
@@ -131,13 +132,13 @@ def world(pg_engine: Engine) -> Engine:
     return pg_engine
 
 
-def context(job: str, session: date) -> JobContext:
-    settings = Settings(_env_file=None, trading_mode=TradingMode.DRY_RUN)  # type: ignore[call-arg]
+def context(job: str, session: date, mode: TradingMode = TradingMode.DRY_RUN) -> JobContext:
+    settings = Settings(_env_file=None, trading_mode=mode)  # type: ignore[call-arg]
     return JobContext(
         job=job,
         session_date=session,
         run_id=uuid.uuid4().hex,
-        trading_mode=TradingMode.DRY_RUN,
+        trading_mode=mode,
         settings=settings,
         risk=RISK,
         storage=None,  # type: ignore[arg-type]  # these jobs store nothing
@@ -146,9 +147,11 @@ def context(job: str, session: date) -> JobContext:
     )
 
 
-def allocate(engine: Engine, bars: Bars, session: date) -> dict[str, Any]:
+def allocate(
+    engine: Engine, bars: Bars, session: date, mode: TradingMode = TradingMode.DRY_RUN
+) -> dict[str, Any]:
     spec = allocate_job.make_job(engine_factory=lambda _s: engine, funds_factory=lambda _s: bars)
-    return dict(spec.run(context("allocate", session)) or {})
+    return dict(spec.run(context("allocate", session, mode)) or {})
 
 
 def decide(
@@ -428,3 +431,55 @@ def test_a_replay_reads_no_news_after_e(world: Engine) -> None:
     assert start == datetime.combine(date(2026, 10, 26), time(9, 30), tzinfo=NY)
     morning = datetime.combine(E_NOV, time(8, 45), tzinfo=NY)
     assert news_window(calendar, RISK, E_NOV, morning)[1] == morning
+
+
+def halt_flag(engine: Engine, on: bool, peak: float) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            update(SystemFlag)
+            .where(SystemFlag.name == HALT_DRAWDOWN)
+            .values(value=on, details={"peak": peak})
+        )
+
+
+def account_snapshot(engine: Engine, day: date, equity: float) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            insert(AccountSnapshot).values(
+                session_date=day,
+                equity=equity,
+                cash=equity,
+                long_market_value=0.0,
+                peak_equity=equity,
+                drawdown=0.0,
+                open_positions=0,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("equity", "halted", "level"),
+    [(100_000.0, True, RISK.portfolio.capped_level), (250_000.0, False, RISK.portfolio.up_level)],
+)
+def test_on_paper_r_reads_the_accounts_halt_and_may_turn_it_off(
+    world: Engine, equity: float, halted: bool, level: float
+) -> None:
+    halt_flag(world, True, 200_000.0)
+    account_snapshot(world, R_OCT, equity)
+    out = allocate(world, Bars(), R_OCT, TradingMode.PAPER)
+    assert (out["halted"], out["rule_level"]) == (halted, level)
+    assert out["halt"]["turned_off"] is not halted
+    (row,) = targets(world)
+    assert (row.halted, row.rule_level) == (halted, level)
+    assert facts_from_json(row.facts).trend.halted is halted
+    with world.connect() as conn:
+        assert read_flags(conn).halt_drawdown is halted
+
+
+def test_in_dry_run_r_uses_the_simulated_books_halt(world: Engine) -> None:
+    halt_flag(world, True, 200_000.0)
+    out = allocate(world, Bars(), R_OCT)
+    assert (out["halted"], out["rule_level"]) == (False, RISK.portfolio.up_level)
+    assert "halt" not in out
+    with world.connect() as conn:
+        assert read_flags(conn).halt_drawdown is True  # the account's flag is left alone
