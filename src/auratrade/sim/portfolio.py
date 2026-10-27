@@ -21,6 +21,14 @@ functions (`strategies/core_allocation.py`, `tax/israel.py`). Each session, in o
 At the end everything is sold, less slippage, and the last year's tax paid: the final wealth.
 Units are dollars' worth of each fund's price index, not whole shares (pre-registration §3.5).
 The invariants of the pre-registration §7 raise `PortfolioInvariantError`.
+
+**The live book** (task 4.3, #166) runs on the same steps with options that are all off in
+the backtest. ``book`` gives the targets the Portfolio Manager set for each E (satellite funds
+included, their prices in the market; an E without targets takes the rules').
+``sell_at_end=False`` stops at T's close without the final sale, leaving the account in
+`PortfolioRun.end`; ``rank_at_end`` also ranks T when it is an R whose E is past the market
+(the `allocate` job's evening), so its ranking is the run's last. The twin is the same run
+without ``book``.
 """
 
 from __future__ import annotations
@@ -195,6 +203,21 @@ class Ranking:
 
 
 @dataclass(slots=True)
+class AccountEnd:
+    """The account at the last close of a run that didn't sell at the end."""
+
+    units: dict[str, float]
+    cash: float
+    accrued: float
+    """Payouts earned but not yet paid (they are paid at month end)."""
+    tax: TaxBook
+    halt: Halt
+    stop: float | None
+    targets: dict[str, float] | None
+    """The targets of the last rebalance (None before the first)."""
+
+
+@dataclass(slots=True)
 class PortfolioRun:
     start_equity: float
     days: list[date] = field(default_factory=list)
@@ -208,6 +231,8 @@ class PortfolioRun:
     taxes: list[YearTax] = field(default_factory=list)
     final_wealth: float = 0.0
     """After the final sale and its tax."""
+    end: AccountEnd | None = None
+    """Set instead of the final sale with ``sell_at_end=False``."""
 
     @property
     def flips(self) -> int:
@@ -240,23 +265,43 @@ def simulate_portfolio(
     equity: float,
     tax_rate: float,
     offset: int = 1,
+    book: Mapping[date, Mapping[str, float]] | None = None,
+    sell_at_end: bool = True,
+    rank_at_end: bool = False,
 ) -> PortfolioRun:
     """The account from cash at the close of the first R at or after session ``start`` to its
-    sale at the close of session ``end``."""
-    if not 0 <= start < end < len(market.days):
+    sale at the close of session ``end`` (or, with ``sell_at_end=False``, to that close)."""
+    if not 0 <= start <= end < len(market.days) or (sell_at_end and start == end):
         raise ValueError("start and end must be sessions of the market, start first")
+    if rank_at_end and sell_at_end:
+        raise ValueError("rank_at_end needs sell_at_end=False")
+    core = (cfg.market, cfg.leveraged, cfg.cash)
+    if not set(core) <= market.prices.keys():
+        raise ValueError(f"the market needs {core}")
+    for day, targets in (book or {}).items():
+        unknown = sorted(set(targets) - market.prices.keys())
+        if unknown:
+            raise ValueError(f"{day}: no prices for {unknown}")
     sessions = [_Session(d) for d in market.days]
     position = {d: i for i, d in enumerate(market.days)}
     schedule = [(position[r.ranking], position[r.execution]) for r in rebalances(sessions, offset)]
     by_ranking = dict(schedule)
     ranking_days = [r for r, _ in schedule]
+    rank_end = rank_at_end and end not in by_ranking
+    if rank_end:
+        ranking_days = [r for r in ranking_days if r < end] + [end]
     first = next((r for r in ranking_days if r >= start), None)
-    if first is None or first >= end:
+    if first is None or first > end or (sell_at_end and first == end):
         raise ValueError("no ranking session between start and end")
-    sim = _Simulation(market, rules, cfg, equity, tax_rate, ranking_days)
+    sim = _Simulation(market, rules, cfg, equity, tax_rate, ranking_days, book)
     for i in range(first, end + 1):
         sim.session(i, first, end, by_ranking.get(i))
-    sim.finish(end)
+    if sell_at_end:
+        sim.finish(end)
+    else:
+        if rank_end:
+            sim.rank(end, sim.run.marks[-1])
+        sim.keep(end)
     return sim.run
 
 
@@ -275,17 +320,23 @@ class _Simulation:
         equity: float,
         tax_rate: float,
         ranking_days: list[int],
+        book: Mapping[date, Mapping[str, float]] | None = None,
     ) -> None:
         self.m = market
         self.rules = rules
         self.cfg = cfg
         self.bt: PortfolioBacktestConfig = cfg.backtest
-        self.funds = (cfg.market, cfg.leveraged, cfg.cash)
-        self.slip = {
-            cfg.market: self.bt.market_slippage,
-            cfg.leveraged: self.bt.leveraged_slippage,
-            cfg.cash: self.bt.cash_slippage,
-        }
+        core = (cfg.market, cfg.leveraged, cfg.cash)
+        self.funds = (*core, *sorted(set(market.prices) - set(core)))
+        # A satellite fund trades at the market fund's slippage (all are large, liquid ETFs).
+        self.slip = dict.fromkeys(self.funds, self.bt.market_slippage)
+        self.slip.update(
+            {
+                cfg.leveraged: self.bt.leveraged_slippage,
+                cfg.cash: self.bt.cash_slippage,
+            }
+        )
+        self.book = book
         self.acct = _Account({}, equity, {}, TaxBook(tax_rate))
         self.run = PortfolioRun(equity)
         self.ranking_days = ranking_days
@@ -339,6 +390,19 @@ class _Simulation:
         tax = self.acct.tax.close_year(day.year)
         self.run.taxes.append(tax)
         self.run.final_wealth = self.acct.cash - tax.total
+
+    def keep(self, end: int) -> None:
+        """Stop at the close of ``end``: the account as it stands."""
+        a = self.acct
+        self.run.end = AccountEnd(
+            dict(a.units),
+            a.cash,
+            math.fsum(a.accrued.values()),
+            a.tax,
+            self.halt,
+            self.stop,
+            None if self.targets is None else dict(self.targets),
+        )
 
     # --- steps --------------------------------------------------------------------------
 
@@ -468,6 +532,11 @@ class _Simulation:
     # --- the decision on R --------------------------------------------------------------
 
     def _decide(self, i: int, execution: int, value: float) -> None:
+        ranking = self.rank(i, value)
+        self.pending = (execution, self._book_targets(execution, ranking.level), ranking)
+
+    def rank(self, i: int, value: float) -> Ranking:
+        """R's trend, cap and halt, and the rule level."""
         cfg, rules = self.cfg, self.rules
         previous = self.state
         if rules.trend is TrendRule.NONE:
@@ -502,7 +571,15 @@ class _Simulation:
         flipped = previous is not None and previous != state
         ranking = Ranking(self.m.days[i], state, capped, halted, level, flipped)
         self.run.rankings.append(ranking)
-        self.pending = (execution, self._targets(level), ranking)
+        return ranking
+
+    def _book_targets(self, execution: int, level: float) -> dict[str, float]:
+        """The rules' targets, or with a book its targets for E. An E the book has no targets
+        for (the Portfolio Manager never ran) takes the rules': they always fit the limits."""
+        chosen = None if self.book is None else self.book.get(self.m.days[execution])
+        if chosen is None:
+            return self._targets(level)
+        return {s: w for s, w in chosen.items() if w > WEIGHT_TOLERANCE}
 
     def _targets(self, level: float) -> dict[str, float]:
         if self.rules.leverage is LeverageMode.FUND or level <= 1:
