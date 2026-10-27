@@ -89,7 +89,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 - [x] 3.23 👤 The one scored run and its reading (pass, near miss, or clear fail) *(2026-10-27 with the user, `docs/backtests/portfolio.md`: **PASS** on G1-G3. After tax +9.2% a year against +8.7%, max drawdown 68% against 85%, ahead in 69% of 1,065 ten-year windows; a thin edge (+0.5 after tax), from the long bear markets; a tie since publication. Decision #160; Phase 4 next)*
 
 **Phase 4: LLM layer** (after a 3.23 pass or near miss, #156)
-- [ ] 4.1 👤 The Claude client (structured outputs, caching, refusals); the cost estimate for your OK *(built 2026-10-27 on `phase-4/claude-client`: `llm/client.py`, `risk.yaml` `llm:`, hand-built wire fixtures, 100% branch coverage; readings #162. Waiting on you: the estimate ($0.20-0.40 a decision, about $3-5 a year) and the < $0.10 fixture recording)*
+- [x] 4.1 👤 The Claude client (structured outputs, caching, refusals); the cost estimate for your OK *(2026-10-27: `llm/client.py`, `risk.yaml` `llm:`, 100% branch coverage; readings #162. You approved the estimate ($0.20-0.40 a decision, about $3-5 a year) and the recording: one real call, $0.017, replayed in the tests)*
 - [ ] 4.2 The Portfolio Manager: facts, tools, schema, prompt, the final ETF list, guardrail wiring, the twin fallback
 - [ ] 4.3 `allocate` + `portfolio_manager` + the twin in `simulate`, in `dry_run`; migration (targets, tax lots, twin, journal)
 - [ ] 4.4 The scorecard (book vs twin vs SPY, before and after the estimated tax)

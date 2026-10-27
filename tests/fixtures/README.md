@@ -14,7 +14,7 @@ Real vendor responses, recorded once from free endpoints, so tests and CI never 
 | `nasdaq/` | 2026-10-15 | `nasdaqlisted.txt`, `otherlisted.txt` | to 4 and 6 symbols, header and footer kept |
 | `french/` | 2026-10-27 | Kenneth French's `F-F_Research_Data_Factors_daily.csv` (unzipped; the tests zip it) | to the notes, the header, the first 5 and last 6 rows and the footer |
 | `shiller/` | 2026-10-27 | the Open Knowledge `s-and-p-500` `data.csv` (Shiller's monthly data) | to the first 3 rows, 2023-05 to 08 and the last 2 |
-| `anthropic/` | hand-built 2026-10-27 | Claude Messages API responses in the wire format: a tool round, an answer, a refusal after fallbacks, a fallback-served answer, a mid-output fallback, a 529. **Not recorded** (a recording is a paid call): `scripts/record_claude_fixtures.py --paid` adds `recorded_*.json` with the user's OK | no |
+| `anthropic/` | 2026-10-27 | `recorded_turn1.json`, `recorded_turn2.json`: one real decision (a tool round, then a structured answer) recorded with `scripts/record_claude_fixtures.py --paid` (paid, $0.017, approved by the user). The rest are **hand-built** in the same wire format for the paths a real call can't be asked to take: a refusal after fallbacks, a fallback-served answer, a mid-output fallback, a 529 | no |
 | `bases/` | 2026-10-10 | daily bars for the base-count tests (task 2.2) | |
 
 To re-record after a vendor changes a format, fetch the same endpoint, trim it the same way, and check that no key appears in the body.

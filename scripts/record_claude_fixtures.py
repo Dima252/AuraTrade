@@ -21,7 +21,7 @@ import anthropic
 import httpx2
 from pydantic import BaseModel, Field
 
-from auratrade.config import Settings, load_risk_config
+from auratrade.config import load_risk_config, load_settings
 from auratrade.llm.client import ClaudeClient, Tool
 
 OUT = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "anthropic"
@@ -69,7 +69,7 @@ def main() -> None:
     if not parser.parse_args().paid:
         sys.exit("refused: this makes paid Claude calls; pass --paid with the user's OK")
 
-    settings = Settings()
+    settings = load_settings()
     if settings.anthropic_api_key is None:
         sys.exit("ANTHROPIC_API_KEY is not set")
     key = settings.anthropic_api_key.get_secret_value()
