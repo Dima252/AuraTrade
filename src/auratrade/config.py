@@ -454,6 +454,7 @@ class RiskConfig(_Strict):
     scorecard: ScorecardConfig
     portfolio: PortfolioConfig
     llm: LlmConfig
+    portfolio_manager: PortfolioManagerConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1384,6 +1385,19 @@ class LlmConfig(_Strict):
     # Keyed by model id. A model missing here (a server-side fallback's) is priced at the
     # dearest listed, so a cost is never understated.
     prices: dict[str, TokenPrices] = Field(min_length=1)
+
+
+class PortfolioManagerConfig(_Strict):
+    """The Portfolio Manager's facts and tools (README §5.4; task 4.2)."""
+
+    # Each satellite ETF's returns, by label, over this many sessions.
+    return_sessions: dict[str, PositiveInt] = Field(min_length=1)
+    volatility_sessions: Annotated[int, Field(ge=2)]
+    sma_sessions: PositiveInt
+    correlation_sessions: Annotated[int, Field(ge=2)]
+    headlines: PositiveInt
+    news_items: PositiveInt
+    history_months: PositiveInt
 
 
 RiskConfig.model_rebuild()

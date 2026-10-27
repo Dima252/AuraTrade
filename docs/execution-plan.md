@@ -90,7 +90,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 
 **Phase 4: LLM layer** (after a 3.23 pass or near miss, #156)
 - [x] 4.1 👤 The Claude client (structured outputs, caching, refusals); the cost estimate for your OK *(2026-10-27: `llm/client.py`, `risk.yaml` `llm:`, 100% branch coverage; readings #162. You approved the estimate ($0.20-0.40 a decision, about $3-5 a year) and the recording: one real call, $0.017, replayed in the tests)*
-- [ ] 4.2 The Portfolio Manager: facts, tools, schema, prompt, the final ETF list, guardrail wiring, the twin fallback
+- [x] 4.2 The Portfolio Manager: facts, tools, schema, prompt, the final ETF list, guardrail wiring, the hold fallback *(#164, #165: a failure holds; the list is final; the real prompt measured at ~8,500 tokens, ~$0.15-0.30 a decision)*
 - [ ] 4.3 `allocate` + `portfolio_manager` + the twin in `simulate`, in `dry_run`; migration (targets, tax lots, twin, journal)
 - [ ] 4.4 The scorecard (book vs twin vs SPY, before and after the estimated tax)
 
@@ -496,13 +496,13 @@ One invocation → `docs/backtests/portfolio.md`, committed as produced, with th
 
 ### 4.2 The Portfolio Manager (M)
 
-The facts it sees (README §5.4), its tools, the schema (README §9), the versioned prompt with untrusted text as data; every output through `guardrails/portfolio.py`; the twin fallback; the final ETF list in `risk.yaml`. **Holding is the default (#163, the user's instruction):** the prompt says that trading a gain realizes 25% tax that holding defers; the facts carry each holding's tax-if-sold and the satellite's tax budget left; `satellite: null` holds last month's targets; each change gives `why_not_hold`.
+The facts it sees (README §5.4), its tools, the schema (README §9), the versioned prompt with untrusted text as data; every output through `guardrails/portfolio.py`; the hold fallback (#164: on a failure, no shift and last month's satellite); the final ETF list in `risk.yaml`. **Holding is the default (#163, the user's instruction):** the prompt says that trading a gain realizes 25% tax that holding defers; the facts carry each holding's tax-if-sold and the satellite's tax budget left; `satellite: null` holds last month's targets; each change gives `why_not_hold`.
 
 **Accept:** fixture tests for a normal month, a hold month, a clip (the hold rule, the tax budget), a refusal, a timeout, invalid output, an event call.
 
 ### 4.3 Jobs in `dry_run` (M)
 
-`jobs/allocate.py` (on R), `jobs/portfolio_manager.py` (on E and events), the twin in `simulate`; the migration (`portfolio_targets`, `tax_lots`, `twin_book`, `portfolio_journal`); targets written, orders not sent.
+`jobs/allocate.py` (on R), `jobs/portfolio_manager.py` (on E and events), the twin in `simulate`; the migration (`portfolio_targets`, `tax_lots`, `twin_book`, `portfolio_journal`, and `prompt_versions` and `llm_decisions`, which README §10 lists but no migration has made yet); `PmSources` implemented for the tools (`llm/portfolio_manager.py`); targets written, orders not sent.
 
 **Accept:** each job runs locally with `--session … --dry-run`; a month replayed end to end in `dry_run`.
 
