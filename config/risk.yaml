@@ -527,7 +527,9 @@ portfolio:  # README §5.4, §6-§8: the portfolio manager (#154-#155); docs/bac
   drawdown_halt: 0.25                # equity <= 75% of its peak: no leverage, at once
   stop_fraction: 0.30                # the leveraged fund's GTC stop 30% below its last rebalance price; raised only
   drift_band: 0.05                   # trade a holding only if its target changed or it is 5 points off it
-  max_etf_weight: 0.10               # each satellite ETF, of equity
+  max_etf_weight: 0.10               # each satellite ETF, of equity; the market fund (the satellite's neutral, #163) may fill it
+  satellite_min_change: 0.02         # a satellite weight within 2 points of last month's target keeps it (#163)
+  satellite_tax_budget: 0.002        # the satellite's sales may realize this much tax a year, of equity; not while DOWN, capped or halted (#163)
   retry_sessions: 1                  # a rebalance blocked on E is tried once more
   market: SPY                        # the core's funds
   leveraged: SSO

@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from auratrade.tax.israel import Lot, Sale, TaxBook, YearTax
+from auratrade.tax.israel import Lot, Sale, TaxBook, YearTax, fifo_gain
 
 JAN = date(2020, 1, 2)
 JUNE = date(2020, 6, 1)
@@ -126,3 +126,22 @@ class TestYears:
         book.buy("SPY", JAN, 1, 100.0)
         book.sell("SPY", JUNE, 1, 300.0)
         assert book.close_year(2020).gain_tax == 37.5
+
+
+class TestFifoGain:
+    LOTS = (Lot(date(2024, 1, 2), 10.0, 100.0), Lot(date(2025, 1, 2), 10.0, 300.0))
+
+    def test_lots_close_oldest_first_and_split_pro_rata(self) -> None:
+        # 15 at $50: cost 100 + 300 x 5/10 = 250, proceeds 750.
+        assert fifo_gain(self.LOTS, 15.0, 50.0) == pytest.approx(500.0)
+
+    def test_units_beyond_the_lots_are_all_gain(self) -> None:
+        # 25 at $50: cost 400 for the 20 held; the other 5 at no cost.
+        assert fifo_gain(self.LOTS, 25.0, 50.0) == pytest.approx(850.0)
+
+    def test_a_loss(self) -> None:
+        assert fifo_gain(self.LOTS, 20.0, 10.0) == pytest.approx(200.0 - 400.0)
+
+    def test_nothing_sold_and_no_lots(self) -> None:
+        assert fifo_gain(self.LOTS, 0.0, 50.0) == 0.0
+        assert fifo_gain((), 2.0, 50.0) == 100.0

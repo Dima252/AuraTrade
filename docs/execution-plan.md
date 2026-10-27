@@ -496,9 +496,9 @@ One invocation → `docs/backtests/portfolio.md`, committed as produced, with th
 
 ### 4.2 The Portfolio Manager (M)
 
-The facts it sees (README §5.4), its tools, the schema (README §9), the versioned prompt with untrusted text as data; every output through `guardrails/portfolio.py`; the twin fallback; the final ETF list in `risk.yaml`.
+The facts it sees (README §5.4), its tools, the schema (README §9), the versioned prompt with untrusted text as data; every output through `guardrails/portfolio.py`; the twin fallback; the final ETF list in `risk.yaml`. **Holding is the default (#163, the user's instruction):** the prompt says that trading a gain realizes 25% tax that holding defers; the facts carry each holding's tax-if-sold and the satellite's tax budget left; `satellite: null` holds last month's targets; each change gives `why_not_hold`.
 
-**Accept:** fixture tests for a normal month, a clip, a refusal, a timeout, invalid output, an event call.
+**Accept:** fixture tests for a normal month, a hold month, a clip (the hold rule, the tax budget), a refusal, a timeout, invalid output, an event call.
 
 ### 4.3 Jobs in `dry_run` (M)
 
@@ -508,7 +508,7 @@ The facts it sees (README §5.4), its tools, the schema (README §9), the versio
 
 ### 4.4 The scorecard (S)
 
-README §5.5: the after-tax excess over the twin, the tilt and shift scores, the expectations; in the journal and the snapshot.
+README §5.5: the after-tax excess over the twin, the tilt scores against the neutral (SPY at 20%, #163) and the shift scores, the expectations, the tax each decision realized; in the journal and the snapshot.
 
 ---
 
@@ -544,7 +544,7 @@ README §5.8 on the public site (`web/` + `data/snapshot.json`); `cdk deploy Aur
 
 ### 6.3 Twelve months (with you)
 
-Monthly journal reviews. Before month 12, pre-register the rule for the LLM's latitude (the plan's B4) in `docs/backtests/latitude.md`.
+Monthly journal reviews. Before month 12, pre-register the rule for the LLM's latitude (the plan's B4) in `docs/backtests/latitude.md`, **on process, not returns** (#163: rule-following, the calibration of the expectations, the tax realized; returns reported, not decisive).
 
 ---
 

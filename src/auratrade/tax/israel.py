@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -27,6 +28,20 @@ class Lot:
     units: float
     cost: float
     """What these units cost, in USD."""
+
+
+def fifo_gain(lots: Sequence[Lot], units: float, price: float) -> float:
+    """The gain a sale of ``units`` at ``price`` would realize, closing ``lots`` FIFO (the
+    lots aren't changed). Units beyond the lots have no known cost: all their proceeds count
+    as gain, so an estimate is never low."""
+    left, cost = units, 0.0
+    for lot in lots:
+        if left <= 0:
+            break
+        taken = min(left, lot.units)
+        cost += lot.cost * taken / lot.units
+        left -= taken
+    return units * price - cost
 
 
 @dataclass(frozen=True, slots=True)

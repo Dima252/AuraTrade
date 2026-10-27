@@ -203,7 +203,7 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
 - **Runs** at 08:45 on E (or its retry), and on an **event**: the drawdown halt turned on, the leveraged fund's stop filled, a held ETF's corporate action. On events it explains and may only reduce risk.
 - **Inputs:**
   - the trend state, the SMA and the distance to each buffer edge, the volatility, the halt, **the rule level and the twin's targets**;
-  - account state: equity, cash, holdings and their weights, drawdown, **tax lots** (unrealized gains, the year's realized gains, the loss carried forward);
+  - account state: equity, cash, holdings and their weights, drawdown, **tax lots** (unrealized gains, the year's realized gains, the loss carried forward), **the tax a full sale of each holding would realize now, and the satellite's tax budget left this year** (#163);
   - the regime and its pillars; macro (VIX, VIX3M, FRED rates and spreads);
   - each satellite ETF's facts: returns over 1, 3, 6 and 12 months, volatility, distance from its 200-session SMA, correlation with SPY;
   - recent headlines (delimited data, §9);
@@ -213,6 +213,7 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
   - the **core shift**: −0.2 to +0.2 on the rule level, never above 1.5, and **only downward** while the rule level is DOWN, capped or halted;
   - **the satellite**: weights over the approved list summing to the satellite's share (`portfolio.satellite_share`, 20%), each ≤ 10% of equity (BIL counts);
   - a **written reason** for each change, a one-line expectation for each tilt (scored later), and the tax it accepted.
+- **Holding is the default** (#163, the user's instruction): the prompt says that every trade of a gain realizes 25% tax that holding would defer, so last month's targets stand unless a change clearly beats its tax; "hold the satellite" is an explicit answer; each change states the tax it realizes and why it beats holding. Code backs this with the hold rule and the tax budget (§8).
 - **The approved list** (`portfolio.satellite_list`): QQQ (Nasdaq-100), IWM (US small caps), AVUV (US small-cap value), MTUM (momentum), QUAL (quality), VEA (developed ex-US), VWO (emerging markets), GLD (gold), IEF (7-10y Treasuries), TLT (20y+ Treasuries), DBMF (managed futures), BIL (T-bills), SPY (neutral). No leveraged or inverse products. Final in task 4.2; changed only by a decision.
 - **Can't:** buy outside the list, use leverage in the satellite, lift the ceiling, block a sale toward a lower target or a stop, or name a price.
 - **On failure** (error, timeout, refusal, invalid schema, missed deadline): the book takes the **twin's targets** for the month, which add no risk, and an alert goes out.
@@ -220,13 +221,13 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
 ### 5.5 The twin and the scorecard
 
 **The twin** (the benchmark the LLM is measured against):
-- **The core rule on the whole account:** the rule level of §6 applied to 100% of equity, with no satellite of its own (R1 of the plan). Everything the LLM does, satellite and core shift, shows up as the difference.
+- **The core rule on the whole account:** the rule level of §6 applied to 100% of equity, with no satellite of its own (R1 of the plan). **It is also the book at neutral** (no shift, the satellite in SPY, #163), so everything the LLM does, satellite and core shift, and the tax its changes realize, shows up as the difference.
 - **Simulated each evening** by `simulate` through `sim/portfolio.py` on daily bars, at the decision prices the book traded at (or the close, when the book didn't trade), with the same costs and the same tax model.
 - **Like for like.** Paper fills are optimistic (§17), so the book's own decisions are also replayed through `sim/portfolio.py` (the **sim return**); comparisons use the sim return, with paper fills reported alongside.
 
 **The scorecard** (the evidence for whether the LLM adds value):
 - **The headline:** the book's after-tax excess over the twin, monthly and cumulative, with a block-bootstrap interval once 24 months exist.
-- **Each tilt is scored:** the satellite weight of each ETF minus its neutral weight (the twin's), times its return to the next E, relative to SPY; and each core shift times SPY's return over T-bills.
+- **Each tilt is scored:** the satellite weight of each ETF minus its neutral weight (SPY at 20%, #163), times its return to the next E, relative to SPY; and each core shift times SPY's return over T-bills. **The tax each decision realized** is reported beside them.
 - **Each expectation is scored:** the LLM's one-line expectations are checked against what happened (right direction, roughly right size).
 - Each decision is tagged with its prompt version and the answering model (§9).
 
@@ -290,7 +291,7 @@ The rules (#154), all in `risk.yaml` `portfolio:`; the backtest's exact versions
 | **The drawdown halt** | Equity ≤ 75% of its peak at any close → at most **1.0x** at once (§7.3) | The plan's C2 |
 | **The holdings** | Level x > 1: SPY (2 − x) and SSO (x − 1) of equity; x ≤ 1: SPY x and BIL (1 − x). 1.3x = 70% SPY + 30% SSO; 0.5x = 50% SPY + 50% BIL | SSO is 2x daily; no margin |
 
-**The core and the satellite.** The book's core is `1 − portfolio.satellite_share` (80%) of equity, at the rule level plus the LLM's shift; the satellite (20%) is the LLM's (§5.4). The twin applies the rule level to the whole account (§5.5).
+**The core and the satellite (#163).** The book's **level** is the rule level plus the LLM's shift. The satellite (20%) is the LLM's (§5.4); its **neutral** is SPY at the whole 20%. The core (`1 − portfolio.satellite_share`, 80%) is sized by code so that, with the satellite at its neutral, the book's exposure is the level: core level = (level − 0.2) / 0.8, so 1.375x for 1.3x (70% SPY and 30% SSO of equity, as the twin), 0.375x for 0.5x, 1.0x for 1.0x (no SSO). **With no shift and the satellite at neutral, the book is the twin** (§5.5), the strategy the backtest tested; every satellite fund other than SPY moves the exposure by its own difference from SPY.
 
 **Why these rules and not others:** they come from the sources with no tuning; the alternatives (the 200-day average, 1.5x / 0x, margin, no stop, no volatility cap) are the pre-registered comparisons, reported and never adopted (#156).
 
@@ -303,7 +304,7 @@ The rules (#154), all in `risk.yaml` `portfolio:`; the backtest's exact versions
 | Step | Rule |
 |---|---|
 | **When** | The rule level is read on R's close; the book trades at **15:40 on E** (the next full session). A half day moves E |
-| **Targets** | The core: SPY / SSO / BIL weights for (rule level + shift) on the core's share; the satellite: the LLM's weights. A rule level of DOWN, the cap or the halt allow only a downward shift |
+| **Targets** | The core: SPY / SSO / BIL weights for the core level sized from the book's level (rule level + shift, §6) on the core's share; the satellite: the LLM's weights after the hold rule and the tax budget (§8). A rule level of DOWN, the cap or the halt allow only a downward shift |
 | **The drift band** | A holding is traded only if its target changed or its weight is more than **5 points** from its target (`portfolio.drift_band`). Fewer, larger trades: less tax and cost |
 | **Orders** | Sells first, then buys; whole shares; marketable limits on the decision price; SSO as an OTO with its stop leg (§5.6) |
 | **Start** | The paper trial starts from cash on its first E |
@@ -325,7 +326,8 @@ The rules (#154), all in `risk.yaml` `portfolio:`; the backtest's exact versions
 ### 7.4 Exits and tax
 
 - Every sale is either the rebalance (toward a target), the stop, or the halt. There are no discretionary exits between rebalances.
-- **The tax is a fact, not a rule:** the Portfolio Manager sees each lot's unrealized gain and the year's realized gains and losses, and states the tax a change accepts. No rule forces or blocks a sale for tax; the drift band and the buffer keep sales rare.
+- **Holding is the default (#163).** Every sale of a gain realizes 25% tax that holding would defer, so the Portfolio Manager is told to hold unless a change clearly beats its tax; it sees each holding's unrealized gain and the tax a full sale would realize now, and states the tax each change accepts.
+- **Code enforces it in the satellite** (§8): a weight within 2 points of last month's target keeps it (`portfolio.satellite_min_change`), and the satellite's sales may realize at most 0.2% of equity in tax a year (`portfolio.satellite_tax_budget`), except while the trend is DOWN, capped or halted. The core's sales follow the rules and aren't budgeted; the drift band and the buffer keep them rare.
 
 ---
 
@@ -335,10 +337,12 @@ Guardrails are pure Python functions (`auratrade/guardrails/portfolio.py`) with 
 
 | Guardrail | Default | Behaviour |
 |---|---|---|
-| Exposure to the S&P (the core's level) | 0.3x to 1.5x (`portfolio.min_level`, `max_level`); ≤ 1.0x while capped or halted | Clip |
+| Exposure to the S&P (the book's level, §6) | 0.3x to 1.5x (`portfolio.min_level`, `max_level`); ≤ 1.0x while capped or halted | Clip |
 | The LLM's core shift | ±0.2x (`portfolio.max_shift`); downward only when DOWN, capped or halted | Clip |
 | Leveraged products | SSO only, only in the core, only while the level is above 1.0x | Reject |
-| Satellite | `portfolio.satellite_share` (20%) of equity; the approved list only; each ETF ≤ 10% (`portfolio.max_etf_weight`); no leveraged or inverse | Reject / clip, the rest to BIL |
+| Satellite | `portfolio.satellite_share` (20%) of equity; the approved list only; each ETF ≤ 10% (`portfolio.max_etf_weight`), SPY (the neutral) up to 20%; no leveraged or inverse | Reject / clip, the rest to BIL |
+| Hold by default (#163) | A satellite weight within 2 points of last month's target keeps it; a new holding under 2 points isn't opened; a full exit is honoured (`portfolio.satellite_min_change`) | Clip |
+| Satellite tax budget (#163) | The tax the satellite's sales would realize (25% of their net FIFO gains at the decision prices; a fund without a price counts its whole sale as gain), with the year's earlier satellite tax, ≤ 0.2% of equity (`portfolio.satellite_tax_budget`); not applied while DOWN, capped or halted | Clip: moved back toward last month's targets until it fits |
 | **Price levels** | The LLM never supplies a price; limits and the stop come from code | Reject |
 | Stop on the leveraged fund | Always: the OTO's GTC leg at the plan level | Reject |
 | Hard stop: GTC, full quantity, ≥ plan level | The invariant in every order job and `stop_guard`; a partly filled buy counts as unprotected (§5.6) | Auto-repair + alert |
@@ -380,8 +384,9 @@ The setup system's guardrails (`guardrails/evaluate.py` and the rest) still serv
 // Portfolio Manager → guardrails → portfolio_targets
 { "core_shift": -0.1,
   "core_reasoning": "...",
-  "satellite": [{ "symbol": "GLD", "weight": 0.05, "expectation": "..." },
-                { "symbol": "BIL", "weight": 0.15, "expectation": "..." }],
+  "satellite": [{ "symbol": "GLD", "weight": 0.05, "expectation": "...", "why_not_hold": "..." },
+                { "symbol": "SPY", "weight": 0.15, "expectation": "...", "why_not_hold": "..." }],
+  // or "satellite": null: hold last month's targets (the default, #163)
   "tax_note": "...",
   "summary": "≤ 120 words for the journal and the dashboard" }
 ```
@@ -533,7 +538,7 @@ The earlier systems' backtest rules and gates are archived (`docs/archive/README
 - **Runs** on the `paper` account reset to $100,000, from the first E after task 6.1, for 12 months, and on after that as the showcase.
 - **Operations:** every rebalance executed or correctly blocked; every job ran or was correctly skipped; the leveraged fund never without a full-quantity broker stop; zero duplicate orders; zero unresolved mismatches; `docs/runbook.md` exists and the operator commands and the dead-man's switch have each been exercised once.
 - **Guardrails:** none bypassed; every clip logged and alerted.
-- **The LLM's value:** the scorecard (§5.5) reported monthly. After 12 months a pre-registered rule (written before month 12) decides whether the LLM's latitude grows, stays or shrinks (the plan's B4).
+- **The LLM's value:** the scorecard (§5.5) reported monthly. After 12 months a pre-registered rule (written before month 12) decides whether the LLM's latitude grows, stays or shrinks (the plan's B4). **It rests on process, not returns (#163):** with a tracking error of 3-5% a year against the twin, 12 months can't tell skill from luck, so the rule judges rule-following, the calibration of the expectations and the tax realized; the returns are reported, not decisive.
 - **Live money** is not planned. If it ever is: a separate stack, a live broker adapter, and the user's explicit start (CLAUDE.md §3.1).
 
 ---
@@ -718,6 +723,7 @@ The earlier systems' backtest rules and gates are archived (`docs/archive/README
 | 160 | The portfolio's scored run (3.23): the gate passed | *Run once 2026-10-27 with the user (`docs/backtests/portfolio.md`, committed as produced at af2e621).* **G1-G3 pass:** after Israeli tax +9.2% a year against +8.7% for the market bought and held (1928-2026), max drawdown 68% against 85%, ahead in 69% of 1,065 ten-year windows. **The edge is thin and tax-sensitive:** +1.8 points before tax (bootstrap +0.1 to +2.6), +0.5 after; tax costs 2.5 points a year against 1.2. It comes from the long bear markets (1929-32, 1937, 1973-74, 2007-09) and loses in V-shaped crashes (1987, 2020). **After publication it ties:** since 2007 +9.6% against +9.4% (drawdown 37% against 55%), since 2016 +11.8% against +12.7%. The trend alone earned +7.5%, leverage alone +8.4%; the stop and the volatility cap change little; margin is worse; nothing is adopted. The first invocation crashed before writing anything (an absolute float tolerance in `TaxBook`, made relative with a test); no result had been produced. By the pre-registration's §9 the plan continues: Phase 4. |
 | 161 | The relics sweep | *Asked for by the user 2026-10-27 ("make sure everything is relevant to this new strategy and there aren't relics from before"); it reopens the rule of #146 and #153 that dropped strategies' code stays, unwired.* **Deleted:** the momentum book's code (`strategies/momentum_book.py`, `guardrails/book.py`, `sim/book.py`, `risk.yaml` `book:` and its models, the book's `EntryBlock`s), every earlier backtest harness (`backtest/` baseline, close entry, comparisons, diagnostics, history scan, momentum, pool, regime and its search), `history/read.py`, `scripts/scan_real_data.py` and `smoke_real_data.py`, the spike-grade edge check (`spikes/edge_check`), with their tests; the rebalance calendar's and `backfill.py`'s tests moved to their own files. **Archived:** the superseded plans (`docs/archive/`), the earlier backtest reports (`docs/backtests/archive/`), the old session handoff. **Kept until task 5.2** (its checklist in the plan): the setup system's code the deployed walking skeleton and the regime classifier still run (the scans, plans, guardrails, journal, the stock-universe ingest); removing it now would break them before their replacements exist. **Rewritten:** the public site's page, for the portfolio manager. Git history keeps everything deleted. |
 | 162 | The Claude client's readings (4.1) | *Taken under the user's delegation; the paid calls (the fixture recording, any later run) still need the user's OK with a cost.* **One client, no exceptions:** a decision ends in a validated answer or one of eight named failures; API errors, timeouts, refusals and bad output never raise, so the caller always has the twin's path (CLAUDE.md §3.6). **Fallbacks on** (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`): a refusal is re-run server-side on the model Anthropic routes its category to; the answering model is recorded on every turn, and a mid-output fallback echoes only the declined hop's text (its thinking and tool calls are dropped and not run). **Caching:** a breakpoint on the system prompt plus the top-level automatic one, so each tool round reads the last. **Tools:** strict, `tool_choice: auto`, arguments validated before running; a tool's error goes back to the model as an error result instead of failing the decision; the last allowed turn (`llm.max_turns`, 6) sends `tool_choice: none`, so the model must answer. **The deadline:** no request starts after it, each attempt's timeout is cut to it, an answer arriving after it is discarded (still costed). **Cost:** each turn priced from its usage, each fallback hop at its own model's price, a model missing from `llm.prices` at the dearest listed; the alert is per decision. **Fixtures:** hand-built in the API's wire format for every path, plus one real call recorded with `scripts/record_claude_fixtures.py --paid` (2026-10-27, $0.017: a tool round and an answer; the conversation cache read 1,049 tokens on turn 2; `usage.iterations` comes without a fallback too, its model null). **The estimate** (README §9): $0.20-0.40 a decision, about $3-5 a year. *Built and approved by the user 2026-10-27 (the estimate and the recording).* |
+| 163 | The neutral satellite and the tax rules | *Found in a review of the LLM's role the user asked for; approved by the user 2026-10-27, with an addition (`docs/spikes/llm-neutral-and-tax.md`).* **The finding:** with the core at the rule level on 80% and the satellite's ETFs capped at 10% with no leverage, the book with no change by the LLM was not the twin, the strategy that passed the gate (#160): in an up-trend 1.04-1.25x against 1.3x, about 0.5-1 point a year behind, which the scorecard would have charged to the LLM; in a down-trend the satellite could take the book to about 0.6x against 0.5x; nothing in code limited the tax the LLM's changes realize. **The changes:** the satellite's neutral is SPY at 20% (it may fill the satellite); the book's level is the rule level plus the shift, and the core is sized as (level − 0.2) / 0.8, so the neutral book is the twin (this closes the down-trend gap too, up to an ETF's beta difference from SPY); **hold by default**: a satellite weight within 2 points of last month's target keeps it (`portfolio.satellite_min_change`); **a tax budget**: the satellite's sales may realize at most 0.2% of equity in tax a year (`portfolio.satellite_tax_budget`; FIFO gains at the decision prices, losses offsetting), a decision over it moved back toward last month's targets, not applied while DOWN, capped or halted. **The user's addition:** the Portfolio Manager is told that trading a gain loses money to tax and to prefer holding; it sees each holding's tax-if-sold and the budget left, "hold the satellite" is an explicit answer, and each change says why it beats holding (task 4.2). **The latitude rule (B4)** is pre-registered on process, not returns. The backtest and the twin are unchanged (the simulator never used the book's targets). |
 
 ---
 
