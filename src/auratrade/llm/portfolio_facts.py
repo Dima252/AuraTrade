@@ -99,7 +99,8 @@ class PastDecision:
     """The enforced satellite; None when it was held."""
     summary: str
     excess_vs_twin: float | None
-    """The book's after-tax return less the twin's to the next decision (None: not yet)."""
+    """The book's after-tax return less the twin's to the next decision, or to date while its
+    month is open (None: not scored yet)."""
     fell_back: bool = False
 
 

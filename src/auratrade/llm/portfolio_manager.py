@@ -56,6 +56,10 @@ class SatelliteWeight(pydantic.BaseModel):
         description="One checkable line: direction and rough size of its return against the "
         "market fund until the next decision"
     )
+    expected_vs_market: float = pydantic.Field(
+        description="The expectation as a number: its return less the market fund's until the "
+        "next decision, as a fraction (0.01 is one point ahead); the scorecard checks it"
+    )
     why_not_hold: str = pydantic.Field(
         description="Why changing this weight beats holding, net of its tax; 'unchanged' if "
         "the weight is last month's"

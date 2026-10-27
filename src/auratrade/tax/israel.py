@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date
 
@@ -164,6 +164,23 @@ class TaxBook:
             income,
             self.rate * income,
         )
+
+    def tax_if_sold(
+        self, year: int, values: Mapping[str, float], pending_income: float = 0.0
+    ) -> float:
+        """The tax owed if every lot were sold at ``values`` (each symbol's market value) now:
+        the year's tax so far, the sale's and the pending income's. What "after the estimated
+        tax" takes off equity (README §5.5). A closed year has paid its tax, so the sale falls
+        in the next."""
+        missing = sorted(set(self._lots) - values.keys())
+        if missing or pending_income < 0:
+            raise ValueError(f"no value for {missing}, or negative pending income")
+        realized = income = 0.0
+        if self._closed is None or year > self._closed:
+            realized, income = self.realized(year), self._income.get(year, 0.0)
+        unrealized = math.fsum(values[s] - self.cost_basis(s) for s in self._lots)
+        net = realized + unrealized - self.carry
+        return self.rate * (max(net, 0.0) + income + pending_income)
 
     def close_year(self, year: int) -> YearTax:
         """Settle ``year``: its tax, and the loss it carries into the next."""

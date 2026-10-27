@@ -240,3 +240,23 @@ class TestFundsMarket:
             funds_market(split, {k: v for k, v in split.items() if k != "BIL"}, ZERO)
         with pytest.raises(ValueError, match="too few sessions"):
             funds_market(split, split, ZERO, start=DAYS_OCT[-1])
+
+
+def test_each_close_carries_the_tax_a_sale_would_owe() -> None:
+    m = with_fund(market(), "QQQ", {date(2000, 1, 10): 0.10})
+    result = simulate_portfolio(
+        m,
+        PRIMARY,
+        ZERO,
+        start=R_DEC,
+        end=AT[date(2000, 1, 28)],
+        equity=100_000.0,
+        tax_rate=0.25,
+        book={E_JAN: {"SPY": 0.5, "SSO": 0.3, "QQQ": 0.2}},
+        sell_at_end=False,
+    )
+    first, last = result.snapshots[0], result.snapshots[-1]
+    assert (first.tax_owed, first.realized) == (0.0, 0.0)  # cash at R
+    # QQQ's 2,000 gain is the only one: 25% of it if sold.
+    assert last.tax_owed == pytest.approx(500.0)
+    assert last.realized == 0.0

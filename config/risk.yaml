@@ -591,3 +591,11 @@ portfolio_manager:  # README §5.4: the facts the Portfolio Manager sees and its
   dry_run_equity: 100000             # the simulated book's and the twin's start (#166; paper is reset to it in 6.1)
   deadline: "12:00"                  # ET on E: no valid decision by then holds (#164)
   headline_sessions: 5               # the headlines in the facts: from this many sessions back
+  scorecard:                         # README §5.5: each decision scored against the twin (task 4.4)
+    flat_band: 0.01                  # an expectation within ±1 point says "level with SPY"; right if the outcome is too
+    size_factor: 2.0                 # the size is right when the outcome is within 2x of the expectation, either way
+    bootstrap_months: 24             # the headline's interval from this many complete months
+    block_months: 3                  # resampled in blocks of months
+    samples: 10000
+    confidence: 0.90
+    seed: 20261027
