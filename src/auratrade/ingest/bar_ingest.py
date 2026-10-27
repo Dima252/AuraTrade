@@ -21,11 +21,12 @@ from datetime import date, datetime
 from typing import Protocol
 
 import structlog
-from sqlalchemy import Connection
+from sqlalchemy import Connection, select
 
 from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import RiskConfig
 from auratrade.data.alpaca_data import Adjustment, DailyBar
+from auratrade.db.models import Ticker
 from auratrade.ingest.bar_store import (
     record_corrections,
     replace_window,
@@ -43,7 +44,6 @@ from auratrade.ingest.bars import (
     sanity_problem,
     split_changed,
 )
-from auratrade.ingest.universe import active_ids
 
 log = structlog.get_logger(__name__)
 
@@ -69,6 +69,14 @@ def tracked_symbols(risk: RiskConfig) -> list[str]:
     """The ETF list (README §5.1)."""
     p = risk.portfolio
     return sorted({p.market, p.leveraged, p.cash, *p.satellite_list, *risk.regime.indexes})
+
+
+def active_ids(conn: Connection, symbols: Iterable[str]) -> dict[str, int]:
+    wanted = list(symbols)
+    rows = conn.execute(
+        select(Ticker.symbol, Ticker.id).where(Ticker.active, Ticker.symbol.in_(wanted))
+    ).all()
+    return {row.symbol: row.id for row in rows}
 
 
 def required_symbols(risk: RiskConfig) -> list[str]:

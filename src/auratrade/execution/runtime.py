@@ -1,5 +1,5 @@
-"""What every order job shares (README §5.7): its dependencies, the order section (lock →
-reconcile → desk), the stop invariant, owed sales, and the checks that block entries.
+"""What every order job shares (README §5.6): its dependencies, the order section (lock →
+reconcile → desk), the stop invariant on the portfolio's funds, and the kill switch.
 
 An order job runs:
 
@@ -25,11 +25,11 @@ from sqlalchemy import Engine
 from auratrade.calendar.sessions import MarketCalendar, load_calendar
 from auratrade.config import TradingMode
 from auratrade.db.flags import read_flags
-from auratrade.execution import funds, store
+from auratrade.execution import funds
 from auratrade.execution.broker import Broker, PriceSource
 from auratrade.execution.invariant import check
 from auratrade.execution.lock import Holder
-from auratrade.execution.orders import OrderDesk, SaleStatus
+from auratrade.execution.orders import OrderDesk
 from auratrade.execution.reconcile import Reconciled, reconcile
 from auratrade.jobs.base import JobContext
 from auratrade.notify.alerts import Alerter
@@ -143,7 +143,7 @@ class Section:
 
 @contextmanager
 def order_section(ctx: JobContext, deps: ExecutionDeps) -> Iterator[Section]:
-    """Wait for the order lock, reconcile, and yield a desk (README §5.7.7)."""
+    """Wait for the order lock, reconcile, and yield a desk (README §5.6.5)."""
     with deps.lock.hold(ctx.job, wait=True):
         yield _section(ctx, deps)
 
@@ -161,15 +161,7 @@ def _section(ctx: JobContext, deps: ExecutionDeps) -> Section:
     with deps.engine.connect() as conn:
         calendar = load_calendar(conn)
     portfolio = ctx.risk.portfolio
-    rec = reconcile(
-        deps.engine,
-        deps.broker,
-        session=ctx.session_date,
-        now=deps.clock(),
-        calendar=calendar,
-        risk=ctx.risk,
-        ignore=funds.funds(portfolio),
-    )
+    rec = reconcile(deps.engine, deps.broker, now=deps.clock(), funds=funds.funds(portfolio))
     with deps.engine.begin() as conn:
         rec.alerts += funds.apply_splits(
             conn, portfolio, rec.broker_positions, session=ctx.session_date, now=deps.clock()
@@ -216,13 +208,20 @@ class InvariantReport:
 
 
 def enforce_invariant(section: Section) -> InvariantReport:
-    """Check every position's stops against its plan level; repair what is wrong (README
-    §5.7.1). A repair alerts, and the caller blocks entries for the run."""
+    """Check the funds' stops against the leveraged fund's level; repair what is wrong (README
+    §5.6.1). A repair alerts, and the caller blocks increases for the run. Positions outside the
+    funds are reconciliation's mismatches: not the portfolio's, left alone."""
     broker, rec, desk = section.deps.broker, section.rec, section.desk
-    unstopped = funds.unstopped(section.ctx.risk.portfolio)
-    protections = check(broker.positions(), broker.open_orders(), rec.levels, unstopped=unstopped)
-    report = InvariantReport(checked=len(rec.positions))
-    bad = {s: p for s, p in protections.items() if not p.ok}
+    portfolio = section.ctx.risk.portfolio
+    names, unstopped = funds.funds(portfolio), funds.unstopped(portfolio)
+
+    def protections() -> dict[str, Any]:
+        positions = [p for p in broker.positions() if p.symbol in names]
+        orders = [o for o in broker.open_orders() if o.symbol in names]
+        return check(positions, orders, rec.levels, unstopped=unstopped)
+
+    report = InvariantReport(checked=len([s for s in rec.broker_positions if s in names]))
+    bad = {s: p for s, p in protections().items() if not p.ok}
     report.problems = {s: sorted(x.value for x in p.problems) for s, p in bad.items()}
     if not bad:
         return report
@@ -233,92 +232,29 @@ def enforce_invariant(section: Section) -> InvariantReport:
     for symbol, protection in bad.items():
         level = rec.levels.get(symbol)
         if level is None and protection.qty > 0:
-            # A position the database doesn't know: no plan level to place a stop at.
+            # The leveraged fund held without a recorded level: bought outside the order layer.
             section.alert(f"{symbol}: {protection.qty} shares with no plan; not touched")
             report.still_unprotected.append(symbol)
             continue
-        result = desk.protect(symbol, level or 0.0)
+        desk.protect(symbol, level or 0.0)
         report.repaired.append(symbol)
-        if result.sale is not None and result.sale.owed:
-            mark_exit_pending(section, symbol, "HARD_STOP")
-    after = check(broker.positions(), broker.open_orders(), rec.levels, unstopped=unstopped)
     report.still_unprotected += [
-        s for s, p in after.items() if not p.ok and s not in report.still_unprotected
+        s for s, p in protections().items() if not p.ok and s not in report.still_unprotected
     ]
     section.alert(
         f"stop invariant repaired for {', '.join(report.repaired) or 'nothing'} "
-        f"({report.problems}); entries blocked this run"
+        f"({report.problems}); increases blocked this run"
         + (f"; STILL UNPROTECTED: {report.still_unprotected}" if report.still_unprotected else "")
     )
     return report
 
 
-def mark_exit_pending(section: Section, symbol: str, reason: str | None) -> None:
-    position = section.rec.positions.get(symbol)
-    if position is None:
-        return
-    with section.deps.engine.begin() as conn:
-        store.set_exit_pending(conn, position.id, reason, section.deps.clock())
-
-
-def sell_owed(section: Section) -> list[dict[str, Any]]:
-    """Retry the sales the plan decided and that haven't happened (README §5.7.2, #124)."""
-    out: list[dict[str, Any]] = []
-    if section.dry_run or not section.desk.market_open:
-        return out
-    for symbol, position in section.rec.positions.items():
-        if position.exit_pending is None:
-            continue
-        level = section.rec.levels[symbol]
-        result = section.desk.sell(symbol, position.shares, position.exit_pending, level)
-        if result.status is SaleStatus.FILLED:
-            mark_exit_pending(section, symbol, None)
-        out.append({"symbol": symbol, "reason": position.exit_pending, **_sale(result)})
-    return out
-
-
-def _sale(result: Any) -> dict[str, Any]:
-    return {"requested": result.requested, "sold": result.sold, "status": result.status.value}
-
-
 def enforce_kill_switch(section: Section) -> bool:
-    """True when entries are disabled; the kill switch also cancels resting entry orders."""
+    """True when the kill switch is on; it also cancels resting buy orders (README §5.9)."""
     with section.deps.engine.connect() as conn:
         flags = read_flags(conn)
     if not flags.trading_enabled and not section.dry_run:
         count = section.desk.cancel_entries(why="kill switch")
         if count:
-            section.alert(f"kill switch on: cancelled {count} resting entry orders")
-    return not flags.entries_allowed
-
-
-def entry_blocks(section: Section, invariant: InvariantReport) -> list[str]:
-    """Why no new entry may go in this run (fail closed, README §3 rule 6). Empty: entries
-    may go ahead."""
-    reasons: list[str] = []
-    ctx = section.ctx
-    with section.deps.engine.connect() as conn:
-        flags = read_flags(conn)
-        mismatches = store.open_mismatches(conn)
-    if not flags.trading_enabled:
-        reasons.append("kill switch on")
-    if flags.halt_daily_loss or flags.halt_weekly_loss or flags.halt_drawdown:
-        reasons.append("loss or drawdown halt")
-    session = section.calendar.session_for(ctx.session_date)
-    if session is None:
-        reasons.append("not a session")
-    else:
-        if not session.calendar_agrees:
-            reasons.append(f"calendar cross-check {session.calendar_check}")
-        if session.is_early_close:
-            reasons.append("early close: no new entries")
-        previous = section.calendar.previous_session(ctx.session_date)
-        if previous.data_status != "COMPLETE":
-            reasons.append(f"{previous.day} data {previous.data_status}")
-    if any(symbol is None for _, symbol in mismatches):
-        reasons.append("an account-level mismatch is open")
-    if not invariant.clean:
-        reasons.append("the stop invariant needed repair")
-    if section.rec.unknown:
-        reasons.append(f"unknown positions at the broker: {section.rec.unknown}")
-    return reasons
+            section.alert(f"kill switch on: cancelled {count} resting buy orders")
+    return not flags.trading_enabled

@@ -9,7 +9,7 @@ at start (`auratrade.parameters`). Only names are printed, never values. Without
 nothing is sent to AWS.
 
 The account's own keys (Alpaca, the database, the dead-man's switch) must be in the env file.
-The shared ones (Anthropic, FRED, Finnhub, EDGAR, Telegram) fall back to `.env` when the file
+The shared ones (Anthropic, FRED, Telegram) fall back to `.env` when the file
 leaves them empty. `TRADING_MODE` and the other settings the stack sets are never uploaded: the
 mode is a deploy-time choice (`-c trading_mode=paper`), not a parameter a file could change.
 
@@ -38,8 +38,6 @@ ACCOUNT_KEYS = ("ALPACA_API_KEY", "ALPACA_SECRET_KEY", "DATABASE_URL", "HEALTHCH
 SHARED_KEYS = (
     "ANTHROPIC_API_KEY",
     "FRED_API_KEY",
-    "FINNHUB_API_KEY",
-    "EDGAR_USER_AGENT",
     "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_CHAT_ID",
 )

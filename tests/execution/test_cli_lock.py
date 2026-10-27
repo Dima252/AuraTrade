@@ -11,7 +11,7 @@ from auratrade.cli import CliDeps, build_parser, main
 from auratrade.config import Settings, TradingMode
 from auratrade.db.flags import TRADING_ENABLED, read_flags
 from auratrade.db.models import Mismatch, SystemFlag
-from auratrade.execution.broker import OrderStatus, Side
+from auratrade.execution.broker import LimitBuy, OrderStatus, Side
 from auratrade.execution.lock import LockTimeoutError, OrderLock
 from tests.execution.conftest import World
 
@@ -37,11 +37,9 @@ def cli(
     return factory, out
 
 
-def test_kill_on_blocks_entries_and_cancels_resting_ones(world: World) -> None:
-    from auratrade.jobs import execute_entries
-
-    world.signal("NVDA")
-    world.run(execute_entries.make_job)
+def test_kill_on_blocks_increases_and_cancels_resting_buys(world: World) -> None:
+    world.fake.set_price("SPY", 500.0)
+    world.fake.submit(LimitBuy("SPY", 10, 400.0, "manual-rest"))
     factory, out = cli(world)
     assert main(["kill", "on"], deps_factory=factory) == 0
     with world.engine.connect() as conn:
@@ -49,12 +47,12 @@ def test_kill_on_blocks_entries_and_cancels_resting_ones(world: World) -> None:
     assert all(
         o.status is OrderStatus.CANCELED for o in world.fake.all_orders() if o.side is Side.BUY
     )
-    assert out[-1] == "cancelled 1 resting entry orders"
+    assert out[-1] == "cancelled 1 resting buy orders"
     main(["kill", "status"], deps_factory=factory)
-    assert "ON (entries blocked)" in out[-1]
+    assert out[-1] == "kill switch ON (increases blocked)"
     main(["kill", "off"], deps_factory=factory)
     main(["kill", "status"], deps_factory=factory)
-    assert "off (entries allowed)" in out[-1]
+    assert out[-1] == "kill switch off (increases allowed)"
 
 
 def test_kill_on_in_dry_run_only_sets_the_flag(world: World) -> None:

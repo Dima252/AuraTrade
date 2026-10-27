@@ -1,7 +1,8 @@
 """Chaos tests of the portfolio's orders (execution plan task 5.1, "Accept"): a crash between the
 stop reduction and the sale, a partly filled OTO, a rejected stop with the price through it, a
-split on the leveraged fund, the halt's sale under the kill switch, and a rebalance killed after
-a buy and run again.
+split on the leveraged fund, the halt's sale under the kill switch, a rebalance killed after a
+buy and run again; and the order layer's own (task 1.7): two jobs at once, a 500, a dropped
+connection.
 
 Each ends with the order layer's two properties (README §5.6, CLAUDE.md §3.5):
 - **the leveraged fund is protected**: its live GTC stops cover its full quantity at or above
@@ -11,14 +12,17 @@ Each ends with the order layer's two properties (README §5.6, CLAUDE.md §3.5):
 
 from __future__ import annotations
 
+import threading
+import time
 from dataclasses import replace
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from sqlalchemy import insert, select
 
 from auratrade.db.models import CorporateAction, Mismatch
 from auratrade.execution.broker import BrokerError, OrderType, PriceSource, Side
+from auratrade.execution.lock import Holder
 from auratrade.execution.store import entities
 from auratrade.jobs import execute_close, execute_open, stop_guard
 from auratrade.sim.fake_broker import ProcessKilled
@@ -310,3 +314,101 @@ def test_a_sale_rejected_by_the_broker_restores_the_stop(world: World) -> None:
     world.run(execute_close.make_job, session=date(2026, 10, 26))
     assert world.fake.position("SSO") == 100
     assert protected(world)
+
+
+# --- two order jobs at once, a 500, a dropped connection (task 1.7's, on the funds) -----------
+
+
+def test_a_second_order_job_waits_for_the_lock(world: World) -> None:
+    bought_from_cash(world)
+    finished: list[dict[str, object]] = []
+    with world.lock.hold("execute_close"):
+        calls = len(world.fake.calls)
+        runner = threading.Thread(
+            target=lambda: finished.append(world.run(execute_open.make_job)), daemon=True
+        )
+        runner.start()
+        time.sleep(0.6)
+        assert runner.is_alive()
+        assert not finished
+        assert len(world.fake.calls) == calls  # it hasn't touched the broker
+    runner.join(timeout=10)
+    assert finished
+    assert finished[0]["problems"] == {}
+
+
+def test_stop_guard_skips_while_another_job_holds_the_lock(
+    world: World, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    bought_from_cash(world)
+    [leg] = stops(world.fake)
+    world.fake.delete(leg.id)
+    with world.lock.hold("execute_close"):
+        out = world.run(stop_guard.make_job)
+        assert out["skipped"] == "order lock held"
+        holder = world.lock.holder()
+        assert holder is not None
+        assert holder.application_name == "auratrade-lock:execute_close"
+        assert not [t for t in world.alerts.texts if "has been held" in t]
+        stuck = Holder(holder.application_name, timedelta(minutes=30))
+        monkeypatch.setattr(world.lock, "holder", lambda: stuck)
+        world.run(stop_guard.make_job)
+        assert [t for t in world.alerts.texts if "has been held" in t]
+    assert world.lock.__class__.holder(world.lock) is None
+    world.run(stop_guard.make_job)
+    assert protected(world)
+
+
+def test_a_dropped_connection_on_a_repair_stop_places_one_stop(world: World) -> None:
+    bought_from_cash(world)
+    [leg] = stops(world.fake)
+    world.fake.delete(leg.id)
+    world.fake.drop_next("submit")
+    world.run(stop_guard.make_job)
+    assert [o.qty for o in stops(world.fake)] == [298]
+    assert protected(world)
+    assert no_duplicates(world.fake)
+
+
+def test_a_500_on_every_attempt_fails_the_run_and_the_next_one_repairs(world: World) -> None:
+    bought_from_cash(world)
+    [leg] = stops(world.fake)
+    world.fake.delete(leg.id)
+    for _ in range(world.risk.execution.call_attempts):
+        world.fake.fail_next("submit")
+    out = world.run(stop_guard.make_job)
+    assert out["still_unprotected"] == ["SSO"]
+    assert [t for t in world.alerts.texts if "could not place a stop" in t]
+    world.run(stop_guard.make_job)
+    assert protected(world)
+    assert no_duplicates(world.fake)
+
+
+def test_the_sale_through_the_level_puts_its_proceeds_in_the_cash_fund(world: World) -> None:
+    bought_from_cash(world)
+    [leg] = stops(world.fake)
+    world.fake.delete(leg.id)
+    at_close(world, NEXT)
+    world.fake.set_price("SSO", 65.0)  # under the level of 70: the invariant sells at once
+    out = world.run(execute_close.make_job, session=NEXT)
+    assert out["repaired"] == ["SSO"]
+    assert world.fake.position("SSO") == 0
+    # The run that repaired blocks increases: the proceeds wait in cash for a clean run.
+    proceeds = out["stop_proceeds"]
+    assert proceeds["stopped"] == 298
+    assert proceeds["skipped"].endswith("the stop invariant needed repair")
+    later = date(2026, 10, 26)
+    at_close(world, later)
+    out = world.run(execute_close.make_job, session=later)
+    assert world.fake.position("BIL") == out["stop_proceeds"]["shares"] > 0
+    assert protected(world)
+
+
+def test_in_dry_run_an_order_call_never_reaches_the_broker(world: World) -> None:
+    from auratrade.execution.runtime import DryRunViolationError, ReadOnlyBroker
+
+    broker = ReadOnlyBroker(world.fake)
+    assert broker.positions() == []
+    for name in ("submit", "replace", "cancel"):
+        with pytest.raises(DryRunViolationError, match=name):
+            getattr(broker, name)

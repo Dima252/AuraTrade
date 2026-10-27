@@ -3,7 +3,7 @@
 from datetime import date, timedelta
 
 from auratrade.config import DEFAULT_RISK_CONFIG, RegimeConfig, RiskConfig, load_risk_config
-from auratrade.regime.breadth import TickerHistory
+from auratrade.regime.inputs import TickerHistory
 
 RISK = load_risk_config(DEFAULT_RISK_CONFIG)
 
@@ -16,20 +16,10 @@ def small_risk() -> RiskConfig:
             "index_trend": cfg.index_trend.model_copy(
                 update={"short_sma": 3, "long_sma": 5, "slope_sessions": 2}
             ),
-            "breadth": cfg.breadth.model_copy(
-                update={
-                    "sma": 3,
-                    "new_high_sessions": 5,
-                    "net_new_highs_sessions": 3,
-                }
-            ),
             "replay_warmup_sessions": 8,
         }
     )
-    universe = RISK.universe.model_copy(
-        update={"min_history_sessions": 5, "dollar_volume_sessions": 3, "min_dollar_volume": 1000.0}
-    )
-    return RISK.model_copy(update={"regime": regime, "universe": universe})
+    return RISK.model_copy(update={"regime": regime})
 
 
 def weekdays(start: date, n: int) -> list[date]:

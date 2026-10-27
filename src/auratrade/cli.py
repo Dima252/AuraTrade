@@ -1,16 +1,17 @@
 """Operator commands (README §5.13).
 
-    uv run auratrade kill on        # entries off; resting entry orders cancelled at once
-    uv run auratrade kill off       # entries on (a fresh database starts with them off)
+    uv run auratrade kill on        # increases off; resting buy orders cancelled at once
+    uv run auratrade kill off       # increases on (a fresh database starts with them off)
     uv run auratrade kill status
     uv run auratrade mismatches     # open reconciliation and corporate-action mismatches
     uv run auratrade resolve 12 --note "DXJ split fixed by hand at the broker"
     uv run auratrade halt status    # the drawdown halt and its peak (README §7.3)
     uv run auratrade halt reset     # off, the peak at the broker's equity (after a paper reset)
 
-The kill switch blocks new entries and adds only; it never touches a protective stop, a plan
-exit or reconciliation. `kill on` cancels resting entry orders under the order lock; every
-order job also checks the flag and cancels any that remain.
+The kill switch blocks increases of exposure only; it never touches a protective stop, a sale
+toward a lower target, the halt's sale or reconciliation (README §5.9). `kill on` cancels
+resting buy orders under the order lock; every order job also checks the flag and cancels any
+that remain.
 """
 
 from __future__ import annotations
@@ -105,15 +106,15 @@ def kill(deps: CliDeps, action: str) -> int:
     if action == "status":
         with deps.engine.connect() as conn:
             flags = read_flags(conn)
-        state = "off (entries allowed)" if flags.trading_enabled else "ON (entries blocked)"
-        deps.out(f"kill switch {state}; entries allowed now: {flags.entries_allowed}")
+        state = "off (increases allowed)" if flags.trading_enabled else "ON (increases blocked)"
+        deps.out(f"kill switch {state}")
         return 0
     if action == "off":
         _set_trading(deps, True)
-        deps.out("kill switch off: entries allowed (halts and checks still apply)")
+        deps.out("kill switch off: increases allowed (the halt and the checks still apply)")
         return 0
     _set_trading(deps, False)
-    deps.out("kill switch ON: no new entries or adds")
+    deps.out("kill switch ON: no increases of exposure")
     if deps.settings.trading_mode is not TradingMode.PAPER:
         deps.out("TRADING_MODE is not paper: no orders to cancel")
         return 0
@@ -129,7 +130,7 @@ def kill(deps: CliDeps, action: str) -> int:
             alert=deps.out,
         )
         count = desk.cancel_entries(why="kill switch")
-    deps.out(f"cancelled {count} resting entry orders")
+    deps.out(f"cancelled {count} resting buy orders")
     return 0
 
 
@@ -198,7 +199,7 @@ def halt(deps: CliDeps, action: str) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auratrade", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
-    k = sub.add_parser("kill", help="the kill switch: entries and adds only")
+    k = sub.add_parser("kill", help="the kill switch: increases of exposure only")
     k.add_argument("action", choices=("on", "off", "status"))
     sub.add_parser("mismatches", help="list open mismatches")
     r = sub.add_parser("resolve", help="mark a mismatch resolved after fixing it")

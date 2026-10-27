@@ -9,12 +9,10 @@
   as above.
 - **Stops** fill at min(stop, the bar's open) minus slippage, so gaps go through.
 - **Soft-rule exits** fill at the decision price minus slippage.
-- **Pessimistic same-bar order:** a bar that fills an entry can also stop it out, and a bar that
-  reaches both the hard stop and a favourable level takes the stop first (``plans.resolve``
-  checks the stop before any milestone).
+- **Pessimistic same-bar order:** a bar that fills an entry can also stop it out.
 
-Slippage is a fraction of the price, by the stock's average dollar volume (``sim.slippage``).
-Buy fills round up to a tick, sell fills down.
+Slippage is a fraction of the price, given by the caller (the portfolio's in
+``portfolio.backtest``). Buy fills round up to a tick, sell fills down.
 """
 
 from __future__ import annotations
@@ -24,9 +22,14 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Protocol
 
-from auratrade.config import SimConfig
 from auratrade.execution.prices import round_down, round_up
-from auratrade.plans.model import reached
+
+_LEVEL_TOLERANCE = 1e-9
+
+
+def reached(value: float, level: float) -> bool:
+    """``value >= level``, ignoring float noise in a computed level."""
+    return value >= level - _LEVEL_TOLERANCE
 
 
 class PriceBar(Protocol):
@@ -45,17 +48,6 @@ class MinuteBar(PriceBar, Protocol):
     def start(self) -> datetime: ...
     @property
     def volume(self) -> int | float: ...
-
-
-def slippage(dollar_volume: float | None, config: SimConfig) -> float:
-    """The slippage fraction for a stock trading ``dollar_volume`` a day; the thinnest tier
-    when it isn't known."""
-    thinnest = config.slippage[-1].fraction
-    if dollar_volume is None:
-        return thinnest
-    return next(
-        (t.fraction for t in config.slippage if dollar_volume >= t.min_dollar_volume), thinnest
-    )
 
 
 def buy_price(price: float, slip: float) -> float:

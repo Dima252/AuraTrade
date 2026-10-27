@@ -70,7 +70,8 @@ def _macro(conn: Any, days: list[date], source: str = "CBOE") -> None:
 
 @pytest.fixture
 def seeded(pg_engine: Engine) -> dict[str, int]:
-    """40 sessions; SPY and QQQ rising 1% a day; a small universe; VIX 15 / VIX3M 18."""
+    """40 sessions; SPY and QQQ rising 1% a day; other tickers the regime doesn't load; VIX 15 /
+    VIX3M 18."""
     with pg_engine.begin() as conn:
         conn.execute(
             insert(MarketSession),
@@ -113,29 +114,13 @@ def _replay(engine: Engine, first: date, last: date, risk: RiskConfig = RISK) ->
 
 
 class TestLoad:
-    def test_the_universe_is_point_in_time(self, pg_engine: Engine, seeded: dict[str, int]) -> None:
-        with pg_engine.connect() as conn:
-            data = load_data(
-                conn, load_calendar(conn), SESSIONS[30], SESSIONS[39], RISK.regime, RISK.universe
-            )
-        firsts_and_lasts = sorted((h.dates[0], h.dates[-1]) for h in data.universe)
-        assert firsts_and_lasts == [
-            (SESSIONS[22], SESSIONS[24]),  # BBB: delisted at session 25
-            (SESSIONS[22], SESSIONS[39]),  # AAA
-            (SESSIONS[22], SESSIONS[39]),  # DDD: listed at session 20, inside the window
-        ]
-        assert set(data.indexes) == {"SPY", "QQQ"}  # the ETFs CCC, SPY and QQQ aren't breadth
-        assert data.sessions[0] == SESSIONS[22]  # 8 sessions of look-back
-
-    def test_listing_dates_cut_the_universe(
+    def test_only_the_indexes_with_their_look_back(
         self, pg_engine: Engine, seeded: dict[str, int]
     ) -> None:
         with pg_engine.connect() as conn:
-            data = load_data(
-                conn, load_calendar(conn), SESSIONS[18], SESSIONS[22], RISK.regime, RISK.universe
-            )
-        starts = sorted(h.dates[0] for h in data.universe)
-        assert starts == [SESSIONS[10], SESSIONS[10], SESSIONS[20]]  # DDD only once listed
+            data = load_data(conn, load_calendar(conn), SESSIONS[30], SESSIONS[39], RISK.regime)
+        assert set(data.indexes) == {"SPY", "QQQ"}  # no stock universe since task 5.2
+        assert data.sessions[0] == SESSIONS[23]  # 7 sessions: the long SMA and its slope
 
 
 class TestReplayAndStep:
@@ -148,9 +133,10 @@ class TestReplayAndStep:
         assert all(r.effective_regime == r.computed_regime for r in rows)
         assert all(r.llm_regime is None for r in rows)
         assert {r.risk_hash for r in rows} == {RISK.config_hash}
-        # Rising indexes, a healthy universe and calm VIX: +4 every session, no FTD (1% days),
-        # so the no_ftd fallback, then CONFIRMED_UPTREND after 10 labels.
-        assert {r.score for r in rows if r.session_date >= SESSIONS[20]} == {4}
+        # Rising indexes, calm VIX and no distribution: +3 every session (breadth and leadership
+        # score 0 since task 5.2), no FTD (1% days), so the no_ftd fallback, then
+        # CONFIRMED_UPTREND after 10 labels.
+        assert {r.score for r in rows if r.session_date >= SESSIONS[20]} == {3}
         regimes = [r.computed_regime for r in rows]
         assert Regime.EARLY_UPTREND.value in regimes
         assert regimes[-1] == Regime.CONFIRMED_UPTREND.value
@@ -335,14 +321,7 @@ class TestEdges:
             with pytest.raises(MissingDataError, match="empty"):
                 replay(conn, RISK, SESSIONS[12], SESSIONS[20])
             with pytest.raises(MissingDataError, match="empty"):
-                load_data(
-                    conn,
-                    load_calendar(conn),
-                    SESSIONS[12],
-                    SESSIONS[20],
-                    RISK.regime,
-                    RISK.universe,
-                )
+                load_data(conn, load_calendar(conn), SESSIONS[12], SESSIONS[20], RISK.regime)
 
     def test_nothing_to_compute_or_write(self, pg_engine: Engine) -> None:
         with pg_engine.begin() as conn:

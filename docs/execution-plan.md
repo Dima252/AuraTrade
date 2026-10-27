@@ -52,7 +52,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 - [x] 2.3 Regime classifier *(built out of plan order with the user's approval)*
 - [x] 2.4 Regime backtest *(`backtest/regime.py`, report `docs/backtests/archive/regime.md`, targets pre-registered before the first run. IBD's published thresholds failed 4 of 5 checks on 4 pillars (38% in `CORRECTION`, 7 false spells); the provisional thresholds adopted with the user (#135) pass 3: declines early, the 2020 recovery, 1 false spell. Still missed, for the 3.8 re-run: `CONFIRMED_UPTREND` 49% / 55% of 2019 / H2 2020-21 (target 60%) and ~17 switches a year)*
 
-**Phase 3: Scanner, strategies, plans, baseline** (the setup system: built, failed its gate, archived; its remaining code goes in 5.2, #161)
+**Phase 3: Scanner, strategies, plans, baseline** (the setup system: built, failed its gate, archived; its code deleted in 5.2, #161, #169)
 - [x] 3.1 Trend Template *(built out of plan order with the user's approval)*
 - [x] 3.2a Strategy registry + core scans (VCP, momentum, EP proxy) *(`strategies/` base, registry, `vcp_breakout`, `momentum_breakout`, `episodic_pivot`; pure, 100% branch coverage. Real-data run over 2017-2022 in `docs/backtests/archive/scans.md`: 0 exceptions. Readings approved as #136: a 5% floor on a VCP's first contraction (merger-arbitrage flatliners), no momentum depth cap until 3.8)*
 - [x] 3.2b Remaining scans (leader pullback, emerging leader) *(`leader_pullback`, `emerging_leader`; `SymbolData` gains RS ratings, SPY's closes and the regime's `CORRECTION` spells. Real-data run with all five scans in `docs/backtests/archive/scans.md`, 0 exceptions. The user's choices are #137: drawdown at most 1.5x SPY's, a pullback at least 2 x ATR deep, the 5-session-low stop)*
@@ -96,7 +96,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 
 **Phase 5: Execution**
 - [x] 5.1 Rebalance orders (targets → whole-share orders, sells first, the drift band; SSO's OTO stop and its raise); the invariant and `stop_guard` for #155; chaos tests on the fake broker *(#168: `execution/rebalance.py` (pure, 100% branch), `execution/portfolio.py` (the rebalance, its retry, the halt's sale), `execution/funds.py` (SSO's level in `fund_stops`, splits); `jobs/execute_close.py`, run by hand until 5.2; migration 0010; the accept's chaos tests in `tests/execution/test_portfolio_chaos.py`)*
-- [ ] 5.2 The daily checks (the halt turned on and off; the stop's proceeds into BIL), the slimmed ingest (the ETF list, macro, news), the new schedule (with `execute_close`); the earlier systems' slots retired
+- [x] 5.2 The daily checks (the halt turned on and off; the stop's proceeds into BIL), the slimmed ingest (the ETF list, macro, news), the new schedule (with `execute_close`); the earlier systems' slots retired *(#169: `execution/halt.py` (the halt and its peak in `system_flags`: on at `post_market`'s close, off on R in `allocate` on `paper`), `execution/portfolio.stop_proceeds` (into BIL at the next 15:40), `auratrade halt status|reset`; the chain ends with `allocate`, `portfolio_manager` 08:45, `execute_close` 15:40; ingest is the ETF list's bars, corporate actions, macro, retention; the setup system's code, tests, config sections and settings deleted, reconciliation the funds' only, the regime on three pillars; the nightly backup now covers the portfolio's tables. Events still reach the Portfolio Manager by hand)*
 - [ ] 5.3 Live tax lots from the broker's fills; the journal; the nightly snapshot
 
 **Phase 6: The paper trial and the showcase**
@@ -429,7 +429,7 @@ Thresholds are **tuned on 2016–2022 only** (trading effectively from early 201
 
 ## Phase 3: the earlier systems (done, archived)
 
-Tasks 3.1-3.8e built and tested the chart-pattern setup system (its gate failed, #143-#145), and 3.9-3.16 the momentum book (its gate failed, #152). Their task-by-task detail is in [archive/execution-plan-setup-system.md](archive/execution-plan-setup-system.md) and [archive/execution-plan-momentum-book.md](archive/execution-plan-momentum-book.md); their reports in [backtests/archive/](backtests/archive/). The momentum book's code and every earlier backtest harness were deleted in the cleanup of 2026-10-27 (#161); the setup system's code that the walking skeleton and the regime still run goes in task 5.2.
+Tasks 3.1-3.8e built and tested the chart-pattern setup system (its gate failed, #143-#145), and 3.9-3.16 the momentum book (its gate failed, #152). Their task-by-task detail is in [archive/execution-plan-setup-system.md](archive/execution-plan-setup-system.md) and [archive/execution-plan-momentum-book.md](archive/execution-plan-momentum-book.md); their reports in [backtests/archive/](backtests/archive/). The momentum book's code and every earlier backtest harness were deleted in the cleanup of 2026-10-27 (#161); the setup system's code went in task 5.2 (#169).
 
 ---
 
@@ -573,4 +573,4 @@ flowchart LR
     P6 -.-> P7[7 Optional second broker]
 ```
 
-The portfolio's backtest (3.17-3.23) decides whether the rest is built as planned: a pass or a near miss continues; a clear fail comes back to you. The momentum book's code is deleted (#161) and the setup system's goes in 5.2; their plans are archived in `docs/archive/`. The order layer (5.1) grows from the skeleton's core (1.7), and the simulator (`sim/`) is shared by everything that replays or backtests.
+The portfolio's backtest (3.17-3.23) decides whether the rest is built as planned: a pass or a near miss continues; a clear fail comes back to you. Both systems' code is deleted (#161, #169); their plans are archived in `docs/archive/`. The order layer (5.1) grows from the skeleton's core (1.7), and the simulator (`sim/`) is shared by everything that replays or backtests.

@@ -19,8 +19,6 @@ ACCOUNT = {
 SHARED = {
     "ANTHROPIC_API_KEY": "sk-ant-secret-789",
     "FRED_API_KEY": "fredkey0123456789",
-    "FINNHUB_API_KEY": "finnhubkey012",
-    "EDGAR_USER_AGENT": "AuraTrade research owner@realmail.net",
     "TELEGRAM_BOT_TOKEN": "123456:telegramtoken",
     "TELEGRAM_CHAT_ID": "4242424242",
 }
@@ -134,7 +132,7 @@ def test_main_applies_with_the_profile(
     assert {c["Name"].rsplit("/", 1)[1] for c in fake.calls} == set(pp.REQUIRED)
     out = capsys.readouterr().out
     assert "left out: EXTRA (not used in AWS)" in out
-    assert "done: 10 SecureString parameters under /auratrade/paper/" in out
+    assert "done: 8 SecureString parameters under /auratrade/paper/" in out
     for value in VALUES.values():
         assert value not in out
 

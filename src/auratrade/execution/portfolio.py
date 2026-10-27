@@ -42,8 +42,8 @@ from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import PortfolioConfig
 from auratrade.db.flags import read_flags
 from auratrade.db.models import FundStop, PortfolioTarget
-from auratrade.execution import funds, store
-from auratrade.execution.broker import Broker, OrderType, Side
+from auratrade.execution import funds, ids, store
+from auratrade.execution.broker import Broker, BrokerOrder, Side
 from auratrade.execution.orders import BuyResult, SaleResult, SaleStatus
 from auratrade.execution.prices import marketable_buy_limit
 from auratrade.execution.rebalance import (
@@ -357,6 +357,17 @@ def bought_from_flat(conn: Connection, symbol: str) -> date | None:
     return day
 
 
+def stopped_out(order: BrokerOrder) -> bool:
+    """A sale by the stop: the stop order itself, or the sale at once the invariant makes when
+    the price is already through the level (`OrderDesk.protect`)."""
+    if order.side is not Side.SELL:
+        return False
+    if order.is_sell_stop:
+        return True
+    parsed = ids.parse(order.client_order_id)
+    return parsed is not None and parsed.purpose is ids.Purpose.EXIT and parsed.detail == "STOP"
+
+
 def stop_proceeds(section: Section, invariant: InvariantReport) -> dict[str, Any] | None:
     """The leveraged fund's stop fills since the rebalance finished, into the cash fund (README
     §7.2). None when no stop filled."""
@@ -373,11 +384,7 @@ def stop_proceeds(section: Section, invariant: InvariantReport) -> dict[str, Any
     fills = [
         o
         for o in deps.broker.orders_since(created_after, [lev])
-        if o.side is Side.SELL
-        and o.type in (OrderType.STOP, OrderType.STOP_LIMIT)
-        and o.filled_qty > 0
-        and o.filled_at is not None
-        and o.filled_at >= since
+        if stopped_out(o) and o.filled_qty > 0 and o.filled_at is not None and o.filled_at >= since
     ]
     if not fills:
         return None

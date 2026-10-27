@@ -13,7 +13,6 @@ SUBPACKAGES = [
     "indicators",
     "regime",
     "strategies",
-    "plans",
     "llm",
     "guardrails",
     "execution",

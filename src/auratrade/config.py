@@ -12,7 +12,7 @@ from datetime import date, time
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Literal, Self
 
 import yaml
 from pydantic import (
@@ -21,9 +21,7 @@ from pydantic import (
     Field,
     PositiveInt,
     SecretStr,
-    SerializerFunctionWrapHandler,
     field_validator,
-    model_serializer,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,8 +61,6 @@ class Settings(BaseSettings):
     alpaca_secret_key: SecretStr | None = None
     anthropic_api_key: SecretStr | None = None
     fred_api_key: SecretStr | None = None
-    finnhub_api_key: SecretStr | None = None
-    edgar_user_agent: str | None = None
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
     database_url: SecretStr | None = None
@@ -72,17 +68,9 @@ class Settings(BaseSettings):
     # credential: anyone holding it can ping.
     healthchecks_ping_url: SecretStr | None = None
 
-    analyst_model: str = DEFAULT_MODEL
+    # The Portfolio Manager's model and effort (README §9).
     pm_model: str = DEFAULT_MODEL
-    eod_model: str = DEFAULT_MODEL
-    weekly_model: str = DEFAULT_MODEL
-    # The Analyst's effort (medium vs high) is chosen by test in task 4.6 (README §9). The EOD
-    # role belongs to the setup system; Phase 4 removes its settings.
-    analyst_effort: Effort = Effort.MEDIUM
     pm_effort: Effort = Effort.HIGH
-    eod_effort: Effort = Effort.HIGH
-    weekly_effort: Effort = Effort.HIGH
-    analyst_max_candidates: PositiveInt = 40
 
     storage_backend: Literal["local", "s3"] = "local"
     storage_local_dir: Path = REPO_ROOT / "var" / "storage"
@@ -116,7 +104,6 @@ class Settings(BaseSettings):
             self.alpaca_secret_key,
             self.anthropic_api_key,
             self.fred_api_key,
-            self.finnhub_api_key,
             self.telegram_bot_token,
             self.database_url,
             self.healthchecks_ping_url,
@@ -151,171 +138,8 @@ class Regime(StrEnum):
     CONFIRMED_UPTREND = "CONFIRMED_UPTREND"
 
 
-class Strategy(StrEnum):
-    VCP_BREAKOUT = "VCP_BREAKOUT"
-    MOMENTUM_BREAKOUT = "MOMENTUM_BREAKOUT"
-    EPISODIC_PIVOT = "EPISODIC_PIVOT"
-    LEADER_PULLBACK = "LEADER_PULLBACK"
-    EMERGING_LEADER = "EMERGING_LEADER"
-
-
-class FundedStrategy(_Strict):
-    strategy: Strategy
-    min_conviction: Annotated[int, Field(ge=1, le=5)] | None = None
-
-
-class RegimeLimits(_Strict):
-    """One row of archived README §6. Risk and exposure are fractions of equity."""
-
-    strategies: tuple[FundedStrategy, ...]
-    base_risk: Fraction
-    max_exposure: Fraction
-    max_positions: Annotated[int, Field(ge=0)]
-    max_positions_large_account: Annotated[int, Field(ge=0)] | None = None
-
-
-class EarlyUptrendStep(_Strict):
-    """Archived README §6: `EARLY_UPTREND` limits step up after N sessions, on score ≥ +1 only."""
-
-    starter_sessions: PositiveInt
-    min_score_to_step_up: int
-    stepped_base_risk: Fraction
-    stepped_max_exposure: Fraction
-
-
-class RegimesConfig(_Strict):
-    CONFIRMED_UPTREND: RegimeLimits
-    UNDER_PRESSURE: RegimeLimits
-    EARLY_UPTREND: RegimeLimits
-    CORRECTION: RegimeLimits
-    early_uptrend_step: EarlyUptrendStep
-    large_account_equity: Positive
-
-
-class GuardrailsConfig(_Strict):
-    """Numeric defaults from archived README §8; behaviour lives in `auratrade.guardrails`."""
-
-    max_risk_per_trade: Fraction
-    max_position_size: Fraction
-    max_heat: Fraction
-    heat_min_room_of_planned: Fraction
-    max_per_cluster: PositiveInt
-    cluster_correlation: Fraction
-    cluster_correlation_sessions: PositiveInt
-    pivot_tolerance: Fraction
-    min_stop_below_pivot_atr: Positive
-    max_chase_above_pivot: Fraction
-    max_above_50d: Positive
-    late_stage_base_count: PositiveInt
-    late_stage_risk_factor: Fraction
-    max_base_count: PositiveInt
-    earnings_blackout_sessions: PositiveInt
-    earnings_estimate_sessions: PositiveInt
-    earnings_estimate_window_sessions: PositiveInt
-    tranche2_max_sessions: PositiveInt
-    stop_widths: dict[Strategy, StopWidthRule]
-    # "Keep losses small vs gains": after this many closed trades of a strategy, its max stop
-    # width is also capped at `keep_losses_small_gain_share` x its rolling average gain.
-    keep_losses_small_trades: PositiveInt
-    keep_losses_small_gain_share: Fraction
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if missing := set(Strategy) - set(self.stop_widths):
-            raise ValueError(f"stop_widths has no rule for {sorted(missing)}")
-        return self
-
-
-class StopWidthUnit(StrEnum):
-    """What a strategy's max stop width is measured in (archived README §7.1, §8)."""
-
-    LIMIT_PCT = "LIMIT_PCT"
-    """A fraction of the limit price (the worst fill), measured down from the limit."""
-    ATR = "ATR"
-    """ATR multiples, measured down from the trigger."""
-    ADR = "ADR"
-    """ADR multiples (ADR% x the trigger), measured down from the trigger."""
-
-
-class StopWidthRule(_Strict):
-    unit: StopWidthUnit
-    max: Positive
-    noise_floor_atr: Positive
-    """The narrowest max width the keep-losses-small cap may leave, in ATR multiples."""
-
-
-class HaltsConfig(_Strict):
-    daily_loss: Fraction
-    weekly_loss: Fraction
-    drawdown: Fraction
-
-
-class MultiplierConfig(_Strict):
-    """Progressive-exposure multiplier (archived README §8)."""
-
-    win_r: Positive
-    loss_r: Positive
-    deep_drawdown: Fraction
-    deep_drawdown_multiplier: Positive
-    drawdown: Fraction
-    drawdown_multiplier: Positive
-    tier_exit_wins: PositiveInt
-    losing_streak: PositiveInt
-    losing_streak_exit_wins: PositiveInt
-    losing_streak_multiplier: Positive
-    prove_it_wins: PositiveInt
-    prove_it_multiplier: Positive
-    unproven_regime_trades: PositiveInt
-    unproven_regime_multiplier: Positive
-    trading_well_high_sessions: PositiveInt
-    trading_well_trades: PositiveInt
-    trading_well_multiplier: Positive
-
-
-class UpDayCluster(_Strict):
-    up_days: PositiveInt
-    of_sessions: PositiveInt
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.up_days > self.of_sessions:
-            raise ValueError("up_days cannot exceed of_sessions")
-        return self
-
-
-class ClimaxConfig(_Strict):
-    """Climax-sale signals and actions (archived README §7.3); see `indicators.climax`."""
-
-    up_day_clusters: tuple[UpDayCluster, ...]
-    min_above_long_average: Positive
-    fast_gain_min: Positive
-    fast_gain_window: PositiveInt
-    fast_gain_min_move_sessions: Annotated[int, Field(ge=0)]
-    exhaustion_min_gap: Fraction
-    sell_half_signals: PositiveInt
-    sell_all_signals: PositiveInt
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.sell_all_signals < self.sell_half_signals:
-            raise ValueError("sell_all_signals must be >= sell_half_signals")
-        return self
-
-
 class DataConfig(_Strict):
-    min_coverage: Fraction
     macro_stale_sessions: PositiveInt
-
-
-class UniverseConfig(_Strict):
-    """The tradable universe (README §5.1), filtered point in time on raw prices."""
-
-    exchanges: tuple[str, ...] = Field(min_length=1)
-    security_types: tuple[str, ...] = Field(min_length=1)
-    min_price: Positive
-    min_dollar_volume: Positive
-    dollar_volume_sessions: PositiveInt
-    min_history_sessions: PositiveInt
 
 
 class OutlierConfig(_Strict):
@@ -342,14 +166,6 @@ class IngestConfig(_Strict):
 
     # Rolling window of bars kept in Postgres (2 years); older bars live in Parquet.
     bar_history_sessions: PositiveInt
-    # Bars are stored for "tracked" tickers: universe types on universe exchanges whose raw
-    # close and average dollar volume pass `track_margin` times the universe filters. A ticker
-    # that starts passing gets its whole window fetched, so the margin only trades storage
-    # (Neon's 0.5 GB) against re-fetching, never which tickers are in the universe.
-    track_margin: Annotated[float, Field(gt=0.0, le=1.0)]
-    # More listed securities than this vanishing from Alpaca's asset list in one evening is a
-    # vendor glitch, not delistings: the refresh writes nothing and the job fails closed.
-    max_delistings: PositiveInt
     # A re-fetched overlap bar whose close moved by more than this is a split (or another
     # vendor re-adjustment): the ticker's whole window is re-fetched.
     split_close_tolerance: Positive
@@ -359,31 +175,13 @@ class IngestConfig(_Strict):
     corporate_actions_lookback_sessions: PositiveInt
     corporate_actions_lookahead_sessions: PositiveInt
     macro: MacroIngestConfig
-    # Upcoming earnings dates: Finnhub's calendar, one request per day, this far ahead.
-    earnings_horizon_sessions: PositiveInt
-    # Blank Finnhub timing → the company's usual timing over its last N reports (#119).
-    earnings_usual_timing_reports: PositiveInt
-    # Reports in the last N sessions get their surprise and their EDGAR 8-K event, and a
-    # fundamentals refresh.
-    earnings_recent_sessions: PositiveInt
-    # Per-run caps that keep the job inside Lambda's 15 minutes in peak earnings weeks; what is
-    # left waits for the next evening (surprises) or the rolling refresh (fundamentals).
-    earnings_surprise_max_requests: PositiveInt
-    fundamentals_max_requests: PositiveInt
-    # Rolling refreshes: every tracked ticker once per N sessions.
-    fundamentals_refresh_sessions: PositiveInt
-    # Quarters kept in Postgres per ticker (growth and acceleration need the last 8 or so).
-    fundamentals_quarters: PositiveInt
-    industries_refresh_sessions: PositiveInt
-    # SIC codes roll up to 3 and then 2 digits until a group has this many members.
-    industry_min_group_size: PositiveInt
-    # Scanner, tracker and LLM output rows older than this move to Parquet (README §10).
+    # The setup system's scanner and tracker rows older than this move to Parquet (README §10).
     archive_after_sessions: PositiveInt
-    # Concurrent requests per vendor: the bar and EDGAR requests are bound by response time, and
-    # the vendor's rate limiter still applies across the workers.
+    # Concurrent requests per vendor: the bar requests are bound by response time, and the
+    # vendor's rate limiter still applies across the workers.
     http_workers: PositiveInt
-    # Each step's transaction stays open across its vendor calls (a first fill fetches for about
-    # 15 minutes), and Neon ends a transaction idle for 5. Raised for the ingest's own
+    # Each step's transaction stays open across its vendor calls (a first fill fetches for a
+    # few minutes), and Neon ends a transaction idle for 5. Raised for the ingest's own
     # transactions only, and still bounded so a lost client's locks are freed.
     transaction_idle_minutes: PositiveInt
     db_size_limit_mb: PositiveInt
@@ -391,28 +189,10 @@ class IngestConfig(_Strict):
 
 
 class HistoryConfig(_Strict):
-    """The Parquet history and its backfill (README §5.1, §10; task 1.6)."""
+    """The Parquet history's backfill for the portfolio's backtest (README §5.1; task 3.18)."""
 
     # Alpaca's SIP daily bars start on 2016-01-04 (spike 0.3a).
     start: date
-    # A ticker that didn't trade for more than this many sessions is a new security after the
-    # gap: tickers get reused (#111).
-    max_gap_sessions: PositiveInt
-    # A one-bar move of this factor or more in the split-adjusted close (up, or down to its
-    # inverse) is a new security too: a reorganization, an unadjusted reverse split, a spin-off.
-    max_jump: Annotated[float, Field(gt=1.0)]
-    # Two securities whose bars are identical on at least this share of the shorter one's
-    # sessions are one company under two tickers (the old ticker of a rename keeps serving the
-    # new one's bars): the shorter, or the one no active asset names, is dropped.
-    duplicate_share: Fraction
-    # Alpaca's asset list forgets most delistings, but the bars endpoint still serves them: every
-    # 1-4 letter ticker is tried over a few sessions at this spacing. A security in the universe
-    # has traded for at least `universe.min_history_sessions`, so a spacing below that sees it.
-    enumeration_every_sessions: PositiveInt
-    enumeration_window_sessions: PositiveInt
-    # Symbols per bars request: small requests spread over the workers finish sooner than the
-    # 1,000-symbol maximum, whose pages are fetched one after another.
-    bar_chunk_symbols: PositiveInt
     workers: PositiveInt
 
 
@@ -423,35 +203,16 @@ class JobsConfig(_Strict):
     stale_running_minutes: PositiveInt
     # How late a scheduled run's heartbeat may be before the watchdog alerts.
     watchdog_grace_minutes: PositiveInt
-    # eod_review runs only this close to the session's close (its 12:40 and 15:40 slots).
-    eod_review_window_minutes: PositiveInt
 
 
 class RiskConfig(_Strict):
-    regimes: RegimesConfig
-    guardrails: GuardrailsConfig
-    entries: EntriesConfig
-    halts: HaltsConfig
-    multiplier: MultiplierConfig
-    climax: ClimaxConfig
     data: DataConfig
-    universe: UniverseConfig
     ingest: IngestConfig
     history: HistoryConfig
     jobs: JobsConfig
-    trend_template: TrendTemplateConfig
-    bases: BasesConfig
     regime: RegimeConfig
-    plans: PlansConfig
     execution: ExecutionConfig
-    skeleton: SkeletonConfig
-    strategies: StrategiesConfig
-    ranking: RankingConfig
     charts: ChartsConfig
-    sim: SimConfig
-    watchlist: WatchlistConfig
-    baseline: BaselineConfig
-    scorecard: ScorecardConfig
     portfolio: PortfolioConfig
     llm: LlmConfig
     portfolio_manager: PortfolioManagerConfig
@@ -466,17 +227,6 @@ class RiskConfig(_Strict):
     def short_hash(self) -> str:
         return self.config_hash[:12]
 
-    def with_candidate(self, name: str) -> RiskConfig:
-        """The config with the entry candidate ``name`` swapped in: its entry policies and its
-        stop caps (#144)."""
-        c = self.plans.entry_candidates[name]
-        plans = self.plans.model_copy(update={"entry": {**self.plans.entry, **c.entry}})
-        widths = {**self.guardrails.stop_widths, **c.stop_widths}
-        guardrails = self.guardrails.model_copy(update={"stop_widths": widths})
-        # Re-validated, so the copy has its own hash.
-        data = {**self.model_dump(), "plans": plans.model_dump()}
-        return RiskConfig.model_validate({**data, "guardrails": guardrails.model_dump()})
-
 
 def load_risk_config(path: Path = DEFAULT_RISK_CONFIG) -> RiskConfig:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -485,52 +235,8 @@ def load_risk_config(path: Path = DEFAULT_RISK_CONFIG) -> RiskConfig:
     return RiskConfig.model_validate(raw)
 
 
-# --- risk.yaml: scanner and plans (Phase 3) ------------------------------------------------
-# Defined after RiskConfig so these sections stay appended; `RiskConfig.model_rebuild()` below
-# resolves the forward references.
-
-
-class RsWeight(_Strict):
-    lookback: PositiveInt
-    weight: Positive
-
-
-TrendTemplateRule = Annotated[int, Field(ge=1, le=8)]
-
-
-class TrendTemplateConfig(_Strict):
-    """Minervini's 8-rule Trend Template (archived README §5.3); see
-    `strategies.trend_template`."""
-
-    short_sma: PositiveInt
-    mid_sma: PositiveInt
-    long_sma: PositiveInt
-    long_sma_rising_sessions: PositiveInt
-    range_sessions: PositiveInt
-    min_above_low: Positive
-    max_below_high: Fraction
-    min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
-    rs_weights: tuple[RsWeight, ...] = Field(min_length=1)
-    required_rules: dict[Strategy, frozenset[TrendTemplateRule]]
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if not self.short_sma < self.mid_sma < self.long_sma:
-            raise ValueError("need short_sma < mid_sma < long_sma")
-        missing = set(Strategy) - self.required_rules.keys()
-        if missing:
-            raise ValueError(f"required_rules is missing {sorted(missing)}")
-        return self
-
-
-class BasesConfig(_Strict):
-    """Base detection and IBD counting (archived README §5.3); see `indicators.bases.BaseRules`."""
-
-    min_sessions: PositiveInt
-    max_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
-    swing_reversal: Annotated[float, Field(gt=0.0, lt=1.0)]
-    pivot_min_position: Annotated[float, Field(gt=0.0, lt=1.0)]
-    new_stage_advance: Positive
+# --- risk.yaml: the regime (task 2.3) ------------------------------------------------------
+# Defined after RiskConfig; `RiskConfig.model_rebuild()` below resolves the forward references.
 
 
 class IndexTrendConfig(_Strict):
@@ -625,14 +331,6 @@ class RegimeConfig(_Strict):
         return self
 
 
-class TrailMA(StrEnum):
-    """Trailing moving averages, loosest first: a step tighter is 50 SMA -> 21 EMA -> 10-day."""
-
-    SMA_50 = "SMA_50"
-    EMA_21 = "EMA_21"
-    TEN_DAY = "TEN_DAY"
-
-
 class AverageKind(StrEnum):
     SMA = "SMA"
     EMA = "EMA"
@@ -643,326 +341,7 @@ class TrailSpec(_Strict):
     window: PositiveInt
 
 
-class FloatRange(_Strict):
-    min: float
-    max: float
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.min > self.max:
-            raise ValueError("min must be <= max")
-        return self
-
-    def contains(self, value: float) -> bool:
-        return self.min <= value <= self.max
-
-
-class IntRange(_Strict):
-    min: int
-    max: int
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.min > self.max:
-            raise ValueError("min must be <= max")
-        return self
-
-    def contains(self, value: float) -> bool:
-        return self.min <= value <= self.max
-
-
-class KullamagiPartial(_Strict):
-    """(a) Sell a fraction at the EOD review of session ``after_sessions`` if >= +min_r R."""
-
-    kind: Literal["KULLAMAGI"] = "KULLAMAGI"
-    fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-    after_sessions: PositiveInt
-
-
-class ONeilPartial(_Strict):
-    """(b) Sell a fraction once the decision price is ``gain`` above the entry (0.2 = +20%)."""
-
-    kind: Literal["ONEIL"] = "ONEIL"
-    fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-    gain: Positive
-
-
-class MinerviniPartial(_Strict):
-    """(c) Sell a fraction once the decision price is ``r_multiple`` R above the entry."""
-
-    kind: Literal["MINERVINI"] = "MINERVINI"
-    fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-    r_multiple: Positive
-
-
-type AnyPartial = KullamagiPartial | ONeilPartial | MinerviniPartial
-StrengthPartial = Annotated[
-    KullamagiPartial | ONeilPartial | MinerviniPartial, Field(discriminator="kind")
-]
-
-
-class KullamagiMenu(_Strict):
-    fraction: FloatRange
-    after_sessions: IntRange
-    min_r: Positive
-
-
-class ONeilMenu(_Strict):
-    fraction: FloatRange
-    gain: FloatRange
-
-
-class MinerviniMenu(_Strict):
-    fraction: FloatRange
-    r_multiple: FloatRange
-
-
-class PartialMenus(_Strict):
-    """The bounded strength-partial menu (archived README §7.3)."""
-
-    KULLAMAGI: KullamagiMenu
-    ONEIL: ONeilMenu
-    MINERVINI: MinerviniMenu
-
-    def violations(self, partial: AnyPartial) -> list[str]:
-        menu: BaseModel = getattr(self, partial.kind)
-        out: list[str] = []
-        for name in type(menu).model_fields:
-            bounds = getattr(menu, name)
-            if not isinstance(bounds, FloatRange | IntRange):
-                continue
-            value: float = getattr(partial, name)
-            if not bounds.contains(value):
-                out.append(
-                    f"{partial.kind} partial {name}={value} is outside [{bounds.min}, {bounds.max}]"
-                )
-        return out
-
-
-class ExitPlan(_Strict):
-    """One position's exit-menu choices (archived README §7.3). Written at entry; tighten-only
-    after."""
-
-    partial: StrengthPartial | None = None
-    breakeven_after_partial: bool = False
-    breakeven_at_r: bool = False
-    round_trip: bool = False
-    trail: TrailMA
-    eight_week_hold: bool = False
-    climax_sales: bool = False
-    heavy_volume_reversal: bool = False
-    late_stage_sale: bool = False
-    time_stop: bool = False
-    # Safety rules: in every default set, tested on vs off by the baseline backtest.
-    earnings_cushion: bool = True
-    regime_tightening: bool = True
-
-
-class ExitPlanOverrides(_Strict):
-    """Per-strategy switches on top of an exit set; only the keys given are applied."""
-
-    partial: StrengthPartial | None = None
-    breakeven_after_partial: bool | None = None
-    breakeven_at_r: bool | None = None
-    round_trip: bool | None = None
-    trail: TrailMA | None = None
-    eight_week_hold: bool | None = None
-    climax_sales: bool | None = None
-    heavy_volume_reversal: bool | None = None
-    late_stage_sale: bool | None = None
-    time_stop: bool | None = None
-    earnings_cushion: bool | None = None
-    regime_tightening: bool | None = None
-
-    @model_serializer(mode="wrap")
-    def _only_given(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
-        # Dump only the keys given, so a dumped config re-validates to the same overrides
-        # (an explicit `partial: null` means "no partial", not "unchanged").
-        data: dict[str, Any] = handler(self)
-        return {name: value for name, value in data.items() if name in self.model_fields_set}
-
-    def apply(self, plan: ExitPlan) -> ExitPlan:
-        changes = {name: getattr(self, name) for name in self.model_fields_set}
-        return ExitPlan.model_validate({**plan.model_dump(), **changes})
-
-
-class ExitSetName(StrEnum):
-    KULLAMAGI = "KULLAMAGI"
-    MINERVINI = "MINERVINI"
-    ONEIL = "ONEIL"
-
-
-class DefaultPlan(_Strict):
-    exit_set: ExitSetName
-    overrides: ExitPlanOverrides = ExitPlanOverrides()
-
-
-class TriggerKind(StrEnum):
-    """Entry triggers (archived README §7.1); computed by `execution.triggers` (3.5b)."""
-
-    PIVOT = "PIVOT"
-    """The pivot (a pullback's prior-session high), or the opening-range high if the range
-    traded above it."""
-    CONSOLIDATION_OR_RANGE_HIGH = "CONSOLIDATION_OR_RANGE_HIGH"
-    """max(consolidation high, opening-range high)."""
-    OPENING_RANGE_HIGH = "OPENING_RANGE_HIGH"
-    CLOSE = "CLOSE"
-    """The close-entry candidate (#144): the entry gate on the 15:40 decision price, then a
-    marketable limit buy with its stop leg."""
-
-
-class StopKind(StrEnum):
-    STRUCTURAL = "STRUCTURAL"
-    LOW_OF_DAY = "LOW_OF_DAY"
-    TRIGGER_DAY_LOW = "TRIGGER_DAY_LOW"
-    """The trigger session's low at the decision time, never below the structural stop
-    (#144)."""
-
-
-class GateKind(StrEnum):
-    BREAKOUT = "BREAKOUT"
-    PULLBACK = "PULLBACK"
-    GAP_HELD = "GAP_HELD"
-    """An EP at the close (#144): the gap held, on the after-close EP volume."""
-
-
-class EntryPolicy(_Strict):
-    trigger: TriggerKind
-    stop: StopKind
-    tranches: Literal[1, 2]
-    gate: GateKind | None = None
-    """The tranche-2 gate; for a close entry, the entry's own gate."""
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.trigger is TriggerKind.CLOSE:
-            if self.tranches != 1 or self.gate is None:
-                raise ValueError("a close entry is one tranche with an entry gate")
-        elif (self.tranches == 2) != (self.gate is not None):
-            raise ValueError("a confirmation gate is needed exactly when there are 2 tranches")
-        return self
-
-
-class EntryCandidate(_Strict):
-    """A pre-registered entry candidate: the policies and stop caps it swaps in."""
-
-    entry: dict[Strategy, EntryPolicy]
-    stop_widths: dict[Strategy, StopWidthRule] = {}
-
-
-class GateConfig(_Strict):
-    """A confirmation gate (archived README §7.1) on the decision price: tranche 2's, or a close
-    entry's
-    (#144)."""
-
-    max_above_level: Fraction | None
-    """The max chase above the level; None: none (an EP has no prior pivot to chase from)."""
-    min_range_position: Fraction
-    min_volume_ratio: Positive | None
-    """None: no volume condition (the close-entry comparison)."""
-    rs_line_near_high: bool
-    above_tested_ma: bool
-    rs_line_not_at_low: bool
-
-
-class EightWeekHoldConfig(_Strict):
-    min_gain: Positive
-    within_sessions: PositiveInt
-    hold_sessions: PositiveInt
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.hold_sessions < self.within_sessions:
-            raise ValueError("hold_sessions must be >= within_sessions")
-        return self
-
-
-class HeavyVolumeReversalConfig(_Strict):
-    min_volume_ratio: Positive
-
-
-class TimeStopConfig(_Strict):
-    min_r: Positive
-    halve_session: PositiveInt
-    halve_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-    exit_session: PositiveInt
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.exit_session <= self.halve_session:
-            raise ValueError("exit_session must be after halve_session")
-        return self
-
-
-class LateStageSaleConfig(_Strict):
-    min_base_count: PositiveInt
-    sell_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-
-
-class EarningsCushionConfig(_Strict):
-    exit_below_r: float
-    hold_full_from_r: float
-    trim_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.exit_below_r > self.hold_full_from_r:
-            raise ValueError("exit_below_r must be <= hold_full_from_r")
-        return self
-
-
-class PlansConfig(_Strict):
-    """Position plans (archived README §7.1-7.4); behaviour lives in `auratrade.plans`."""
-
-    trails: dict[TrailMA, TrailSpec]
-    partial_menus: PartialMenus
-    breakeven_at_r: Positive
-    round_trip_gain: Positive
-    eight_week_hold: EightWeekHoldConfig
-    heavy_volume_reversal: HeavyVolumeReversalConfig
-    early_sessions: PositiveInt
-    time_stop: TimeStopConfig
-    climax_sell_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-    late_stage_sale: LateStageSaleConfig
-    earnings_cushion: EarningsCushionConfig
-    confirmation_gates: dict[GateKind, GateConfig]
-    entry: dict[Strategy, EntryPolicy]
-    entry_candidates: dict[str, EntryCandidate] = {}
-    """Pre-registered entry policies a backtest swaps in (the close entry, #144); nothing live
-    reads them (``RiskConfig.with_candidate``)."""
-    exit_sets: dict[ExitSetName, ExitPlan]
-    default_plans: dict[Strategy, DefaultPlan]
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        required: tuple[tuple[str, set[str], set[str]], ...] = (
-            ("trails", set(self.trails), set(TrailMA)),
-            ("confirmation_gates", set(self.confirmation_gates), set(GateKind)),
-            ("entry", set(self.entry), set(Strategy)),
-            ("exit_sets", set(self.exit_sets), set(ExitSetName)),
-            ("default_plans", set(self.default_plans), set(Strategy)),
-        )
-        for name, keys, wanted in required:
-            if missing := wanted - keys:
-                raise ValueError(f"{name} is missing {sorted(missing)}")
-        problems = [
-            f"{strategy}: {problem}"
-            for strategy in Strategy
-            for problem in self.menu_violations(self.default_exit_plan(strategy))
-        ]
-        if problems:
-            raise ValueError("; ".join(problems))
-        return self
-
-    def default_exit_plan(self, strategy: Strategy) -> ExitPlan:
-        default = self.default_plans[strategy]
-        return default.overrides.apply(self.exit_sets[default.exit_set])
-
-    def menu_violations(self, plan: ExitPlan) -> list[str]:
-        return [] if plan.partial is None else self.partial_menus.violations(plan.partial)
-
-
-# --- risk.yaml: the order layer and the walking skeleton (task 1.7) -------------------------
+# --- risk.yaml: the order layer (tasks 1.7, 5.1) --------------------------------------------
 
 
 class DecisionPriceConfig(_Strict):
@@ -1006,190 +385,11 @@ class ExecutionConfig(_Strict):
         return self
 
 
-class EntriesConfig(_Strict):
-    """Entry triggers, limits and sizing (archived README §7.1); see ``execution.triggers``,
-    ``.sizing``."""
-
-    opening_range_minutes: PositiveInt
-    # limit = min(trigger x (1 + min(limit_max_above_trigger, limit_adr_fraction x ADR)),
-    #             code pivot x (1 + guardrails.max_chase_above_pivot))
-    limit_max_above_trigger: Fraction
-    limit_adr_fraction: Positive
-    tranche1_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
-    # A planned size under this many shares goes in as a single tranche (#122).
-    min_two_tranche_shares: Annotated[int, Field(ge=2)]
-
-
-class SkeletonConfig(_Strict):
-    """The walking skeleton's rule-only scan and entries (execution plan task 1.7). Phase 5
-    replaces the scan and the pick; the order layer stays."""
-
-    trend_template_rules: frozenset[TrendTemplateRule] = Field(min_length=1)
-    pivot_sessions: PositiveInt
-    stop_sessions: PositiveInt
-    # The structural stop is at most this far below the limit price (archived README §7.1).
-    max_stop: Fraction
-    # limit = min(trigger x (1 + min(limit_max_above_trigger, limit_adr_fraction x ADR)),
-    #             pivot x (1 + guardrails.max_chase_above_pivot))  (archived README §7.1)
-    limit_max_above_trigger: Fraction
-    limit_adr_fraction: Positive
-    adr_sessions: PositiveInt
-    risk_per_trade: Fraction
-    picks: PositiveInt
-    candidates: PositiveInt
-    max_positions: PositiveInt
-    trail: TrailMA
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.candidates < self.picks:
-            raise ValueError("candidates must be >= picks")
-        return self
-
-
-# --- risk.yaml: the strategy scans (task 3.2a) ----------------------------------------------
-
-
-class VcpConfig(_Strict):
-    """`VcpBreakout` detection (archived README §5.3, Minervini); see
-    ``strategies.vcp_breakout``."""
-
-    min_base_sessions: PositiveInt
-    max_base_sessions: PositiveInt
-    min_depth: Annotated[float, Field(ge=0.0, lt=1.0)]
-    max_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
-    """Bounds on the first (deepest) contraction: the base's high to its low."""
-    min_contractions: PositiveInt
-    max_contractions: PositiveInt
-    max_final_depth: Annotated[float, Field(gt=0.0, lt=1.0)]
-    swing_confirm_sessions: PositiveInt
-    """A contraction's high counts once at least this many sessions follow it."""
-    pivot_min_position: Annotated[float, Field(gt=0.0, lt=1.0)]
-    volume_sessions: PositiveInt
-    max_final_volume_ratio: Positive
-    """The final contraction's average volume vs the ``volume_sessions`` average."""
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.max_base_sessions < self.min_base_sessions:
-            raise ValueError("max_base_sessions must be >= min_base_sessions")
-        if self.max_contractions < self.min_contractions:
-            raise ValueError("max_contractions must be >= min_contractions")
-        if self.min_contractions < 2:
-            raise ValueError("a VCP needs at least 2 contractions")
-        if self.min_depth >= self.max_depth:
-            raise ValueError("min_depth must be < max_depth")
-        return self
-
-
-class MomentumConfig(_Strict):
-    """`MomentumBreakout` detection (archived README §5.3, Kullamägi); see
-    ``strategies.momentum_breakout``."""
-
-    rank_lookbacks: tuple[PositiveInt, ...] = Field(min_length=1)
-    min_rank: Annotated[float, Field(ge=0.0, le=100.0)]
-    """Top ~2%: the momentum rank on any of ``rank_lookbacks`` is at least this percentile."""
-    move_sessions: PositiveInt
-    min_move: Positive
-    min_consolidation_sessions: Annotated[int, Field(ge=2)]
-    max_consolidation_sessions: PositiveInt
-    ride_smas: tuple[PositiveInt, ...] = Field(min_length=1)
-    ma_rising_sessions: PositiveInt
-    adr_sessions: PositiveInt
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.max_consolidation_sessions < self.min_consolidation_sessions:
-            raise ValueError("max_consolidation_sessions must be >= min_consolidation_sessions")
-        return self
-
-
-class EpisodicPivotProxyConfig(_Strict):
-    """The `EpisodicPivot` backtest proxy (archived README §5.3; live detection is task 5.6)."""
-
-    min_gap: Positive
-    min_volume_ratio: Positive
-    """The after-close view (``scan``): the gap session's full-day volume."""
-    min_opening_volume_ratio: Positive
-    """The backtest pool's 09:36 view: the volume from the open to the entry, against the prior
-    average daily volume (#143)."""
-    volume_sessions: PositiveInt
-    rally_lookbacks: tuple[PositiveInt, ...] = Field(min_length=1)
-    adr_sessions: PositiveInt
-
-
-class LeaderPullbackConfig(_Strict):
-    """`LeaderPullback` detection (archived README §5.3, Minervini / O'Neil); see
-    ``strategies.leader_pullback``."""
-
-    min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
-    emas: tuple[PositiveInt, ...] = Field(min_length=1)
-    """The averages a pullback may test, shortest first."""
-    atr_sessions: PositiveInt
-    max_atr_from_ema: Positive
-    swing_sessions: PositiveInt
-    """The pullback starts at the highest high of this many sessions."""
-    min_pullback_sessions: PositiveInt
-    min_depth_atr: Annotated[float, Field(ge=0.0)]
-    """The pullback falls at least this many ATRs from its swing high to its low."""
-    volume_sessions: PositiveInt
-    max_volume_ratio: Positive
-    """The pullback's average volume vs the ``volume_sessions`` average."""
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if self.min_pullback_sessions > self.swing_sessions:
-            raise ValueError("min_pullback_sessions must be <= swing_sessions")
-        if list(self.emas) != sorted(set(self.emas)):
-            raise ValueError("emas must be distinct, shortest first")
-        return self
-
-
-class EmergingLeaderConfig(_Strict):
-    """`EmergingLeader` detection (archived README §5.3, O'Neil); see
-    ``strategies.emerging_leader``."""
-
-    min_rs_rating: Annotated[float, Field(ge=0.0, le=100.0)]
-    high_sessions: PositiveInt
-    """A new high (price or RS line) is the highest of this many sessions."""
-    lead_sessions: Annotated[int, Field(ge=0)]
-    """The drawdown is measured from this many sessions before the correction's first."""
-    max_drawdown_vs_index: Positive
-    max_sessions_since_correction: PositiveInt
-    stop_sessions: PositiveInt
-
-
-class RsLineConfig(_Strict):
-    high_window: PositiveInt
-    near_tolerance: Annotated[float, Field(ge=0.0, lt=1.0)]
-    low_window: PositiveInt
-
-
-class CatalystConfig(_Strict):
-    """The quality score's catalyst, without the surprise (archived README §5.3)."""
-
-    gap_lookback_sessions: PositiveInt
-    min_gap: Positive
-    min_volume_ratio: Positive
-    volume_sessions: PositiveInt
-    min_eps_growth: float
-
-
-class RankingConfig(_Strict):
-    """The quality score, the cap and the verdict cache (archived README §5.3; task 3.3, #138)."""
-
-    rs_line: RsLineConfig
-    up_down_sessions: PositiveInt
-    adr_sessions: PositiveInt
-    extension_sma: PositiveInt
-    catalyst: CatalystConfig
-    missing_component: Fraction
-    """The score of a component without data: neutral, neither rewarded nor punished."""
-    verdict_max_age_sessions: PositiveInt
+# --- risk.yaml: the charts and the portfolio ------------------------------------------------
 
 
 class ChartsConfig(_Strict):
-    """The Analyst's charts (README §5.3; task 3.4); see ``auratrade.charts``."""
+    """The Portfolio Manager's `get_chart` (README §5.4; task 3.4); see ``auratrade.charts``."""
 
     daily_sessions: PositiveInt
     daily_width: PositiveInt
@@ -1200,79 +400,6 @@ class ChartsConfig(_Strict):
     weekly_height: PositiveInt
     weekly_averages: dict[str, TrailSpec] = Field(min_length=1)
     dpi: PositiveInt
-
-
-class SlippageTier(_Strict):
-    min_dollar_volume: Annotated[float, Field(ge=0.0)]
-    fraction: Fraction
-
-
-class SimConfig(_Strict):
-    """The fill simulator (README §5.12; task 3.6); see ``auratrade.sim``."""
-
-    # Highest dollar volume first; the last tier (from 0) catches everything below.
-    slippage: tuple[SlippageTier, ...] = Field(min_length=1)
-    # Minutes after the open that entries go in: 09:36, or 09:51 on the delayed-SIP opening
-    # range when IEX printed nothing in the first minutes (#109).
-    entry_minutes: PositiveInt
-    delayed_entry_minutes: PositiveInt
-    volume_sessions: PositiveInt
-    long_average_sessions: PositiveInt
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        floors = [tier.min_dollar_volume for tier in self.slippage]
-        if floors != sorted(floors, reverse=True) or len(set(floors)) != len(floors):
-            raise ValueError("slippage tiers must go from the highest dollar volume down")
-        if floors[-1] != 0:
-            raise ValueError("the last slippage tier must start at 0")
-        if self.delayed_entry_minutes <= self.entry_minutes:
-            raise ValueError("delayed_entry_minutes must be after entry_minutes")
-        return self
-
-
-class StrategiesConfig(_Strict):
-    VCP_BREAKOUT: VcpConfig
-    MOMENTUM_BREAKOUT: MomentumConfig
-    EPISODIC_PIVOT: EpisodicPivotProxyConfig
-    LEADER_PULLBACK: LeaderPullbackConfig
-    EMERGING_LEADER: EmergingLeaderConfig
-
-
-class WatchlistConfig(_Strict):
-    """The evening's full scan (archived README §5.3; task 3.7); see ``strategies.watchlist``."""
-
-    # The ATR stored with each setup: the guardrails' stop-width floor and ATR caps read it.
-    atr_sessions: PositiveInt
-
-
-class BaselineConfig(_Strict):
-    """The shadow book's own account (README §5.12): the setup baseline (`journal.baseline`) now,
-    the rule book from task 4.5."""
-
-    # Its own account starts at the paper account's capital (#122).
-    start_equity: Positive
-
-
-class ScorecardConfig(_Strict):
-    """The Analyst verdict scorecard (archived README §5.12; task 3.7); see
-    ``journal.scorecard``."""
-
-    # R after each horizon, in sessions from the entry session (the entry session is 1).
-    horizons: tuple[PositiveInt, ...] = Field(min_length=1)
-    # Every verdict is played as if taken, sized on a notional account large enough that whole
-    # shares don't distort R; R doesn't depend on the size otherwise.
-    notional_equity: Positive
-    risk_per_trade: Fraction
-    bootstrap_samples: PositiveInt
-    confidence: Fraction
-    seed: int
-
-    @model_validator(mode="after")
-    def _check(self) -> Self:
-        if list(self.horizons) != sorted(set(self.horizons)):
-            raise ValueError("scorecard horizons must be distinct and ascending")
-        return self
 
 
 class PortfolioBacktestConfig(_Strict):
