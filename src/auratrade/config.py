@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import date
+from datetime import date, time
 from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
@@ -1398,6 +1398,11 @@ class PortfolioManagerConfig(_Strict):
     headlines: PositiveInt
     news_items: PositiveInt
     history_months: PositiveInt
+    history_sessions: PositiveInt
+    dry_run_equity: Positive
+    deadline: time
+    """US/Eastern on E."""
+    headline_sessions: PositiveInt
 
 
 RiskConfig.model_rebuild()

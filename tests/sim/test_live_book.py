@@ -58,6 +58,60 @@ class TestBook:
         assert result.end.units["QQQ"] == pytest.approx(200)
         assert result.end.targets == book[E_JAN]
         assert result.end.tax.units("QQQ") == pytest.approx(200)
+        assert len(result.snapshots) == len(result.marks)
+        last = result.snapshots[-1]
+        assert last.units == result.end.units
+        assert last.cash == pytest.approx(result.end.cash)
+        assert not last.halted
+        assert last.peak == pytest.approx(102_000)
+
+    def test_a_holding_whose_target_is_unchanged_is_not_traded(self) -> None:
+        m = with_fund(market(), "QQQ", {date(2000, 1, 10): 0.05})
+        book = {
+            E_JAN: {"SPY": 0.5, "SSO": 0.3, "QQQ": 0.2},
+            E_FEB: {"SPY": 0.6, "SSO": 0.2, "QQQ": 0.2},
+        }
+        result = simulate_portfolio(
+            m,
+            PRIMARY,
+            ZERO,
+            start=R_DEC,
+            end=END,
+            equity=100_000.0,
+            tax_rate=0.0,
+            book=book,
+            sell_at_end=False,
+        )
+        february = {t.symbol for t in result.trades if t.day == E_FEB}
+        # The core's targets changed; QQQ's didn't and it is within the band (21% of 20%).
+        assert february == {"SPY", "SSO"}
+        assert result.end is not None
+        assert result.end.units["QQQ"] == pytest.approx(200)
+
+    def test_a_holding_past_the_band_is_traded_back(self) -> None:
+        m = with_fund(market(), "QQQ", {date(2000, 1, 10): 0.50})
+        book = {
+            E_JAN: {"SPY": 0.5, "SSO": 0.3, "QQQ": 0.2},
+            E_FEB: {"SPY": 0.5, "SSO": 0.3, "QQQ": 0.2},
+        }
+        result = simulate_portfolio(
+            m,
+            PRIMARY,
+            ZERO,
+            start=R_DEC,
+            end=END,
+            equity=100_000.0,
+            tax_rate=0.0,
+            book=book,
+            sell_at_end=False,
+        )
+        # QQQ rose to 30k of 110k (27%): more than 5 points over its 20%, so it is sold back.
+        # SPY (45%) and SSO (27%) are within 5 points of theirs: untouched, the sale in cash.
+        sold = {t.symbol: t.units for t in result.trades if t.day == E_FEB}
+        assert set(sold) == {"QQQ"}
+        assert sold["QQQ"] * 150 == pytest.approx(-(30_000 - 0.2 * 110_000))
+        assert result.end is not None
+        assert result.end.cash == pytest.approx(8_000)
 
     def test_an_e_without_targets_takes_the_rules(self) -> None:
         m = with_fund(market(), "QQQ")
@@ -84,6 +138,7 @@ class TestBook:
         )
         assert book.trades == twin.trades
         assert book.marks == twin.marks
+        assert run(m).snapshots == []  # the backtest's runs keep none
 
     def test_a_book_fund_without_prices_is_an_error(self) -> None:
         with pytest.raises(ValueError, match="no prices for"):

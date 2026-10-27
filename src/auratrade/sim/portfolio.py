@@ -24,7 +24,10 @@ The invariants of the pre-registration §7 raise `PortfolioInvariantError`.
 
 **The live book** (task 4.3, #166) runs on the same steps with options that are all off in
 the backtest. ``book`` gives the targets the Portfolio Manager set for each E (satellite funds
-included, their prices in the market; an E without targets takes the rules').
+included, their prices in the market; an E without targets takes the rules'), and trades
+each holding only if its own target changed or it drifted past the band (README §7.1, as the
+order layer does; the hold rule of #163 relies on it), where the rules' runs rebalance the
+whole account when any target changed.
 ``sell_at_end=False`` stops at T's close without the final sale, leaving the account in
 `PortfolioRun.end`; ``rank_at_end`` also ranks T when it is an R whose E is past the market
 (the `allocate` job's evening), so its ranking is the run's last. The twin is the same run
@@ -202,6 +205,17 @@ class Ranking:
     flipped: bool
 
 
+@dataclass(frozen=True, slots=True)
+class Snapshot:
+    """The account at one close (kept by runs that don't sell at the end)."""
+
+    units: dict[str, float]
+    cash: float
+    """Uninvested cash with the payouts earned but not yet paid."""
+    halted: bool
+    peak: float
+
+
 @dataclass(slots=True)
 class AccountEnd:
     """The account at the last close of a run that didn't sell at the end."""
@@ -233,6 +247,8 @@ class PortfolioRun:
     """After the final sale and its tax."""
     end: AccountEnd | None = None
     """Set instead of the final sale with ``sell_at_end=False``."""
+    snapshots: list[Snapshot] = field(default_factory=list)
+    """One per mark, with ``sell_at_end=False``."""
 
     @property
     def flips(self) -> int:
@@ -294,6 +310,7 @@ def simulate_portfolio(
     if first is None or first > end or (sell_at_end and first == end):
         raise ValueError("no ranking session between start and end")
     sim = _Simulation(market, rules, cfg, equity, tax_rate, ranking_days, book)
+    sim.snapshots = not sell_at_end
     for i in range(first, end + 1):
         sim.session(i, first, end, by_ranking.get(i))
     if sell_at_end:
@@ -337,6 +354,7 @@ class _Simulation:
             }
         )
         self.book = book
+        self.snapshots = False
         self.acct = _Account({}, equity, {}, TaxBook(tax_rate))
         self.run = PortfolioRun(equity)
         self.ranking_days = ranking_days
@@ -376,6 +394,10 @@ class _Simulation:
             self._decide(i, execution, value)
         self.run.days.append(day)
         self.run.marks.append(value)
+        if self.snapshots:
+            a = self.acct
+            cash = a.cash + math.fsum(a.accrued.values())
+            self.run.snapshots.append(Snapshot(dict(a.units), cash, self.halt.on, self.halt.peak))
 
     def finish(self, end: int) -> None:
         day = self.m.days[end]
@@ -450,8 +472,19 @@ class _Simulation:
             for s in set(held) | set(targets)
             if s != CASH
         )
+        previous = self.targets
         self.targets = targets
-        if changed or drifted:
+        if self.book is not None and previous is not None:
+            # Each holding on its own: its target changed, or it drifted past the band.
+            moved = {
+                s
+                for s in self.funds
+                if abs(targets.get(s, 0.0) - previous.get(s, 0.0)) > WEIGHT_TOLERANCE
+                or abs(held.get(s, 0.0) - targets.get(s, 0.0)) > self.cfg.drift_band
+            }
+            if moved:
+                self._trade_to(day, prices, targets, value, moved)
+        elif changed or drifted:
             self._trade_to(day, prices, targets, value)
         self._check_after_rebalance(targets, ranking)
         lev = self.cfg.leveraged
@@ -462,10 +495,16 @@ class _Simulation:
             self.stop = None
 
     def _trade_to(
-        self, day: date, prices: Mapping[str, float], targets: dict[str, float], value: float
+        self,
+        day: date,
+        prices: Mapping[str, float],
+        targets: dict[str, float],
+        value: float,
+        only: set[str] | None = None,
     ) -> None:
-        want = {s: targets.get(s, 0.0) * value for s in self.funds}
-        for symbol in self.funds:
+        funds = [s for s in self.funds if only is None or s in only]
+        want = {s: targets.get(s, 0.0) * value for s in funds}
+        for symbol in funds:
             units = self.acct.units.get(symbol, 0.0)
             excess = units * prices[symbol] - want[symbol]
             if units and excess > WEIGHT_TOLERANCE * value:
@@ -473,7 +512,7 @@ class _Simulation:
                 self._sell(day, symbol, sold, prices, "REBALANCE")
         short = {
             s: want[s] - self.acct.units.get(s, 0.0) * prices[s]
-            for s in self.funds
+            for s in funds
             if want[s] - self.acct.units.get(s, 0.0) * prices[s] > WEIGHT_TOLERANCE * value
         }
         floor = targets.get(CASH, 0.0) * value if targets.get(CASH, 0.0) < 0 else 0.0
