@@ -157,13 +157,22 @@ def twin_targets(level: float, cfg: PortfolioConfig) -> dict[str, float]:
     return core_weights(level, cfg)
 
 
+def core_level(level: float, cfg: PortfolioConfig) -> float:
+    """The core's own level for a book ``level`` (#163): sized so that, with the satellite at
+    its neutral (the market fund at its whole share), the book's exposure is ``level``. At
+    neutral the book is the twin."""
+    share = cfg.satellite_share
+    return (level - share) / (1 - share)
+
+
 def book_targets(
-    core_level: float, satellite: Mapping[str, float], cfg: PortfolioConfig
+    level: float, satellite: Mapping[str, float], cfg: PortfolioConfig
 ) -> dict[str, float]:
-    """The book's targets as fractions of equity: the core's share at ``core_level`` plus the
-    satellite's weights (already fractions of equity, checked by `guardrails/portfolio.py`)."""
+    """The book's targets as fractions of equity: the core's share at the core level for the
+    book ``level`` (the rule level plus the shift), plus the satellite's weights (already
+    fractions of equity, checked by `guardrails/portfolio.py`)."""
     core_share = 1 - cfg.satellite_share
-    out = {k: core_share * v for k, v in core_weights(core_level, cfg).items()}
+    out = {k: core_share * v for k, v in core_weights(core_level(level, cfg), cfg).items()}
     for symbol, weight in satellite.items():
         if weight > WEIGHT_TOLERANCE:
             out[symbol] = out.get(symbol, 0.0) + weight

@@ -346,6 +346,7 @@ class TestPortfolioConfig:
         assert (pf.vol_sessions, pf.vol_cap) == (21, 0.25)
         assert (pf.drawdown_halt, pf.stop_fraction, pf.drift_band) == (0.25, 0.3, 0.05)
         assert (pf.satellite_share, pf.max_etf_weight, pf.tax_rate) == (0.2, 0.1, 0.25)
+        assert (pf.satellite_min_change, pf.satellite_tax_budget) == (0.02, 0.002)
         assert (pf.market, pf.leveraged, pf.cash, pf.leverage) == ("SPY", "SSO", "BIL", 2.0)
         assert pf.backtest.score_start_year == 1928
         assert (pf.backtest.window_years, pf.backtest.min_window_share) == (10, 0.6)
@@ -360,6 +361,9 @@ class TestPortfolioConfig:
             ("satellite_list", ["QQQ", "SSO"], "leveraged fund"),
             ("max_etf_weight", 0.5, "satellite_share"),
             ("stop_fraction", 0.0, "stop_fraction"),
+            ("satellite_share", 1.0, "satellite_share < 1"),
+            ("min_level", 0.1, "min_level >= it"),
+            ("max_level", 1.9, "core above"),
         ],
     )
     def test_invalid(self, field: str, value: object, error: str) -> None:

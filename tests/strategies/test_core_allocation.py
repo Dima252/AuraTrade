@@ -10,6 +10,7 @@ from auratrade.strategies.core_allocation import (
     Halt,
     Trend,
     book_targets,
+    core_level,
     core_weights,
     exposure,
     halt_at_close,
@@ -159,9 +160,23 @@ class TestWeights:
     def test_twin_is_the_rule_level_on_the_whole_account(self) -> None:
         assert twin_targets(1.3, CFG) == core_weights(1.3, CFG)
 
+    @pytest.mark.parametrize(
+        ("level", "core"), [(1.3, 1.375), (1.5, 1.625), (1.0, 1.0), (0.5, 0.375), (0.3, 0.125)]
+    )
+    def test_the_core_is_sized_for_a_neutral_satellite(self, level: float, core: float) -> None:
+        assert core_level(level, CFG) == pytest.approx(core)
+
+    @pytest.mark.parametrize("level", [1.5, 1.3, 1.0, 0.5, 0.3])
+    def test_at_neutral_the_book_is_the_twin(self, level: float) -> None:
+        got = book_targets(level, {"SPY": 0.2}, CFG)
+        assert got == pytest.approx(twin_targets(level, CFG))
+        assert exposure(got, CFG) == pytest.approx(level)
+
     def test_book_targets_add_the_satellite_to_the_core_share(self) -> None:
         got = book_targets(1.3, {"GLD": 0.05, "SPY": 0.05, "BIL": 0.10, "QQQ": 0.0}, CFG)
-        assert got == pytest.approx({"SPY": 0.56 + 0.05, "SSO": 0.24, "GLD": 0.05, "BIL": 0.10})
+        # The core at 1.375: SPY 0.8 x 0.625 = 0.5, SSO 0.8 x 0.375 = 0.3.
+        assert got == pytest.approx({"SPY": 0.5 + 0.05, "SSO": 0.3, "GLD": 0.05, "BIL": 0.10})
         assert "QQQ" not in got
         assert math.fsum(got.values()) == pytest.approx(1.0)
-        assert exposure(got, CFG) == pytest.approx(0.8 * 1.3 + 0.05)
+        # 15 of the satellite's 20 points out of the S&P: 1.3 - 0.15.
+        assert exposure(got, CFG) == pytest.approx(1.15)

@@ -1327,6 +1327,8 @@ class PortfolioConfig(_Strict):
     stop_fraction: Annotated[float, Field(gt=0.0, lt=1.0)]
     drift_band: Fraction
     max_etf_weight: Fraction
+    satellite_min_change: Fraction
+    satellite_tax_budget: Fraction
     retry_sessions: Annotated[int, Field(ge=0)]
     market: str
     leveraged: str
@@ -1351,6 +1353,13 @@ class PortfolioConfig(_Strict):
             raise ValueError("portfolio satellite_list can't hold the leveraged fund")
         if self.max_etf_weight > self.satellite_share:
             raise ValueError("portfolio max_etf_weight can't exceed satellite_share")
+        # The core is sized so the book, with the satellite at its neutral (the market fund),
+        # is at the level (#163): its level must stay within [0, leverage].
+        if self.satellite_share >= 1 or self.min_level < self.satellite_share:
+            raise ValueError("portfolio needs satellite_share < 1 and min_level >= it")
+        top = (self.max_level - self.satellite_share) / (1 - self.satellite_share)
+        if top > self.leverage:
+            raise ValueError("portfolio max_level needs a core above the fund's leverage")
         return self
 
 

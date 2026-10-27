@@ -51,6 +51,10 @@ class GuardrailRule(StrEnum):
     SATELLITE_LIST = "SATELLITE_LIST"
     SATELLITE_WEIGHT = "SATELLITE_WEIGHT"
     SATELLITE_TOTAL = "SATELLITE_TOTAL"
+    SATELLITE_HOLD = "SATELLITE_HOLD"
+    """A satellite change smaller than ``satellite_min_change``: last month's target kept (#163)."""
+    TAX_BUDGET = "TAX_BUDGET"
+    """The satellite's sales over the year's tax budget: moved back toward holding (#163)."""
     NO_INCREASE = "NO_INCREASE"
     """Kill switch, incomplete data or a calendar disagreement: hold or reduce."""
 
