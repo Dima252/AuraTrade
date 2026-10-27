@@ -17,7 +17,7 @@ THU = date(2026, 10, 15)
 
 
 # A stand-in for the output tables (the real ones need every column filled).
-OUTPUT = (("scan_output", "session_date"), ("llm_decisions", "session_date"))
+OUTPUT = (("scan_output", "session_date"), ("not_yet_created", "session_date"))
 
 
 def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
@@ -79,7 +79,7 @@ def test_retention(pg_engine: Engine, tmp_path: Path) -> None:
             assert kept == window
             left = conn.execute(text("SELECT symbol FROM scan_output")).scalars().all()
         assert left == ["NEW"]
-        assert report.archived == {"scan_output": 1}  # llm_decisions doesn't exist yet
+        assert report.archived == {"scan_output": 1}  # a table not created yet is skipped
         assert report.over_alert  # any real database is over a 1 MB limit
         first = days[0]
         archived = pq.read_table(

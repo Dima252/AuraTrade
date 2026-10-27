@@ -230,7 +230,7 @@ def decide(
         prompt=prompt.id,
         on_event=facts.event.kind if facts.event else None,
         fell_back=outcome.failure,
-        level=round(enforced.level, 4),
+        book_level=round(enforced.level, 4),
         outcome=enforced.outcome,
         findings=[f.rule for f in enforced.findings],
     )

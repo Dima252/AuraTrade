@@ -193,17 +193,7 @@ def _tax_budget(
         }
 
     def tax(weights: Mapping[str, float]) -> float:
-        gain = 0.0
-        for symbol in symbols:
-            sold = (previous.get(symbol, 0.0) - weights.get(symbol, 0.0)) * ctx.equity
-            if sold <= 0:
-                continue
-            price = ctx.prices.get(symbol, 0.0)
-            if price > 0:
-                gain += fifo_gain(ctx.lots.get(symbol, ()), sold / price, price)
-            else:
-                gain += sold
-        return cfg.tax_rate * max(gain, 0.0)
+        return satellite_tax(weights, ctx, cfg)
 
     wanted = tax(proposed)
     if wanted <= room:
@@ -215,6 +205,26 @@ def _tax_budget(
     message = f"satellite sales would realize ${wanted:,.0f} tax, ${room:,.0f} left this year"
     out.append(clip(GuardrailRule.TAX_BUDGET, message, round(wanted, 2), round(room, 2)))
     return {k: v for k, v in toward(low).items() if v > WEIGHT_TOLERANCE}
+
+
+def satellite_tax(
+    satellite: Mapping[str, float], ctx: PortfolioContext, cfg: PortfolioConfig
+) -> float:
+    """The tax (USD) the satellite's sales from last month's targets to ``satellite`` would
+    realize: 25% of their net FIFO gains at the decision prices; a fund without a price counts
+    its whole sale as gain (#163)."""
+    previous = ctx.previous_satellite
+    gain = 0.0
+    for symbol in sorted(set(satellite) | set(previous)):
+        sold = (previous.get(symbol, 0.0) - satellite.get(symbol, 0.0)) * ctx.equity
+        if sold <= 0:
+            continue
+        price = ctx.prices.get(symbol, 0.0)
+        if price > 0:
+            gain += fifo_gain(ctx.lots.get(symbol, ()), sold / price, price)
+        else:
+            gain += sold
+    return cfg.tax_rate * max(gain, 0.0)
 
 
 def _with_cash(weights: dict[str, float], cfg: PortfolioConfig) -> dict[str, float]:

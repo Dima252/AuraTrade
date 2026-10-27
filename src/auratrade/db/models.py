@@ -928,3 +928,148 @@ class VerdictOutcomeRow(Base):
     details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
     created_at: Mapped[datetime] = _created()
     updated_at: Mapped[datetime] = _created()
+
+
+# --- The portfolio manager (task 4.3, README §5.4-§5.7, §10) ---------------------------------
+
+TARGET_KINDS = ("REBALANCE", "EVENT")
+TARGET_STATUSES = ("ALLOCATED", "DECIDED")
+BOOKS = ("TWIN", "SIM")
+LOT_KINDS = ("LOT", "INCOME")
+
+
+class PromptVersion(Base):
+    """A prompt as sent: its id is the version and the rendered text's hash (README §9)."""
+
+    __tablename__ = "prompt_versions"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    version: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = _created()
+
+
+class LlmDecision(Base):
+    """One LLM decision: the answer or the failure, who answered, what it cost (README §9)."""
+
+    __tablename__ = "llm_decisions"
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    session_date: Mapped[date] = mapped_column(Date)
+    role: Mapped[str] = mapped_column(Text)
+    prompt_id: Mapped[str] = mapped_column(Text, ForeignKey("prompt_versions.id"))
+    requested_model: Mapped[str] = mapped_column(Text)
+    model: Mapped[str | None] = mapped_column(Text)
+    """The model that gave the last answer (a server-side fallback's, if it ran)."""
+    effort: Mapped[str] = mapped_column(Text)
+    failure: Mapped[str | None] = mapped_column(Text)
+    detail: Mapped[str] = mapped_column(Text, server_default=text("''"))
+    refusal_category: Mapped[str | None] = mapped_column(Text)
+    answer: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    turns: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    cost_usd: Mapped[float] = mapped_column(Double)
+    cost_alert: Mapped[bool] = mapped_column(Boolean)
+    fallback: Mapped[bool] = mapped_column(Boolean)
+    created_at: Mapped[datetime] = _created()
+
+
+class PortfolioTarget(Base):
+    """One decision: on R `allocate` writes the rule level and the facts (ALLOCATED); on E (or
+    an event) `portfolio_manager` writes the enforced targets (DECIDED)."""
+
+    __tablename__ = "portfolio_targets"
+    __table_args__ = (
+        CheckConstraint(_in("kind", TARGET_KINDS), name="kind"),
+        CheckConstraint(_in("status", TARGET_STATUSES), name="status"),
+        CheckConstraint(_in("trend", ("UP", "DOWN")), name="trend"),
+        # One rebalance per E; events are rare and may repeat.
+        Index(
+            "uq_portfolio_targets_rebalance",
+            "execution_session",
+            unique=True,
+            postgresql_where=text("kind = 'REBALANCE'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    ranking_session: Mapped[date] = mapped_column(Date)
+    execution_session: Mapped[date] = mapped_column(Date)
+    """E, or the event's session."""
+    status: Mapped[str] = mapped_column(Text)
+    trend: Mapped[str] = mapped_column(Text)
+    capped: Mapped[bool] = mapped_column(Boolean)
+    halted: Mapped[bool] = mapped_column(Boolean)
+    rule_level: Mapped[float] = mapped_column(Double)
+    twin_targets: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    facts: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    """The Portfolio Manager's facts as `allocate` gathered them (headlines are added on E)."""
+    llm_decision_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("llm_decisions.id"))
+    level: Mapped[float | None] = mapped_column(Double)
+    core_level: Mapped[float | None] = mapped_column(Double)
+    satellite: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    targets: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    findings: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    held_satellite: Mapped[bool | None] = mapped_column(Boolean)
+    fell_back: Mapped[bool | None] = mapped_column(Boolean)
+    satellite_tax: Mapped[float | None] = mapped_column(Double)
+    """The tax the satellite's sales were estimated to realize (#163's budget counts it)."""
+    risk_hash: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = _created()
+    decided_at: Mapped[datetime | None]
+
+
+class TaxLot(Base):
+    """The live account's tax lots and income (README §5.7), from the broker's fills (5.3)."""
+
+    __tablename__ = "tax_lots"
+    __table_args__ = (CheckConstraint(_in("kind", LOT_KINDS), name="kind"),)
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text)
+    symbol: Mapped[str] = mapped_column(Text)
+    opened: Mapped[date] = mapped_column(Date)
+    units: Mapped[float] = mapped_column(Double)
+    cost: Mapped[float] = mapped_column(Double)
+    """USD; for an INCOME row, the amount received."""
+    closed: Mapped[date | None] = mapped_column(Date)
+    proceeds: Mapped[float | None] = mapped_column(Double)
+    realized_gain: Mapped[float | None] = mapped_column(Double)
+    order_id: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _created()
+
+
+class BookMark(Base):
+    """The twin's simulated account each session (README §5.5) and, in `dry_run`, the book's
+    own decisions replayed (SIM, #166): rewritten whole each evening from the trial's start."""
+
+    __tablename__ = "twin_book"
+    __table_args__ = (CheckConstraint(_in("book", BOOKS), name="book"),)
+
+    book: Mapped[str] = mapped_column(Text, primary_key=True)
+    session_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    equity: Mapped[float] = mapped_column(Double)
+    cash: Mapped[float] = mapped_column(Double)
+    holdings: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    """{symbol: {"units": .., "value": ..}} at the close."""
+    trades: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    halted: Mapped[bool] = mapped_column(Boolean)
+    peak_equity: Mapped[float] = mapped_column(Double)
+    updated_at: Mapped[datetime] = _created()
+
+
+class PortfolioJournal(Base):
+    """One row per month (README §5.7): the decision and its reasons, the clips, the trades,
+    and the month's results (task 4.4)."""
+
+    __tablename__ = "portfolio_journal"
+
+    execution_session: Mapped[date] = mapped_column(Date, primary_key=True)
+    targets_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("portfolio_targets.id"))
+    summary: Mapped[str] = mapped_column(Text)
+    decision: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    clips: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    trades: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    results: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
+    created_at: Mapped[datetime] = _created()
+    updated_at: Mapped[datetime] = _created()

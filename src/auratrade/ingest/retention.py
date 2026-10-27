@@ -1,9 +1,9 @@
 """Retention (README §10): keep Neon's free tier under its 0.5 GB.
 
 - `daily_bars` older than the `bar_history_sessions` window move to Parquet, then leave Postgres.
-- Scanner, tracker and LLM output rows older than `archive_after_sessions` move to Parquet,
-  one object per table and run. `llm_decisions` arrives in Phase 4; until then it is
-  skipped.
+- Scanner and tracker output rows older than `archive_after_sessions` move to Parquet, one
+  object per table and run. The portfolio's tables, `llm_decisions` among them, are kept
+  forever: one decision a month is the validation record (README §10).
 - The database size is reported every evening, with an alert from `db_size_alert_fraction` of
   the limit.
 """
@@ -28,7 +28,6 @@ from auratrade.storage import ObjectStore
 OUTPUT_TABLES: tuple[tuple[str, str], ...] = (
     ("daily_watchlist", "session_date"),
     ("breakout_tracker", "trigger_session"),
-    ("llm_decisions", "session_date"),
 )
 ARCHIVE_PREFIX = "parquet"
 

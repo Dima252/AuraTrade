@@ -320,3 +320,119 @@ def _weights(weights: Mapping[str, float]) -> dict[str, float]:
 def _r(value: float | None, digits: int) -> float | None:
     """Rounded; a missing or non-finite number is unknown (null), never NaN in the JSON."""
     return None if value is None or not math.isfinite(value) else round(value, digits)
+
+
+def facts_to_json(facts: PmFacts) -> dict[str, Any]:
+    """The facts as `portfolio_targets.facts` keeps them, without the headlines (they are
+    fetched fresh on E)."""
+    t, a = facts.trend, facts.account
+    return {
+        "session": str(facts.session),
+        "ranking_session": str(facts.ranking_session),
+        "trend": {
+            "state": t.state.value,
+            "month_end_value": t.month_end_value,
+            "sma": t.sma,
+            "volatility": t.volatility,
+            "capped": t.capped,
+            "halted": t.halted,
+        },
+        "account": {
+            "equity": a.equity,
+            "peak_equity": a.peak_equity,
+            "weights": dict(a.weights),
+            "previous_satellite": dict(a.previous_satellite),
+            "lots": {
+                s: [[str(lot.opened), lot.units, lot.cost] for lot in lots]
+                for s, lots in a.lots.items()
+            },
+            "prices": dict(a.prices),
+            "realized_this_year": a.realized_this_year,
+            "loss_carried": a.loss_carried,
+            "satellite_tax_this_year": a.satellite_tax_this_year,
+        },
+        "etfs": [
+            {
+                "symbol": e.symbol,
+                "returns": dict(e.returns),
+                "volatility": e.volatility,
+                "distance_from_sma": e.distance_from_sma,
+                "correlation_with_market": e.correlation_with_market,
+            }
+            for e in facts.etfs
+        ],
+        "regime": facts.regime,
+        "macro": dict(facts.macro),
+        "history": [
+            {
+                "session": str(d.session),
+                "core_shift": d.core_shift,
+                "satellite": None if d.satellite is None else dict(d.satellite),
+                "summary": d.summary,
+                "excess_vs_twin": d.excess_vs_twin,
+                "fell_back": d.fell_back,
+            }
+            for d in facts.history
+        ],
+        "scorecard": facts.scorecard,
+        "event": None if facts.event is None else [facts.event.kind.value, facts.event.detail],
+        "notes": list(facts.notes),
+    }
+
+
+def facts_from_json(data: Mapping[str, Any]) -> PmFacts:
+    t, a = data["trend"], data["account"]
+    event = data.get("event")
+    return PmFacts(
+        session=date.fromisoformat(data["session"]),
+        ranking_session=date.fromisoformat(data["ranking_session"]),
+        trend=TrendFacts(
+            Trend(t["state"]),
+            t["month_end_value"],
+            t["sma"],
+            t["volatility"],
+            t["capped"],
+            t["halted"],
+        ),
+        account=AccountFacts(
+            equity=a["equity"],
+            peak_equity=a["peak_equity"],
+            weights=a["weights"],
+            previous_satellite=a["previous_satellite"],
+            lots={
+                s: [Lot(date.fromisoformat(d), units, cost) for d, units, cost in lots]
+                for s, lots in a["lots"].items()
+            },
+            prices=a["prices"],
+            realized_this_year=a["realized_this_year"],
+            loss_carried=a["loss_carried"],
+            satellite_tax_this_year=a["satellite_tax_this_year"],
+        ),
+        etfs=[
+            EtfFacts(
+                e["symbol"],
+                e["returns"],
+                e["volatility"],
+                e["distance_from_sma"],
+                e["correlation_with_market"],
+            )
+            for e in data["etfs"]
+        ],
+        regime=data["regime"],
+        macro=data["macro"],
+        headlines=(),
+        history=[
+            PastDecision(
+                date.fromisoformat(d["session"]),
+                d["core_shift"],
+                d["satellite"],
+                d["summary"],
+                d["excess_vs_twin"],
+                d["fell_back"],
+            )
+            for d in data["history"]
+        ],
+        scorecard=data["scorecard"],
+        event=None if event is None else Event(EventKind(event[0]), event[1]),
+        notes=tuple(data["notes"]),
+    )

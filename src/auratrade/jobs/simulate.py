@@ -3,6 +3,8 @@
     uv run python -m auratrade.jobs.simulate --session 2026-10-23 --dry-run
 
 On session T's bars:
+0. **The twin and the book** (README §5.5; task 4.3, #166): both through `sim/portfolio.py` from
+   the trial's first R to T, written whole to `twin_book` (nothing before the trial starts).
 1. **Breakout tracker:** T's triggers of T-1's full scan (every setup, ungated) and every
    5-session result that is now complete, so `regime`'s leadership-health pillar sees results
    through T.
@@ -30,6 +32,7 @@ from auratrade.config import Settings
 from auratrade.db.engine import engine_from_settings
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
 from auratrade.journal.evening import TickerReview, run_baseline, score_verdicts, track_breakouts
+from auratrade.journal.portfolio import FundBars, simulate_books
 from auratrade.sim.minutes import MinuteCache, MinuteSource
 from auratrade.storage import ObjectStore, make_store
 
@@ -54,12 +57,19 @@ def _alpaca(settings: Settings) -> MinuteSource:
     )
 
 
+def _funds(settings: Settings) -> FundBars:
+    from auratrade.jobs.allocate import alpaca
+
+    return alpaca(settings)
+
+
 def make_job(
     *,
     engine_factory: Callable[[Settings], Engine] = engine_from_settings,
     store_factory: Callable[[Settings], ObjectStore] = make_store,
     source_factory: Callable[[Settings], MinuteSource] = _alpaca,
     reviews: Reviews = _no_reviews,
+    funds_factory: Callable[[Settings], FundBars] | None = None,
 ) -> JobSpec:
     def run(ctx: JobContext) -> JobOutput:
         engine = engine_factory(ctx.settings)
@@ -71,11 +81,15 @@ def make_job(
             status = None if session is None else session.data_status
             ctx.log.warning("simulate_skipped", data_status=status)
             return {"skipped": f"data status {status}"}
-        cache = MinuteCache(store_factory(ctx.settings), source_factory(ctx.settings))
         seconds: dict[str, float] = {}
+        funds = funds_factory(ctx.settings) if funds_factory else _funds(ctx.settings)
+        with engine.begin() as conn:
+            books = simulate_books(conn, calendar, ctx.risk, funds, ctx.session_date)
+        seconds["books"] = round(time.monotonic() - started, 1)
+        cache = MinuteCache(store_factory(ctx.settings), source_factory(ctx.settings))
         with engine.begin() as conn:
             tracker = track_breakouts(conn, calendar, ctx.session_date, ctx.risk)
-        seconds["tracker"] = round(time.monotonic() - started, 1)
+        seconds["tracker"] = round(time.monotonic() - started - sum(seconds.values()), 1)
         with engine.begin() as conn:
             book = run_baseline(conn, calendar, ctx.session_date, ctx.risk, cache)
         seconds["baseline"] = round(time.monotonic() - started - sum(seconds.values()), 1)
@@ -89,7 +103,13 @@ def make_job(
                 reviews(conn, calendar, ctx.session_date),
             )
         seconds["scorecard"] = round(time.monotonic() - started - sum(seconds.values()), 1)
-        return {"tracker": tracker, "baseline": book, "scorecard": scored, "seconds": seconds}
+        return {
+            "books": books,
+            "tracker": tracker,
+            "baseline": book,
+            "scorecard": scored,
+            "seconds": seconds,
+        }
 
     return JobSpec(name="simulate", policy=GuardPolicy.EVENING, run=run)
 

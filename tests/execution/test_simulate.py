@@ -382,6 +382,11 @@ class TestScorecard:
         assert out == {"units": 0}
 
 
+class NoFunds:
+    def daily_bars(self, *_args: object, **_kwargs: object) -> dict[str, list[object]]:
+        raise AssertionError("no bars are fetched before the trial starts")
+
+
 def test_the_job_runs_every_step(market: World) -> None:
     listed(market, "NVDA", pivot=50.0, rank=1)
     source = Source({T: {"NVDA": minutes("NVDA", T, BREAKOUT)}})
@@ -389,8 +394,10 @@ def test_the_job_runs_every_step(market: World) -> None:
         engine_factory=lambda _s: market.engine,
         store_factory=lambda _s: market.storage,
         source_factory=lambda _s: source,
+        funds_factory=lambda _s: NoFunds(),
     )
     out = dict(spec.run(market.context("simulate", session=T)) or {})
+    assert out["books"] == {"skipped": "the trial hasn't started"}
     assert out["tracker"] == {"triggers": 1, "results": 0}
     assert out["baseline"]["simulated"] == {"OPEN": 1}  # type: ignore[index]
     assert out["scorecard"] == {"units": 0}

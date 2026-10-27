@@ -587,3 +587,7 @@ portfolio_manager:  # README §5.4: the facts the Portfolio Manager sees and its
   headlines: 20                      # the most recent headlines in the facts
   news_items: 10                     # one get_news call
   history_months: 24                 # get_decision_history's most
+  history_sessions: 300              # the funds' bars before the trial's start: SMA10's months, the ETFs' 12-month facts
+  dry_run_equity: 100000             # the simulated book's and the twin's start (#166; paper is reset to it in 6.1)
+  deadline: "12:00"                  # ET on E: no valid decision by then holds (#164)
+  headline_sessions: 5               # the headlines in the facts: from this many sessions back
