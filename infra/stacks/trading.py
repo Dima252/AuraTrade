@@ -1,4 +1,4 @@
-"""The trading stack for one environment (README §12, task 1.8): the skeleton's jobs as Lambda
+"""The trading stack for one environment (README §12, task 1.8): the portfolio's jobs as Lambda
 functions on one container image, started by EventBridge Scheduler on `jobs.schedule`.
 
 - **Image:** the repo's `Dockerfile`, built and pushed to the CDK asset repository by
@@ -55,19 +55,17 @@ class Function:
 # Order jobs may wait for the order lock (`execution.lock_wait_max_seconds`) and for fills, so
 # they get Lambda's full 15 minutes; a run cut off mid-sequence is what `stop_guard` repairs.
 FUNCTIONS: tuple[Function, ...] = (
+    # The decision on E: one Claude call with its tools, bounded by `llm` deadlines.
+    Function("portfolio_manager", 1024, 900),
     Function("execute_open", 1024, 900, retries=2),
-    Function("execute_entries", 1024, 900, retries=2),
-    Function("eod_review", 1024, 900, retries=2),
+    Function("execute_close", 1024, 900, retries=2),
     Function("post_market", 1024, 900, retries=2, storage=True),
     Function("stop_guard", 1024, 300),
-    Function("ingest", 3008, 900, storage=True),
-    # Minute bars for its symbols only (cached in S3), then every open simulated trade re-played.
-    Function("simulate", 1024, 600, storage=True),
+    Function("ingest", 1024, 900, storage=True),
+    # The twin, the book and SPY from the trial's start, on the funds' daily bars.
+    Function("simulate", 1024, 600),
     Function("regime", 1024, 300),
-    # The scan holds about two years of bars for the whole universe in memory; since 3.7 it
-    # also runs every strategy scan over them (the full watchlist).
-    Function("scan", 3008, 900),
-    Function("analyst_submit", 512, 60),
+    Function("allocate", 1024, 600),
     Function("watchdog", 512, 120),
 )
 
@@ -203,7 +201,7 @@ class TradingStack(Stack):
 
         chain_wait = load_risk_config().jobs.chain_wait_minutes
         counts: dict[str, int] = defaultdict(int)
-        for slot in schedule.skeleton_slots(chain_wait):
+        for slot in schedule.weekday_slots(chain_wait):
             for expression in cron_expressions(slot.times()):
                 counts[slot.job] += 1
                 name = f"{slot.job}-{counts[slot.job]}"

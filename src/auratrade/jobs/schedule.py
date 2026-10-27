@@ -27,8 +27,7 @@ EVENING_CHAIN: tuple[ChainLink, ...] = (
     ChainLink("ingest", time(17, 0)),
     ChainLink("simulate", time(17, 15)),
     ChainLink("regime", time(17, 25)),
-    ChainLink("scan", time(17, 35)),
-    ChainLink("analyst_submit", time(17, 50)),
+    ChainLink("allocate", time(17, 35)),
 )
 
 _INDEX = {link.job: i for i, link in enumerate(EVENING_CHAIN)}
@@ -49,12 +48,13 @@ def successor(job: str) -> str | None:
     return None if i is None or i == len(EVENING_CHAIN) - 1 else EVENING_CHAIN[i + 1].job
 
 
-# --- the skeleton's weekday schedule -----------------------------------------------------
+# --- the weekday schedule ----------------------------------------------------------------
 
 
 class Close(StrEnum):
-    """Which sessions a slot belongs to. A scheduler can't follow the calendar, so both of
-    `eod_review`'s slots fire every weekday and the job runs only near that day's close."""
+    """Which sessions a slot belongs to. A scheduler can't follow the calendar, so every slot
+    fires every weekday; this says which sessions the `watchdog` expects its heartbeat on
+    (`execute_close` at 15:40 is after a half day's close: no trades then, README §4)."""
 
     ANY = "any"
     REGULAR = "regular"
@@ -110,17 +110,17 @@ FALLBACK_EVERY_MINUTES = 10
 
 _DAY_SLOTS: tuple[Slot, ...] = (
     Slot("watchdog", time(7, 0), time(22, 0), 15, heartbeat=Heartbeat.NONE),
+    # On E (or its retry) and on no other session: the job itself finds nothing to decide.
+    Slot("portfolio_manager", time(8, 45)),
     Slot("execute_open", time(9, 20)),
     Slot("execute_open", time(9, 31)),
-    Slot("execute_entries", time(9, 36)),
     Slot("stop_guard", time(9, 35), time(16, 0), 5, heartbeat=Heartbeat.NONE),
-    Slot("eod_review", time(12, 40), close=Close.EARLY),
-    Slot("eod_review", time(15, 40), close=Close.REGULAR),
+    Slot("execute_close", time(15, 40), close=Close.REGULAR),
 )
 
 
-def skeleton_slots(chain_wait_minutes: int) -> tuple[Slot, ...]:
-    """The skeleton's weekday schedule. Each chained job after `post_market` fires from its
+def weekday_slots(chain_wait_minutes: int) -> tuple[Slot, ...]:
+    """The weekday schedule (README §3). Each chained job after `post_market` fires from its
     fallback start through its deadline (fallback + `jobs.chain_wait_minutes`), where a run
     without a successful predecessor fails closed."""
     head, *rest = EVENING_CHAIN

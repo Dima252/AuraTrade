@@ -4,7 +4,7 @@
 
 It alerts when something that should have run didn't, which no job can report about itself:
 - on a session day, a scheduled heartbeat missing past its grace (`jobs.watchdog_grace_minutes`),
-  for the slots `schedule.skeleton_slots` expects (`eod_review` by that day's close);
+  for the slots `schedule.weekday_slots` expects (`execute_close` on full sessions only);
 - a run still RUNNING past `jobs.stale_running_minutes` (its process died: Lambda stops at 15);
 - in AWS, a schedule of this environment that isn't enabled (`stop_guard` writes no heartbeat
   unless it acts, so its schedule is checked instead).
@@ -123,7 +123,7 @@ def make_job(
             findings: list[str] = []
             if session is not None:
                 expected = schedule.expected_heartbeats(
-                    schedule.skeleton_slots(jobs.chain_wait_minutes),
+                    schedule.weekday_slots(jobs.chain_wait_minutes),
                     ctx.session_date,
                     early_close=session.is_early_close,
                     grace_minutes=jobs.watchdog_grace_minutes,

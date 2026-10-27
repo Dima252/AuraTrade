@@ -1,16 +1,16 @@
-"""The bars step of the evening ingest (README §4, §5.1).
+"""The bars step of the evening ingest (README §4, §5.1; slimmed to the ETF list in task 5.2).
 
-1. Screen the candidates on raw bars of the last `dollar_volume_sessions` sessions; the tracked
-   set is the ones passing plus the regime's index ETFs.
-2. Gap-fill each tracked ticker from its last stored session (which re-fetches session T-1, whose
-   volume grows after the evening, #118); a ticker with nothing recent stored gets its whole
-   window.
-3. Each ticker's bars: raw close attached, sanity-checked, split check on the re-fetched overlap
-   bar (a moved close re-fetches the whole window), outliers corrected with the stored bar before
-   as context, upserted.
-4. Coverage: the share of tickers that traded at T-1 with a bar at T. Under `data.min_coverage`
-   the missing ones are fetched once more; still under it, or an index missing, marks the session
-   `INCOMPLETE` (no new entries next session, plus an alert).
+1. The tracked set is **the ETF list** (`tracked_symbols`): the portfolio's funds, the
+   satellite's list and the regime's index ETFs. Each must be an active row in `tickers`; one
+   that isn't fails the step (fail closed).
+2. Gap-fill each from its last stored session (which re-fetches session T-1, whose volume grows
+   after the evening, #118); one with nothing recent stored gets its whole window.
+3. Each fund's bars: raw close attached, sanity-checked, split check on the re-fetched overlap
+   bar (a moved close re-fetches the whole window: a held fund can split, SSO has), outliers
+   corrected with the stored bar before as context, upserted.
+4. Coverage: the funds that traded at T-1 with a bar at T. The missing ones are fetched once
+   more; the market fund or an index still missing marks the session `INCOMPLETE` (no increase
+   of exposure next session, plus an alert); another fund missing is reported (no buy of it).
 """
 
 from __future__ import annotations
@@ -43,13 +43,7 @@ from auratrade.ingest.bars import (
     sanity_problem,
     split_changed,
 )
-from auratrade.ingest.universe import (
-    ScreenBar,
-    active_ids,
-    candidates,
-    passes_screen,
-    screen_bars,
-)
+from auratrade.ingest.universe import active_ids
 
 log = structlog.get_logger(__name__)
 
@@ -67,14 +61,24 @@ class BarSource(Protocol):
     ) -> dict[str, list[DailyBar]]: ...
 
 
-class MissingIndexError(RuntimeError):
-    """An index ETF the regime needs isn't in `tickers` (fail closed)."""
+class MissingTickerError(RuntimeError):
+    """A fund on the ETF list isn't an active row in `tickers` (fail closed)."""
+
+
+def tracked_symbols(risk: RiskConfig) -> list[str]:
+    """The ETF list (README §5.1)."""
+    p = risk.portfolio
+    return sorted({p.market, p.leveraged, p.cash, *p.satellite_list, *risk.regime.indexes})
+
+
+def required_symbols(risk: RiskConfig) -> list[str]:
+    """Without a bar for these the session is INCOMPLETE."""
+    return sorted({risk.portfolio.market, *risk.regime.indexes})
 
 
 @dataclass
 class BarReport:
     session: date
-    candidates: int = 0
     tracked: int = 0
     fetched_full: int = 0
     rows_written: int = 0
@@ -85,12 +89,13 @@ class BarReport:
     received: int = 0
     coverage: float = 1.0
     retried: int = 0
-    missing_indexes: list[str] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+    """Funds that traded at T-1 without a bar at T."""
+    missing_required: list[str] = field(default_factory=list)
     status: str = COMPLETE
 
     def details(self) -> dict[str, object]:
         return {
-            "candidates": self.candidates,
             "tracked": self.tracked,
             "fetched_full": self.fetched_full,
             "rows_written": self.rows_written,
@@ -101,7 +106,8 @@ class BarReport:
             "expected": self.expected,
             "received": self.received,
             "retried": self.retried,
-            "missing_indexes": self.missing_indexes,
+            "missing": self.missing,
+            "missing_required": self.missing_required,
             "data_status": self.status,
         }
 
@@ -136,48 +142,20 @@ def ingest_bars(
     session: date,
     now: datetime,
 ) -> BarReport:
-    u, cfg = risk.universe, risk.ingest
+    cfg = risk.ingest
     window = _window(calendar, session, cfg.bar_history_sessions)
     report = BarReport(session)
 
-    pool = candidates(conn, u)
-    report.candidates = len(pool)
-    indexes = active_ids(conn, risk.regime.indexes)
-    # The stored bars serve the screen of tickers tracked through T-1 (their split-adjusted
-    # close x volume is the raw dollar volume), the outlier check's range and left neighbour,
-    # and the overlap re-fetch. Only the others are screened on vendor bars.
-    depth = max(u.dollar_volume_sessions, cfg.outliers.adr_sessions + 2)
-    tails = stored_tail(conn, [c.ticker_id for c in pool] + list(indexes.values()), depth)
-    current = {
-        c.ticker_id
-        for c in pool
-        if (tail := tails.get(c.ticker_id)) and tail[-1].session >= window.previous
-    }
-    screen_start = window.days[max(len(window.days) - u.dollar_volume_sessions, 0)]
-    recent_raw = source.daily_bars(
-        [c.symbol for c in pool if c.ticker_id not in current],
-        screen_start,
-        session,
-        adjustment=Adjustment.RAW,
-    )
-    screens = {
-        c.ticker_id: (
-            [ScreenBar(b.raw_close, b.close * b.volume) for b in tails[c.ticker_id]]
-            if c.ticker_id in current
-            else screen_bars(recent_raw.get(c.symbol, ()))
-        )
-        for c in pool
-    }
-    targets = {
-        c.ticker_id: c.symbol
-        for c in pool
-        if passes_screen(screens[c.ticker_id], u, margin=cfg.track_margin)
-    }
-    absent = sorted(set(risk.regime.indexes) - indexes.keys())
+    wanted = tracked_symbols(risk)
+    ids = active_ids(conn, wanted)
+    absent = sorted(set(wanted) - ids.keys())
     if absent:
-        raise MissingIndexError(f"index ETFs not in tickers: {absent}")
-    targets |= {ticker_id: symbol for symbol, ticker_id in indexes.items()}
+        raise MissingTickerError(f"funds on the ETF list not in tickers: {absent}")
+    targets = {ticker_id: symbol for symbol, ticker_id in ids.items()}
     report.tracked = len(targets)
+    # The stored bars serve the outlier check's range and left neighbour, and the overlap
+    # re-fetch.
+    tails = stored_tail(conn, list(targets), cfg.outliers.adr_sessions + 2)
 
     starts: dict[int, date] = {}
     for ticker_id in targets:
@@ -192,29 +170,30 @@ def ingest_bars(
         conn, source, targets, starts, tails, window, risk, session, corrections, report
     )
 
-    # Coverage: tickers that traded at T-1 (in tonight's screen data, or stored) and the indexes.
-    traded_before = {
+    # Coverage: the funds that traded at T-1 (stored, or in tonight's fetch).
+    expected = {
         ticker_id
-        for ticker_id, symbol in targets.items()
-        if any(b.session == window.previous for b in recent_raw.get(symbol, ()))
+        for ticker_id in targets
+        if ticker_id in written.get(window.previous, set())
         or any(b.session == window.previous for b in tails.get(ticker_id, ()))
-    } | set(indexes.values())
+    }
     received = written.get(session, set())
-    if coverage(traded_before, received) < risk.data.min_coverage:
-        missing = {t: targets[t] for t in traded_before - received}
+    missing = {t: targets[t] for t in expected - received}
+    if missing:
         report.retried = len(missing)
-        log.warning("ingest_short_count_retry", missing=len(missing), expected=len(traded_before))
+        log.warning("ingest_short_count_retry", missing=sorted(missing.values()))
         retry_starts = {t: min(starts[t], window.previous) for t in missing}
         again = _fetch_and_store(
             conn, source, missing, retry_starts, tails, window, risk, session, corrections, report
         )
         received = received | again.get(session, set())
-    report.expected, report.received = len(traded_before), len(traded_before & received)
-    report.coverage = coverage(traded_before, received)
-    report.missing_indexes = sorted(s for s, t in indexes.items() if t not in received)
+    report.expected, report.received = len(expected), len(expected & received)
+    report.coverage = coverage(expected, received)
+    report.missing = sorted(targets[t] for t in expected - received)
+    report.missing_required = sorted(s for s in required_symbols(risk) if ids[s] not in received)
     record_corrections(conn, corrections, now)
     report.corrections = sum(len(found) for found in corrections.values())
-    if report.coverage < risk.data.min_coverage or report.missing_indexes:
+    if report.missing_required:
         report.status = INCOMPLETE
     set_data_status(conn, session, report.status, report.coverage, now)
     return report

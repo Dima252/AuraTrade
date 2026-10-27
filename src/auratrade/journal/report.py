@@ -88,6 +88,7 @@ def daily_report(
     *,
     entries: Iterable[Mapping[str, Any]] = (),
     invariant_ok: bool,
+    halted: bool = False,
     alerts: Sequence[str] = (),
     mode: str,
 ) -> str:
@@ -101,6 +102,8 @@ def daily_report(
         f"Equity {_money(snapshot.equity)}{change}; cash {_money(snapshot.cash)}; "
         f"drawdown {snapshot.drawdown:.1%} from {_money(snapshot.peak_equity)}",
     ]
+    if halted:
+        lines.append("Drawdown halt ON: no leverage (README §7.3)")
     held = [p for p in positions if p.qty > 0]
     lines.append(f"Positions: {len(held)}")
     for p in sorted(held, key=lambda x: x.symbol):

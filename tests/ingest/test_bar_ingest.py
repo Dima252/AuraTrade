@@ -1,4 +1,5 @@
-"""The bars step on Postgres, against an in-memory vendor and Alpaca's recorded calendar."""
+"""The bars step on Postgres for the ETF list, against an in-memory vendor and Alpaca's recorded
+calendar."""
 
 from __future__ import annotations
 
@@ -11,8 +12,14 @@ from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import RiskConfig
 from auratrade.data.alpaca_data import Adjustment
 from auratrade.db.models import BarCorrection, DailyBar, MarketSession
-from auratrade.ingest.bar_ingest import BarReport, MissingIndexError, ingest_bars
-from tests.ingest.fakes import NOW, FakeBars, add_ticker, small_risk, sync_calendar
+from auratrade.ingest.bar_ingest import (
+    BarReport,
+    MissingTickerError,
+    ingest_bars,
+    required_symbols,
+    tracked_symbols,
+)
+from tests.ingest.fakes import FUNDS, NOW, FakeBars, add_ticker, small_risk, sync_calendar
 
 RISK = small_risk()
 THU = date(2026, 10, 15)
@@ -36,16 +43,11 @@ def world(pg_engine: Engine, calendar: MarketCalendar) -> tuple[FakeBars, dict[s
     vendor = FakeBars()
     ids = {}
     with pg_engine.begin() as conn:
-        ids["SPY"] = add_ticker(conn, "SPY", "ETF", "ARCA")
-        ids["QQQ"] = add_ticker(conn, "QQQ", "ETF", "NASDAQ")
-        ids["AAA"] = add_ticker(conn, "AAA")
-        ids["BBB"] = add_ticker(conn, "BBB")  # a $3 stock: never tracked
-        ids["DDD"] = add_ticker(conn, "DDD", "ADR", "NYSE")
-        ids["EEE"] = add_ticker(conn, "EEE", "ETF", "ARCA")  # not a universe type
-        ids["FFF"] = add_ticker(conn, "FFF", exchange="BATS")  # not a universe exchange
-    for symbol in ("SPY", "QQQ", "AAA", "DDD", "EEE", "FFF"):
+        for symbol in FUNDS:
+            ids[symbol] = add_ticker(conn, symbol, "ETF", "ARCA")
+        ids["AAA"] = add_ticker(conn, "AAA")  # a stock: not on the list
+    for symbol in (*FUNDS, "AAA"):
         vendor.add(symbol, days, price=50.0, step=0.1)
-    vendor.add("BBB", days, price=3.0)
     return vendor, ids
 
 
@@ -76,43 +78,52 @@ def status(engine: Engine, day: date) -> tuple[str, float | None]:
     return row.data_status, row.coverage
 
 
+def test_the_etf_list() -> None:
+    assert tracked_symbols(RISK) == list(FUNDS)
+    assert required_symbols(RISK) == ["QQQ", "SPY"]  # the market fund and the indexes
+    full = tracked_symbols(small_risk().model_copy(update={"portfolio": RISK.portfolio}))
+    assert {"SPY", "SSO", "BIL", "QQQ"} <= set(full)
+
+
 class TestFirstRun:
-    def test_tracked_set_gets_its_window(
+    def test_the_list_gets_its_window(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, ids = world
         report = run(pg_engine, vendor, calendar, THU)
-        assert (report.candidates, report.tracked) == (3, 4)  # AAA, BBB, DDD; + SPY, QQQ
+        assert report.tracked == len(FUNDS)
         window = sessions(calendar, date(2026, 9, 1), THU)[-20:]
         assert len(window) == 20
-        for symbol in ("SPY", "QQQ", "AAA", "DDD"):
+        for symbol in FUNDS:
             assert sorted(stored(pg_engine, ids[symbol])) == window
-        for symbol in ("BBB", "EEE", "FFF"):
-            assert stored(pg_engine, ids[symbol]) == {}
+        assert stored(pg_engine, ids["AAA"]) == {}
         assert report.status == "COMPLETE"
         assert report.coverage == 1.0
         assert status(pg_engine, THU) == ("COMPLETE", 1.0)
-        aaa = stored(pg_engine, ids["AAA"])[THU]
-        assert aaa.raw_close == pytest.approx(aaa.close)
+        spy = stored(pg_engine, ids["SPY"])[THU]
+        assert spy.raw_close == pytest.approx(spy.close)
+        assert all(call[0] == FUNDS for call in vendor.calls)
 
     def test_second_run_is_a_no_op(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, ids = world
         first = run(pg_engine, vendor, calendar, THU)
-        assert first.rows_written == 4 * 20
-        before = stored(pg_engine, ids["AAA"])
+        assert first.rows_written == len(FUNDS) * 20
+        before = stored(pg_engine, ids["SPY"])
         second = run(pg_engine, vendor, calendar, THU)
         assert second.rows_written == 0
         assert second.fetched_full == 0
-        assert stored(pg_engine, ids["AAA"]) == before
+        assert stored(pg_engine, ids["SPY"]) == before
 
-    def test_missing_index_ticker_fails_closed(
+    def test_a_fund_not_in_tickers_fails_closed(
         self, pg_engine: Engine, calendar: MarketCalendar
     ) -> None:
         with pg_engine.begin() as conn:
-            add_ticker(conn, "SPY", "ETF", "ARCA")
-        with pytest.raises(MissingIndexError, match="QQQ"):
+            for symbol in FUNDS:
+                if symbol != "SSO":
+                    add_ticker(conn, symbol, "ETF", "ARCA")
+        with pytest.raises(MissingTickerError, match="SSO"):
             run(pg_engine, FakeBars(), calendar, THU)
 
 
@@ -123,15 +134,14 @@ class TestEveningUpdates:
         vendor, ids = world
         run(pg_engine, vendor, calendar, THU)
         # Thursday's volume grew after the evening it was fetched (#118).
-        vendor.set_bar("AAA", THU, volume=180_000)
+        vendor.set_bar("SPY", THU, volume=180_000)
         vendor.calls.clear()
         report = run(pg_engine, vendor, calendar, FRI)
-        bars = stored(pg_engine, ids["AAA"])
+        bars = stored(pg_engine, ids["SPY"])
         assert bars[THU].volume == 180_000
         assert FRI in bars
-        assert report.rows_written == 4 + 1  # four new Friday bars, AAA's Thursday
-        gap_fill = [c for c in vendor.calls if c[0] == ("AAA", "DDD", "QQQ", "SPY")]
-        assert {(start, end) for _, start, end, _ in gap_fill} == {(THU, FRI)}
+        assert report.rows_written == len(FUNDS) + 1  # the Friday bars, SPY's Thursday
+        assert {(start, end) for _, start, end, _ in vendor.calls} == {(THU, FRI)}
 
     def test_monday_holiday(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
@@ -141,26 +151,10 @@ class TestEveningUpdates:
         run(pg_engine, vendor, calendar, friday)
         vendor.calls.clear()
         report = run(pg_engine, vendor, calendar, LABOR_DAY_TUE)
-        assert date(2026, 9, 7) not in stored(pg_engine, ids["AAA"])
-        assert LABOR_DAY_TUE in stored(pg_engine, ids["AAA"])
+        assert date(2026, 9, 7) not in stored(pg_engine, ids["SPY"])
+        assert LABOR_DAY_TUE in stored(pg_engine, ids["SPY"])
         assert report.status == "COMPLETE"
-        gap_fill = [c for c in vendor.calls if c[0] == ("AAA", "DDD", "QQQ", "SPY")]
-        assert {start for _, start, _, _ in gap_fill} == {friday}
-
-    def test_good_friday_gap(self, pg_engine: Engine, calendar: MarketCalendar) -> None:
-        # Thursday 04-02, then Monday 04-06: no bar is expected (or invented) for 04-03.
-        vendor = FakeBars()
-        days = sessions(calendar, date(2026, 3, 1), date(2026, 4, 30))
-        with pg_engine.begin() as conn:
-            spy = add_ticker(conn, "SPY", "ETF", "ARCA")
-            add_ticker(conn, "QQQ", "ETF", "NASDAQ")
-        vendor.add("SPY", days)
-        vendor.add("QQQ", days)
-        run(pg_engine, vendor, calendar, date(2026, 4, 2))
-        report = run(pg_engine, vendor, calendar, date(2026, 4, 6))
-        assert date(2026, 4, 3) not in stored(pg_engine, spy)
-        assert date(2026, 4, 6) in stored(pg_engine, spy)
-        assert report.status == "COMPLETE"
+        assert {start for _, start, _, _ in vendor.calls} == {friday}
 
     def test_day_after_thanksgiving(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
@@ -169,62 +163,23 @@ class TestEveningUpdates:
         run(pg_engine, vendor, calendar, date(2026, 11, 25))
         report = run(pg_engine, vendor, calendar, THANKSGIVING_FRI)
         assert calendar.is_early_close(THANKSGIVING_FRI)
-        assert date(2026, 11, 26) not in stored(pg_engine, ids["AAA"])
-        assert THANKSGIVING_FRI in stored(pg_engine, ids["AAA"])
+        assert date(2026, 11, 26) not in stored(pg_engine, ids["SPY"])
+        assert THANKSGIVING_FRI in stored(pg_engine, ids["SPY"])
         assert report.status == "COMPLETE"
-
-    def test_a_ticker_that_stops_passing_is_no_longer_fetched(
-        self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
-    ) -> None:
-        vendor, ids = world
-        run(pg_engine, vendor, calendar, THU)
-        mon = date(2026, 10, 19)
-        vendor.add("DDD", sessions(calendar, FRI, mon), price=2.0)  # collapses on Friday
-        # Friday: still screened on the stored bars through Thursday, so Friday is stored.
-        assert run(pg_engine, vendor, calendar, FRI).tracked == 4
-        # Monday: its stored Friday close is $2, under the $5 screen.
-        report = run(pg_engine, vendor, calendar, mon)
-        assert report.tracked == 3
-        bars = stored(pg_engine, ids["DDD"])
-        assert FRI in bars
-        assert mon not in bars
-        assert THU in bars  # kept until it ages out of the window
-
-    def test_a_ticker_that_starts_passing_gets_its_window(
-        self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
-    ) -> None:
-        vendor, ids = world
-        run(pg_engine, vendor, calendar, THU)
-        vendor.add("BBB", sessions(calendar, date(2026, 10, 9), FRI), price=30.0)
-        report = run(pg_engine, vendor, calendar, FRI)
-        assert report.fetched_full == 1
-        assert len(stored(pg_engine, ids["BBB"])) == 20
 
 
 class TestValidation:
-    def test_vendor_short_count_is_incomplete(
+    def test_a_missing_market_fund_bar_is_incomplete(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, _ = world
         run(pg_engine, vendor, calendar, THU)
-        vendor.hidden = {("AAA", FRI), ("DDD", FRI)}
+        vendor.hidden = {("SPY", FRI)}
         report = run(pg_engine, vendor, calendar, FRI)
-        assert report.retried == 2
-        assert report.coverage == 0.5
+        assert report.retried == 1
+        assert (report.missing, report.missing_required) == (["SPY"], ["SPY"])
         assert report.status == "INCOMPLETE"
-        assert status(pg_engine, FRI) == ("INCOMPLETE", 0.5)
-
-    def test_short_count_recovered_by_the_retry(
-        self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
-    ) -> None:
-        vendor, ids = world
-        run(pg_engine, vendor, calendar, THU)
-        vendor.hidden = {("AAA", FRI), ("DDD", FRI)}
-        vendor.hide_for_calls = 3  # the screen and the first fetch (split + raw)
-        report = run(pg_engine, vendor, calendar, FRI)
-        assert report.retried == 2
-        assert report.status == "COMPLETE"
-        assert FRI in stored(pg_engine, ids["AAA"])
+        assert status(pg_engine, FRI) == ("INCOMPLETE", 0.8)
 
     def test_a_missing_index_bar_is_incomplete(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
@@ -232,65 +187,77 @@ class TestValidation:
         vendor, _ = world
         run(pg_engine, vendor, calendar, THU)
         vendor.hidden = {("QQQ", FRI)}
-        report = run(pg_engine, vendor, calendar, FRI, small_risk())
-        assert report.missing_indexes == ["QQQ"]
+        report = run(pg_engine, vendor, calendar, FRI)
+        assert report.missing_required == ["QQQ"]
         assert report.status == "INCOMPLETE"
 
-    def test_a_halted_symbol_alone_stays_complete(
+    def test_a_missing_bar_recovered_by_the_retry(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, ids = world
         run(pg_engine, vendor, calendar, THU)
-        vendor.hidden = {("DDD", FRI)}
-        risk = RISK.model_copy(update={"data": RISK.data.model_copy(update={"min_coverage": 0.7})})
-        report = run(pg_engine, vendor, calendar, FRI, risk)
-        assert report.coverage == 0.75
+        vendor.hidden = {("SPY", FRI)}
+        vendor.hide_for_calls = 2  # the first fetch (split + raw)
+        report = run(pg_engine, vendor, calendar, FRI)
+        assert report.retried == 1
         assert report.status == "COMPLETE"
-        assert FRI not in stored(pg_engine, ids["DDD"])  # never forward-filled
+        assert FRI in stored(pg_engine, ids["SPY"])
+
+    def test_another_fund_missing_is_reported_and_stays_complete(
+        self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
+    ) -> None:
+        vendor, ids = world
+        run(pg_engine, vendor, calendar, THU)
+        vendor.hidden = {("GLD", FRI)}
+        report = run(pg_engine, vendor, calendar, FRI)
+        assert (report.missing, report.missing_required) == (["GLD"], [])
+        assert report.coverage == 0.8
+        assert report.status == "COMPLETE"
+        assert FRI not in stored(pg_engine, ids["GLD"])  # never forward-filled
 
     def test_split_refetches_the_window(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, ids = world
         run(pg_engine, vendor, calendar, THU)
-        before = stored(pg_engine, ids["AAA"])
-        ddd_before = stored(pg_engine, ids["DDD"])
-        vendor.splits["AAA"] = (FRI, 2.0)  # 2-for-1, ex-date Friday
+        before = stored(pg_engine, ids["SSO"])
+        spy_before = stored(pg_engine, ids["SPY"])
+        vendor.splits["SSO"] = (FRI, 2.0)  # 2-for-1, ex-date Friday
         report = run(pg_engine, vendor, calendar, FRI)
-        assert report.splits == ["AAA"]
-        after = stored(pg_engine, ids["AAA"])
+        assert report.splits == ["SSO"]
+        after = stored(pg_engine, ids["SSO"])
         assert len(after) == 20
         day = date(2026, 10, 1)
         assert after[day].close == pytest.approx(before[day].close / 2, rel=1e-6)
         assert after[day].volume == before[day].volume * 2
         assert after[day].raw_close == pytest.approx(before[day].raw_close)  # as traded
-        ddd = stored(pg_engine, ids["DDD"])
-        assert {d: ddd[d] for d in ddd_before} == ddd_before  # an unsplit ticker is untouched
+        spy = stored(pg_engine, ids["SPY"])
+        assert {d: spy[d] for d in spy_before} == spy_before  # an unsplit fund is untouched
 
     def test_zero_volume_bars_are_dropped(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, ids = world
-        vendor.set_bar("AAA", THU, volume=0)
-        risk = RISK.model_copy(update={"data": RISK.data.model_copy(update={"min_coverage": 0.7})})
-        report = run(pg_engine, vendor, calendar, THU, risk)
-        assert THU not in stored(pg_engine, ids["AAA"])
-        assert report.dropped == {"zero volume": 1}
+        vendor.set_bar("GLD", THU, volume=0)
+        report = run(pg_engine, vendor, calendar, THU)
+        assert THU not in stored(pg_engine, ids["GLD"])
+        assert report.dropped == {"zero volume": 2}  # the fetch and its retry
+        assert report.missing == ["GLD"]
 
     def test_outlier_high_is_corrected_and_recorded(
         self, pg_engine: Engine, calendar: MarketCalendar, world: tuple[FakeBars, dict[str, int]]
     ) -> None:
         vendor, ids = world
         bad_day = date(2026, 10, 7)
-        vendor.set_bar("AAA", bad_day, high=95.0)
+        vendor.set_bar("GLD", bad_day, high=95.0)
         report = run(pg_engine, vendor, calendar, THU)
         assert report.corrections == 1
-        bar = stored(pg_engine, ids["AAA"])[bad_day]
+        bar = stored(pg_engine, ids["GLD"])[bad_day]
         assert bar.high == pytest.approx(max(bar.open, bar.close))
         with pg_engine.connect() as conn:
             [c] = conn.execute(select(BarCorrection.__table__)).all()
         assert (c.ticker_id, c.session_date, c.field, c.original) == (
-            ids["AAA"],
+            ids["GLD"],
             bad_day,
             "HIGH",
             95.0,
@@ -301,13 +268,13 @@ class TestValidation:
     ) -> None:
         vendor, ids = world
         # Thursday's high is far above its body and Wednesday's high; Friday trades up there
-        # too, so the second evening sees a real breakout and restores the vendor's high.
-        vendor.set_bar("AAA", THU, high=70.0)
+        # too, so the second evening sees a real move and restores the vendor's high.
+        vendor.set_bar("GLD", THU, high=70.0)
         run(pg_engine, vendor, calendar, THU)
-        assert stored(pg_engine, ids["AAA"])[THU].high < 70.0
-        vendor.set_bar("AAA", FRI, open=66.0, high=72.0, low=65.0, close=70.0)
+        assert stored(pg_engine, ids["GLD"])[THU].high < 70.0
+        vendor.set_bar("GLD", FRI, open=66.0, high=72.0, low=65.0, close=70.0)
         run(pg_engine, vendor, calendar, FRI)
-        assert stored(pg_engine, ids["AAA"])[THU].high == pytest.approx(70.0)
+        assert stored(pg_engine, ids["GLD"])[THU].high == pytest.approx(70.0)
 
 
 def test_raw_and_split_adjusted_requests(
@@ -315,9 +282,4 @@ def test_raw_and_split_adjusted_requests(
 ) -> None:
     vendor, _ = world
     run(pg_engine, vendor, calendar, THU)
-    screen = vendor.calls[0]
-    assert screen[0] == ("AAA", "BBB", "DDD")
-    assert screen[3] is Adjustment.RAW
-    assert screen[1] == sessions(calendar, date(2026, 10, 9), THU)[0]
-    adjustments = {c[3] for c in vendor.calls[1:]}
-    assert adjustments == {Adjustment.SPLIT, Adjustment.RAW}
+    assert {c[3] for c in vendor.calls} == {Adjustment.SPLIT, Adjustment.RAW}

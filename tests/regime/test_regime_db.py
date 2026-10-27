@@ -290,7 +290,7 @@ class TestJob:
     def test_the_job_is_in_the_evening_chain(self) -> None:
         assert regime_job.JOB.name == "regime"
         assert regime_job.JOB.predecessor == "simulate"
-        assert regime_job.JOB.successor == "scan"
+        assert regime_job.JOB.successor == "allocate"
 
 
 class TestCli:

@@ -28,7 +28,7 @@ Match = assertions.Match
 Template = assertions.Template
 
 ENV = cdk.Environment(account="123456789012", region="us-east-1")
-ORDER_JOBS = {"execute_open", "execute_entries", "eod_review", "post_market"}
+ORDER_JOBS = {"execute_open", "execute_close", "post_market"}
 
 
 def synth(**kwargs: Any) -> Any:
@@ -78,7 +78,7 @@ def policy_text(template: Any, job: str) -> str:
 def test_one_function_per_job_on_one_image(template: Any) -> None:
     fns = functions(template)
     assert set(fns) == {f.job for f in FUNCTIONS}
-    assert {s.job for s in schedule.skeleton_slots(30)} <= set(fns)
+    assert {s.job for s in schedule.weekday_slots(30)} <= set(fns)
     images = {json.dumps(p["Code"]["ImageUri"]) for p in fns.values()}
     assert len(images) == 1
     for job, props in fns.items():
@@ -144,7 +144,7 @@ def test_every_function_reads_only_its_parameter_path(template: Any) -> None:
 def test_only_storage_jobs_reach_the_bucket(template: Any) -> None:
     for spec in FUNCTIONS:
         assert ("s3:PutObject" in policy_text(template, spec.job)) is spec.storage, spec.job
-    assert {f.job for f in FUNCTIONS if f.storage} == {"post_market", "ingest", "simulate"}
+    assert {f.job for f in FUNCTIONS if f.storage} == {"post_market", "ingest"}
 
 
 def test_the_bucket_is_private_and_kept(template: Any) -> None:
@@ -230,7 +230,7 @@ def test_the_schedules_are_exactly_the_slots(template: Any) -> None:
         assert props["Target"]["Arn"] == {"Fn::GetAtt": [logical_id(template, job), "Arn"]}
         by_job.setdefault(job, set()).update(fired(props["ScheduleExpression"]))
     expected: dict[str, set[time]] = {}
-    for slot in schedule.skeleton_slots(load_risk_config().jobs.chain_wait_minutes):
+    for slot in schedule.weekday_slots(load_risk_config().jobs.chain_wait_minutes):
         expected.setdefault(slot.job, set()).update(slot.times())
     assert by_job == expected
 

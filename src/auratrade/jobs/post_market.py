@@ -7,16 +7,21 @@
    morning, nothing is sold), and cancel any entry parent still resting (a backstop for the EOD
    review, #113).
 2. Today's signals that never went in expire.
-3. The account snapshot, the Telegram daily report, and the nightly backup of the kept-forever
-   tables to storage.
+3. The account snapshot and **the drawdown check** (README §7.3, `execution.halt`): equity at
+   most 75% of its peak turns the halt on, and `execute_close` sells the leveraged fund into the
+   market fund at 15:40 on the next session.
+4. The Telegram daily report, and the nightly backup of the kept-forever tables to storage.
 
-On success it starts `ingest` (the chain). Steps 2-3 run in dry_run too: they change no order.
+On success it starts `ingest` (the chain). Steps 2-4 run in dry_run too: they change no order,
+and the drawdown check is reported but not written (in dry_run the account is the simulated
+book, whose halt is simulated, #166).
 """
 
 from __future__ import annotations
 
 import sys
 
+from auratrade.execution import halt
 from auratrade.execution.runtime import (
     DepsFactory,
     enforce_invariant,
@@ -46,13 +51,28 @@ def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
         with deps.engine.begin() as conn:
             expired = expire_signals(conn, before_or_on=ctx.session_date, now=now)
             snapshot = write_snapshot(conn, ctx.session_date, account, positions)
+            drawdown = halt.check_at_close(
+                conn,
+                ctx.session_date,
+                snapshot.equity,
+                ctx.risk.portfolio,
+                write=not ctx.dry_run,
+            )
             closed = closed_today(conn, ctx.session_date)
+        if drawdown["turned_on"] and not ctx.dry_run:
+            section.alert(
+                f"DRAWDOWN HALT ON: equity {snapshot.equity:,.2f} is {drawdown['drawdown']:.1%} "
+                f"below its peak {drawdown['peak']:,.2f}; the leveraged fund is sold into "
+                f"{ctx.risk.portfolio.market} at 15:40 next session. Explain it with "
+                "portfolio_manager --event HALT."
+            )
         report = daily_report(
             snapshot,
             positions,
             rec.levels,
             closed,
             invariant_ok=not invariant.still_unprotected and not rec.unknown,
+            halted=bool(drawdown["on"]),
             alerts=alerts,
             mode=ctx.trading_mode.value,
         )
@@ -70,6 +90,7 @@ def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
             "signals_expired": expired,
             "equity": snapshot.equity,
             "drawdown": round(snapshot.drawdown, 4),
+            "halt": drawdown,
             "closed_today": [t.symbol for t in closed],
             "backup_rows": backup,
             "actions": actions,

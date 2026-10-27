@@ -5,6 +5,8 @@
     uv run auratrade kill status
     uv run auratrade mismatches     # open reconciliation and corporate-action mismatches
     uv run auratrade resolve 12 --note "DXJ split fixed by hand at the broker"
+    uv run auratrade halt status    # the drawdown halt and its peak (README §7.3)
+    uv run auratrade halt reset     # off, the peak at the broker's equity (after a paper reset)
 
 The kill switch blocks new entries and adds only; it never touches a protective stop, a plan
 exit or reconciliation. `kill on` cancels resting entry orders under the order lock; every
@@ -18,12 +20,14 @@ import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Engine, insert, select, update
 
 from auratrade.config import RiskConfig, Settings, TradingMode, load_risk_config
-from auratrade.db.flags import TRADING_ENABLED, read_flags
+from auratrade.db.flags import HALT_DRAWDOWN, TRADING_ENABLED, read_flags
 from auratrade.db.models import Mismatch, SystemFlag
+from auratrade.execution import halt as drawdown_halt
 from auratrade.execution.broker import Broker
 from auratrade.execution.orders import OrderDesk
 from auratrade.execution.runtime import Lock
@@ -165,6 +169,32 @@ def resolve(deps: CliDeps, mismatch_id: int, note: str) -> int:
     return 0
 
 
+def halt(deps: CliDeps, action: str) -> int:
+    if action == "reset":
+        equity = deps.broker().account().equity
+        session = datetime.now(ZoneInfo("America/New_York")).date()
+        with deps.engine.begin() as conn:
+            drawdown_halt.reset(conn, session, equity, by="cli")
+        deps.out(f"drawdown halt off; its peak reset to the equity {equity:,.2f}")
+        return 0
+    with deps.engine.connect() as conn:
+        row = conn.execute(
+            select(SystemFlag.value, SystemFlag.details).where(SystemFlag.name == HALT_DRAWDOWN)
+        ).first()
+    if row is None:
+        deps.out("drawdown halt: no flag row (reads as ON)")
+        return 0
+    details = dict(row.details or {})
+    peak = details.get("peak")
+    state = "ON (no leverage)" if row.value else "off"
+    text = f"drawdown halt {state}"
+    text += "; no peak yet" if peak is None else f"; peak {float(peak):,.2f}"
+    if row.value and details.get("since"):
+        text += f", on since {details['since']}"
+    deps.out(text)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auratrade", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -174,6 +204,8 @@ def build_parser() -> argparse.ArgumentParser:
     r = sub.add_parser("resolve", help="mark a mismatch resolved after fixing it")
     r.add_argument("id", type=int)
     r.add_argument("--note", required=True)
+    h = sub.add_parser("halt", help="the drawdown halt: its state, or reset it")
+    h.add_argument("action", choices=("status", "reset"))
     return parser
 
 
@@ -188,6 +220,8 @@ def main(
                 return kill(deps, args.action)
             case "mismatches":
                 return mismatches(deps)
+            case "halt":
+                return halt(deps, args.action)
             case _:
                 return resolve(deps, args.id, args.note)
     finally:

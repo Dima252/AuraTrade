@@ -9,7 +9,8 @@
   month's `portfolio_journal` row.
 - **On R** (`allocate`): the trend, the cap and the book's halt from the same runs (ranked at
   R), the rule level, the twin's targets, and the Portfolio Manager's facts, in an ALLOCATED
-  `portfolio_targets` row for E.
+  `portfolio_targets` row for E. On `paper` the halt is the account's (`execution.halt`),
+  turned off here on a DOWN -> UP flip or a new peak; in dry_run it is the simulated book's.
 
 The trial starts at the first R `allocate` ever ran on; both books start there from
 ``dry_run_equity`` in cash. Until task 5.x trades the paper account, the simulated book *is* the
@@ -39,6 +40,7 @@ from auratrade.db.models import (
     PortfolioJournal,
     PortfolioTarget,
 )
+from auratrade.execution import halt as live_halt
 from auratrade.journal.portfolio_scorecard import (
     Decision,
     Marks,
@@ -56,7 +58,9 @@ from auratrade.llm.portfolio_facts import (
 )
 from auratrade.sim.funds import funds_market
 from auratrade.sim.portfolio import BENCHMARK, Market, PortfolioRun, Rules, simulate_portfolio
+from auratrade.strategies import core_allocation
 from auratrade.strategies.core_allocation import (
+    Trend,
     realized_volatility,
     sma,
     twin_targets,
@@ -311,8 +315,11 @@ def build_facts(
     books: Books,
     ranking: date,
     session: date,
+    *,
+    halted: bool | None = None,
 ) -> PmFacts:
-    """The facts on R for E, from the book ranked at R (`run_books(rank_at_end=True)`)."""
+    """The facts on R for E, from the book ranked at R (`run_books(rank_at_end=True)`);
+    `halted` is the account's halt where it isn't the simulated book's."""
     p, pm = risk.portfolio, risk.portfolio_manager
     market, sim = books.market, books.sim
     i = market.days.index(ranking)
@@ -324,7 +331,14 @@ def build_facts(
     if average is None:
         raise ValueError(f"{ranking}: fewer than {p.sma_months} month ends for the trend")
     volatility = realized_volatility(market.returns[max(0, i + 1 - p.vol_sessions) : i + 1], p)
-    trend = TrendFacts(r.state, month_ends[-1], average, volatility, r.capped, r.halted)
+    trend = TrendFacts(
+        r.state,
+        month_ends[-1],
+        average,
+        volatility,
+        r.capped,
+        r.halted if halted is None else halted,
+    )
 
     end = sim.end
     equity = sim.marks[-1]
@@ -488,8 +502,13 @@ def allocate(
     risk: RiskConfig,
     source: FundBars,
     ranking: date,
+    *,
+    live: bool = False,
+    write_halt: bool = True,
 ) -> dict[str, Any]:
-    """On R: the rule level, the twin's targets and the facts in an ALLOCATED row for E."""
+    """On R: the rule level, the twin's targets and the facts in an ALLOCATED row for E.
+    `live`: the halt is the account's (`paper`), checked here first; `write_halt` turns it off
+    in `system_flags` when the check says so."""
     rebalance = rebalance_at(calendar, ranking)
     if rebalance is None:
         return {"skipped": "not a ranking session"}
@@ -505,8 +524,18 @@ def allocate(
     data = fetch_funds(source, risk, window_start(calendar, start, risk), ranking)
     market = data.market(risk, window_start(calendar, start, risk))
     books = run_books(market, risk, start, ranking, decided_targets(conn), rank_at_end=True)
-    facts = build_facts(conn, risk, data, books, ranking, rebalance.execution)
     r, twin = books.sim.rankings[-1], books.twin.rankings[-1]
+    halted, level, halt_check = r.halted, r.level, None
+    if live:
+        flipped_up = r.flipped and r.state is Trend.UP
+        halt_check = live_halt.check_on_ranking(
+            conn, ranking, flipped_up, risk.portfolio, write=write_halt
+        )
+        halted = bool(halt_check["on"])
+        level = core_allocation.rule_level(r.state, r.capped, halted, risk.portfolio)
+    facts = build_facts(
+        conn, risk, data, books, ranking, rebalance.execution, halted=halted if live else None
+    )
     values = {
         "kind": "REBALANCE",
         "ranking_session": ranking,
@@ -514,8 +543,8 @@ def allocate(
         "status": "ALLOCATED",
         "trend": r.state.value,
         "capped": r.capped,
-        "halted": r.halted,
-        "rule_level": r.level,
+        "halted": halted,
+        "rule_level": level,
         "twin_targets": twin_targets(twin.level, risk.portfolio),
         "facts": finite(facts_to_json(facts)),
         "risk_hash": risk.config_hash,
@@ -531,15 +560,18 @@ def allocate(
             )
             .values(**values)
         )
-    return {
+    out: dict[str, Any] = {
         "ranking": str(ranking),
         "execution": str(rebalance.execution),
         "trend": r.state.value,
         "capped": r.capped,
-        "halted": r.halted,
-        "rule_level": r.level,
+        "halted": halted,
+        "rule_level": level,
         "trial_start": str(start),
     }
+    if halt_check is not None:
+        out["halt"] = halt_check
+    return out
 
 
 def simulate_books(
