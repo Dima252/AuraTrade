@@ -25,7 +25,7 @@ from sqlalchemy import Engine
 from auratrade.calendar.sessions import MarketCalendar, load_calendar
 from auratrade.config import TradingMode
 from auratrade.db.flags import read_flags
-from auratrade.execution import store
+from auratrade.execution import funds, store
 from auratrade.execution.broker import Broker, PriceSource
 from auratrade.execution.invariant import check
 from auratrade.execution.lock import Holder
@@ -160,6 +160,7 @@ def _section(ctx: JobContext, deps: ExecutionDeps) -> Section:
     alert = _alert_fn(ctx, deps.alerter, alerts)
     with deps.engine.connect() as conn:
         calendar = load_calendar(conn)
+    portfolio = ctx.risk.portfolio
     rec = reconcile(
         deps.engine,
         deps.broker,
@@ -167,7 +168,14 @@ def _section(ctx: JobContext, deps: ExecutionDeps) -> Section:
         now=deps.clock(),
         calendar=calendar,
         risk=ctx.risk,
+        ignore=funds.funds(portfolio),
     )
+    with deps.engine.begin() as conn:
+        rec.alerts += funds.apply_splits(
+            conn, portfolio, rec.broker_positions, session=ctx.session_date, now=deps.clock()
+        )
+        rec.levels.update(funds.levels(conn, portfolio, rec.broker_positions))
+        blocked = set(funds.mismatched(conn, portfolio))
     for text in rec.alerts:
         alert(text)
     dry_run = ctx.trading_mode is not TradingMode.PAPER
@@ -180,6 +188,7 @@ def _section(ctx: JobContext, deps: ExecutionDeps) -> Section:
         market_open=deps.broker.is_market_open(),
         sleep=deps.sleep,
         alert=alert,
+        blocked_sales=blocked,
         log=ctx.log,
     )
     return Section(ctx, deps, calendar, rec, desk, alerts)
@@ -210,7 +219,8 @@ def enforce_invariant(section: Section) -> InvariantReport:
     """Check every position's stops against its plan level; repair what is wrong (README
     §5.7.1). A repair alerts, and the caller blocks entries for the run."""
     broker, rec, desk = section.deps.broker, section.rec, section.desk
-    protections = check(broker.positions(), broker.open_orders(), rec.levels)
+    unstopped = funds.unstopped(section.ctx.risk.portfolio)
+    protections = check(broker.positions(), broker.open_orders(), rec.levels, unstopped=unstopped)
     report = InvariantReport(checked=len(rec.positions))
     bad = {s: p for s, p in protections.items() if not p.ok}
     report.problems = {s: sorted(x.value for x in p.problems) for s, p in bad.items()}
@@ -231,7 +241,7 @@ def enforce_invariant(section: Section) -> InvariantReport:
         report.repaired.append(symbol)
         if result.sale is not None and result.sale.owed:
             mark_exit_pending(section, symbol, "HARD_STOP")
-    after = check(broker.positions(), broker.open_orders(), rec.levels)
+    after = check(broker.positions(), broker.open_orders(), rec.levels, unstopped=unstopped)
     report.still_unprotected += [
         s for s, p in after.items() if not p.ok and s not in report.still_unprotected
     ]

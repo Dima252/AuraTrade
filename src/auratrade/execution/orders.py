@@ -26,11 +26,13 @@ from auratrade.execution.broker import (
     BrokerOrder,
     BrokerUnavailableError,
     DuplicateClientOrderIdError,
+    LimitBuy,
     LimitSell,
     MarketSell,
     OrderNotFoundError,
     OrderRequest,
     OrderStatus,
+    OtoBuy,
     PriceSource,
     Side,
     StopSell,
@@ -63,6 +65,20 @@ class SaleResult:
     @property
     def owed(self) -> int:
         return self.requested - self.sold
+
+
+@dataclass(frozen=True, slots=True)
+class BuyResult:
+    symbol: str
+    requested: int
+    bought: int
+    price: float | None = None
+    """The average fill price."""
+    failed: str | None = None
+
+    @property
+    def owed(self) -> int:
+        return self.requested - self.bought
 
 
 @dataclass(frozen=True, slots=True)
@@ -340,6 +356,9 @@ class OrderDesk:
         if not self.market_open or symbol in self.blocked_sales:
             self.alert(f"{symbol} is through its stop level; {qty} shares owed a sale")
             return SaleResult(symbol, qty, 0, SaleStatus.DEFERRED)
+        if reason == "STOP":
+            # What the stop would have done, done now: as loud as a stop fill (README §5.9).
+            self.alert(f"{symbol} is through its stop level: selling {qty} at once")
         sold = 0
         order: BrokerOrder | None = None
         price = self.price(symbol)
@@ -372,6 +391,64 @@ class OrderDesk:
         if result.owed:
             self.alert(f"{symbol}: sold {sold} of {qty} through the stop level; the rest is owed")
         return result
+
+    def sell_plain(self, symbol: str, qty: int, reason: str) -> SaleResult:
+        """The sale of a fund that carries no stop (README §5.6.2, #155): a marketable limit;
+        what hasn't filled after the wait is cancelled and owed."""
+        if not self.market_open or symbol in self.blocked_sales:
+            return SaleResult(symbol, qty, 0, SaleStatus.DEFERRED)
+        held, _ = self.state(symbol)
+        qty = min(qty, held)
+        if qty <= 0:
+            return SaleResult(symbol, 0, 0, SaleStatus.NOTHING)
+        price = self.price(symbol)
+        if price is None:
+            self.alert(f"no price for {symbol}: its {reason} sale of {qty} waits")
+            return SaleResult(symbol, qty, 0, SaleStatus.UNFILLED)
+        limit = marketable_sell_limit(price, self.cfg.marketable_limit_slippage)
+        try:
+            order = self.submit_once(
+                LimitSell(symbol, qty, limit, ids.exit_id(self.session, symbol, reason))
+            )
+        except BrokerError as exc:
+            self.alert(f"{reason} sale of {qty} {symbol} rejected: {exc}")
+            return SaleResult(symbol, qty, 0, SaleStatus.UNFILLED)
+        self._record("sell", symbol, order_id=order.id, qty=qty, limit=limit, reason=reason)
+        sold = self._settle(self.wait_fill(order, self.cfg.sell_wait_seconds))
+        return _result(symbol, qty, sold)
+
+    def buy(self, symbol: str, qty: int, limit: float, *, stop: float | None) -> BuyResult:
+        """A marketable limit buy (README §5.6.3); never a market buy. With `stop` it is an OTO
+        whose GTC stop leg rests at that level (the leveraged fund: Alpaca refuses a plain buy
+        while a sell stop rests, #114). What hasn't filled after the wait is cancelled, and a
+        stopped fund is then protected at `stop` for what did fill (a partly filled OTO's leg
+        stays held, #115)."""
+        if not self.market_open:
+            return BuyResult(symbol, qty, 0, failed="market closed")
+        client_order_id = ids.buy_id(self.session, symbol)
+        request: OrderRequest = (
+            LimitBuy(symbol, qty, limit, client_order_id)
+            if stop is None
+            else OtoBuy(symbol, qty, limit, stop, client_order_id)
+        )
+        try:
+            order = self.submit_once(request)
+        except BrokerError as exc:
+            # An unanswered one may rest at the broker: the next run cancels it before it
+            # decides again.
+            self.alert(f"buy of {qty} {symbol} at {limit} failed: {exc}")
+            if stop is not None:
+                self.protect(symbol, stop)
+            return BuyResult(symbol, qty, 0, failed=str(exc))
+        self._record("buy", symbol, order_id=order.id, qty=qty, limit=limit, stop=stop)
+        order = self.wait_fill(order, self.cfg.buy_wait_seconds)
+        if order.is_open:
+            self.cancel_once(order)
+            self._record("cancel_buy", symbol, order_id=order.id, filled=order.filled_qty)
+            order = self.broker.get_order(order.id)
+        if stop is not None:
+            self.protect(symbol, stop)
+        return BuyResult(symbol, qty, order.filled_qty, order.filled_avg_price)
 
     def _settle(self, order: BrokerOrder | None) -> int:
         """Cancel what is left of a sale; its filled quantity."""
