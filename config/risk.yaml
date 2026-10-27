@@ -578,3 +578,12 @@ llm:  # README §9; see auratrade.llm.client (task 4.1). The model and its effor
     claude-opus-5-5: {input: 4.00, output: 20.00, cache_write: 5.00, cache_read: 0.20}
     claude-opus-5: {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}
     claude-opus-4-8: {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}
+
+portfolio_manager:  # README §5.4: the facts the Portfolio Manager sees and its tools (task 4.2)
+  return_sessions: {1m: 21, 3m: 63, 6m: 126, 12m: 252}   # each satellite ETF's returns
+  volatility_sessions: 63            # its realized volatility, annualized
+  sma_sessions: 200                  # its distance from this moving average
+  correlation_sessions: 252          # its daily returns' correlation with SPY's
+  headlines: 20                      # the most recent headlines in the facts
+  news_items: 10                     # one get_news call
+  history_months: 24                 # get_decision_history's most

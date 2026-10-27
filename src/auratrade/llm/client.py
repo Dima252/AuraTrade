@@ -15,7 +15,7 @@ validated answer or to a named failure.
   the model Anthropic routes that category to; the answering model is recorded on every turn.
   A refusal that survives the chain is a failure.
 - **Fail closed** (CLAUDE.md §3.6): an API problem never raises. The caller gets a failure and
-  takes the twin's targets. No request starts after the deadline, each attempt is cut to it,
+  holds (#164). No request starts after the deadline, each attempt is cut to it,
   and an answer that arrives after it is discarded.
 """
 
