@@ -985,6 +985,8 @@ class ExecutionConfig(_Strict):
     # market order gets before the run gives up and leaves it to the next one (README §5.7.2).
     sell_wait_seconds: PositiveInt
     market_order_wait_seconds: PositiveInt
+    # A rebalance's buy works this long; what hasn't filled is cancelled (task 5.1).
+    buy_wait_seconds: PositiveInt
     fill_poll_seconds: Positive
     # Attempts per order call that failed without an answer (a 5xx, a dropped connection),
     # each with the same client_order_id.

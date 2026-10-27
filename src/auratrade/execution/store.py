@@ -312,6 +312,7 @@ def order_purpose(order: BrokerOrder) -> str:
     if parsed is not None:
         return {
             ids.Purpose.ENTRY: "ENTRY",
+            ids.Purpose.BUY: "ENTRY",
             ids.Purpose.STOP: "STOP",
             ids.Purpose.EXIT: "EXIT",
         }[parsed.purpose]

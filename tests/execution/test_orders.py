@@ -9,6 +9,7 @@ from auratrade.execution.broker import (
     BrokerOrder,
     BrokerUnavailableError,
     InsufficientQtyError,
+    LimitBuy,
     LimitSell,
     OrderStatus,
     OrderType,
@@ -465,3 +466,99 @@ def test_cancel_entries_cancels_only_unfilled_parents() -> None:
     assert fake.get_order(waiting.id).status is OrderStatus.CANCELED
     assert fake.get_order(partial.id).is_open
     assert desk(fake).cancel_entries(["NVDA"], why="kill") == 0
+
+
+# --- the portfolio's sale and buy (task 5.1) -----------------------------------------------
+
+
+def holding(fake: FakeBroker, symbol: str = "SPY", qty: int = 10, price: float = 500.0) -> None:
+    """A fund bought earlier, with no stop (#155)."""
+    fake.set_price(symbol, price)
+    order = fake.submit(LimitBuy(symbol, qty, price, ids.buy_id(SESSION, symbol)))
+    fake.fill(order.id, price=price)
+
+
+def test_a_plain_sale_fills_at_a_marketable_limit() -> None:
+    fake = FakeBroker(cash=100_000.0)
+    holding(fake)
+    fake.on_submit.append(lambda o: fake.fill(o.id) if o.side is Side.SELL else None)
+    result = desk(fake).sell_plain("SPY", 4, "REBALANCE")
+    assert (result.sold, result.status) == (4, SaleStatus.FILLED)
+    sale = next(o for o in fake.all_orders() if o.side is Side.SELL)
+    assert (sale.type, sale.limit_price) == (OrderType.LIMIT, 497.5)
+    assert fake.position("SPY") == 6
+
+
+def test_a_plain_sale_that_doesnt_fill_is_cancelled_and_owed() -> None:
+    fake = FakeBroker(cash=100_000.0)
+    holding(fake)
+    result = desk(fake).sell_plain("SPY", 4, "REBALANCE")
+    assert (result.sold, result.status) == (0, SaleStatus.UNFILLED)
+    assert fake.open_orders() == []
+
+
+@pytest.mark.parametrize(
+    ("setup", "status", "alerted"),
+    [
+        ("closed", SaleStatus.DEFERRED, False),
+        ("blocked", SaleStatus.DEFERRED, False),
+        ("nothing", SaleStatus.NOTHING, False),
+        ("no_price", SaleStatus.UNFILLED, True),
+        ("rejected", SaleStatus.UNFILLED, True),
+    ],
+)
+def test_a_plain_sale_that_cant_go_in(setup: str, status: SaleStatus, alerted: bool) -> None:
+    fake = FakeBroker(cash=100_000.0)
+    alerts: list[str] = []
+    if setup != "nothing":
+        holding(fake)
+    d = desk(fake, alerts=alerts, market_open=setup != "closed")
+    if setup == "blocked":
+        d.blocked_sales.add("SPY")
+    if setup == "no_price":
+        fake.set_price("SPY", None)
+    if setup == "rejected":
+        fake.fail_next("submit", InsufficientQtyError("insufficient qty", status=403))
+    assert d.sell_plain("SPY", 4, "REBALANCE").status is status
+    assert bool(alerts) is alerted
+
+
+def test_a_buy_is_a_marketable_limit_and_an_oto_for_a_stopped_fund() -> None:
+    fake = FakeBroker(cash=100_000.0)
+    fake.set_price("SPY", 500.0)
+    fake.set_price("SSO", 100.0)
+    fake.on_submit.append(lambda o: fake.fill(o.id) if o.side is Side.BUY else None)
+    d = desk(fake)
+    plain = d.buy("SPY", 10, 502.5, stop=None)
+    oto = d.buy("SSO", 20, 100.5, stop=70.0)
+    assert (plain.bought, oto.bought) == (10, 20)
+    assert [o.symbol for o in fake.open_orders() if o.is_sell_stop] == ["SSO"]
+    buys = {o.symbol: o for o in fake.all_orders() if o.side is Side.BUY}
+    assert (buys["SPY"].type, buys["SPY"].limit_price) == (OrderType.LIMIT, 502.5)
+    assert (buys["SSO"].type, buys["SSO"].time_in_force) == (OrderType.LIMIT, TimeInForce.GTC)
+    assert ids.parse(buys["SPY"].client_order_id).purpose is ids.Purpose.BUY  # type: ignore[union-attr]
+
+
+def test_a_buy_that_doesnt_fill_is_cancelled() -> None:
+    fake = FakeBroker(cash=100_000.0)
+    fake.set_price("SSO", 100.0)
+    result = desk(fake).buy("SSO", 20, 100.5, stop=70.0)
+    assert (result.bought, result.owed) == (0, 20)
+    assert fake.open_orders() == []
+
+
+def test_a_buy_refused_by_the_broker_alerts() -> None:
+    fake = FakeBroker(cash=100_000.0)
+    fake.set_price("SSO", 100.0)
+    alerts: list[str] = []
+    for _ in range(3):  # every attempt (execution.call_attempts)
+        fake.fail_next("submit", BrokerUnavailableError("500"))
+    result = desk(fake, alerts=alerts).buy("SSO", 20, 100.5, stop=70.0)
+    assert result.failed is not None
+    assert any("buy of 20 SSO" in a for a in alerts)
+
+
+def test_no_buy_while_the_market_is_closed() -> None:
+    fake = FakeBroker(cash=100_000.0, market_open=False)
+    assert desk(fake).buy("SPY", 1, 500.0, stop=None).failed == "market closed"
+    assert fake.all_orders() == []

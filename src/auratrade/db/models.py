@@ -936,6 +936,7 @@ TARGET_KINDS = ("REBALANCE", "EVENT")
 TARGET_STATUSES = ("ALLOCATED", "DECIDED")
 BOOKS = ("TWIN", "SIM", "SPY")
 LOT_KINDS = ("LOT", "INCOME")
+STOP_CHANGES = ("ENTRY", "RAISE", "SPLIT")
 
 
 class PromptVersion(Base):
@@ -1017,6 +1018,10 @@ class PortfolioTarget(Base):
     risk_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created()
     decided_at: Mapped[datetime | None]
+    executions: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
+    """`execute_close`'s runs on a rebalance's targets (task 5.1): one entry per run."""
+    executed_at: Mapped[datetime | None]
+    """When a run finished every trade; until then the retry tries again (README §3)."""
 
 
 class TaxLot(Base):
@@ -1036,6 +1041,28 @@ class TaxLot(Base):
     proceeds: Mapped[float | None] = mapped_column(Double)
     realized_gain: Mapped[float | None] = mapped_column(Double)
     order_id: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = _created()
+
+
+class FundStop(Base):
+    """The leveraged fund's stop level (README §7.2; task 5.1), one row per change: the latest
+    is in force. Set when the fund is bought from flat, raised on each later E, never lowered;
+    a split scales it (#116)."""
+
+    __tablename__ = "fund_stops"
+    __table_args__ = (
+        CheckConstraint(_in("change", STOP_CHANGES), name="change"),
+        CheckConstraint("level > 0", name="level"),
+        Index("ix_fund_stops_symbol", "symbol", "id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    symbol: Mapped[str] = mapped_column(Text)
+    session_date: Mapped[date] = mapped_column(Date)
+    level: Mapped[float] = mapped_column(Double)
+    change: Mapped[str] = mapped_column(Text)
+    decision_price: Mapped[float | None] = mapped_column(Double)
+    details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
     created_at: Mapped[datetime] = _created()
 
 

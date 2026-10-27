@@ -380,6 +380,7 @@ execution:  # README §5.7; see auratrade.execution
   marketable_limit_slippage: 0.005   # a marketable sell limit 0.5% below the decision price
   sell_wait_seconds: 30              # README §5.7.2: re-price once after ~30 s, then market
   market_order_wait_seconds: 30
+  buy_wait_seconds: 30               # a rebalance's buy works this long; the rest is cancelled (task 5.1)
   fill_poll_seconds: 2
   call_attempts: 3                   # an unanswered order call is retried with the same id
   lock_wait_alert_seconds: 120       # README §5.7.7: a job waiting > 2 minutes alerts

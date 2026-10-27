@@ -2,10 +2,11 @@
 
     uv run python -m auratrade.jobs.stop_guard --dry-run
 
-It asks the broker first: every position's live GTC stops cover its full quantity, and no buy
-is partly filled (#115). Plan levels aren't checked here; the order jobs check them. Only when
-something is wrong does it take the order lock without waiting, open the database, reconcile and
-repair with the plan levels. While another job holds the lock it skips (a sell sequence may be
+It asks the broker first: every stopped position's live GTC stops cover its full quantity, and
+no buy is partly filled (#115); the portfolio's unleveraged funds carry no stop (#155). Plan
+levels aren't checked here; the order jobs check them. Only when something is wrong does it
+take the order lock without waiting, open the database, reconcile and repair with the plan
+levels. While another job holds the lock it skips (a sell sequence may be
 between "reduce the stop" and "sell"), and alerts if the lock has been held longer than its
 server-side backstop.
 
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import sys
 
+from auratrade.execution import funds
 from auratrade.execution.invariant import check, unprotected
 from auratrade.execution.runtime import (
     DepsFactory,
@@ -47,7 +49,13 @@ def make_job(deps_factory: DepsFactory = production_deps) -> JobSpec:
         deps = deps_factory(ctx)
         if not deps.broker.is_market_open():
             return {"skipped": "market closed"}
-        bad = unprotected(check(deps.broker.positions(), deps.broker.open_orders()))
+        bad = unprotected(
+            check(
+                deps.broker.positions(),
+                deps.broker.open_orders(),
+                unstopped=funds.unstopped(ctx.risk.portfolio),
+            )
+        )
         if not bad:
             return {"ok": True}
         problems = {p.symbol: sorted(x.value for x in p.problems) for p in bad}

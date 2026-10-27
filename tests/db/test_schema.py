@@ -59,6 +59,7 @@ TABLES = {
     "tax_lots",
     "twin_book",
     "portfolio_journal",
+    "fund_stops",
 }
 
 

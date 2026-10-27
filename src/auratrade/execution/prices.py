@@ -45,3 +45,8 @@ def decision_price(
 def marketable_sell_limit(price: float, slippage: float) -> float:
     """A sell limit far enough below the price to fill at once, rounded down to a tick."""
     return round_down(price * (1 - slippage))
+
+
+def marketable_buy_limit(price: float, slippage: float) -> float:
+    """A buy limit far enough above the price to fill at once, rounded up to a tick."""
+    return round_up(price * (1 + slippage))

@@ -1,8 +1,10 @@
 """The stop invariant (README §3 rule 5, §5.7.1), checked from broker state alone (pure).
 
-Every position's live GTC sell stops together cover its full quantity, each at or above the
-plan's hard-stop level, and a partly filled buy counts as unprotected (#115). `stop_guard` checks
-it without plan levels (existence, quantity, GTC); the order jobs check it with them.
+Every stopped position's live GTC sell stops together cover its full quantity, each at or above
+the plan's hard-stop level, and a partly filled buy counts as unprotected (#115). The portfolio's
+unleveraged funds carry no stop (#155): they are passed as `unstopped` and not checked.
+`stop_guard` checks it without plan levels (existence, quantity, GTC); the order jobs check it
+with them.
 
 What counts as a live stop:
 - a sell stop that will trigger or holds the shares (`LIVE_STOP_STATUSES`); a `held` leg won't
@@ -15,7 +17,7 @@ What counts as a live stop:
 from __future__ import annotations
 
 from collections import defaultdict
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -91,16 +93,19 @@ def check(
     positions: Iterable[BrokerPosition],
     orders: Iterable[BrokerOrder],
     levels: Mapping[str, float] | None = None,
+    *,
+    unstopped: Collection[str] = (),
 ) -> dict[str, Protection]:
-    """One `Protection` per symbol with a position or a live sell stop.
+    """One `Protection` per symbol with a position or a live sell stop, except the symbols in
+    `unstopped`, which carry no stop (#155).
 
     `levels` maps a symbol to its plan's hard stop; without it (`stop_guard`) a stop's level
     isn't checked, and a symbol missing from it isn't either."""
-    orders = list(orders)
+    orders = [o for o in orders if o.symbol not in unstopped]
     by_symbol: dict[str, list[BrokerOrder]] = defaultdict(list)
     for order in orders:
         by_symbol[order.symbol].append(order)
-    held = {p.symbol: p.qty for p in positions if p.qty != 0}
+    held = {p.symbol: p.qty for p in positions if p.qty != 0 and p.symbol not in unstopped}
 
     out: dict[str, Protection] = {}
     for symbol in sorted(set(held) | {o.symbol for o in live_stops(orders)}):

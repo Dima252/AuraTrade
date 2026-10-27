@@ -11,11 +11,14 @@ Run first in every order-touching job, under the lock:
    marked handled, and a mismatch is opened because paper never applies the split to the
    position.
 5. Every order seen is mirrored into `orders`.
+
+The portfolio's funds (`ignore`, `execution.funds`) aren't the setup system's positions: they
+are left out of steps 1-4 and only their orders are mirrored.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass, field, replace
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -86,6 +89,7 @@ def reconcile(
     now: datetime,
     calendar: MarketCalendar,
     risk: RiskConfig,
+    ignore: Collection[str] = (),
 ) -> Reconciled:
     broker_positions = {p.symbol: p for p in broker.positions() if p.qty > 0}
     open_orders = broker.open_orders()
@@ -132,6 +136,8 @@ def reconcile(
 
         for symbol, held in broker_positions.items():
             position = db_open.get(symbol)
+            if position is None and symbol in ignore:
+                continue
             if position is None:
                 result.unknown.append(symbol)
                 if store.record_mismatch(
