@@ -53,6 +53,12 @@ TABLES = {
     "baseline_signals",
     "breakout_tracker",
     "verdict_outcomes",
+    "prompt_versions",
+    "llm_decisions",
+    "portfolio_targets",
+    "tax_lots",
+    "twin_book",
+    "portfolio_journal",
 }
 
 
