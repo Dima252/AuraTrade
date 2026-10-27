@@ -2,9 +2,11 @@
 
 - **The funds' bars** (split-adjusted and total-return, free Alpaca calls) for the core funds
   and the satellite list, from ``history_sessions`` before the trial's start to T.
-- **The books:** the twin (the rules on the whole account) and, in `dry_run`, the book itself
-  (its decided targets replayed, #166), both through `sim/portfolio.py` from the trial's first
-  R, written whole to `twin_book` each evening (`simulate`).
+- **The books:** the twin (the rules on the whole account), SPY bought and held, and, in
+  `dry_run`, the book itself (its decided targets replayed, #166), all through
+  `sim/portfolio.py` from the trial's first R, written whole to `twin_book` each evening
+  (`simulate`), with the scorecard (README §5.5, `journal/portfolio_scorecard.py`) in each
+  month's `portfolio_journal` row.
 - **On R** (`allocate`): the trend, the cap and the book's halt from the same runs (ranked at
   R), the rule level, the twin's targets, and the Portfolio Manager's facts, in an ALLOCATED
   `portfolio_targets` row for E.
@@ -34,7 +36,15 @@ from auratrade.db.models import (
     LlmDecision,
     MacroObservation,
     MarketRegimeRow,
+    PortfolioJournal,
     PortfolioTarget,
+)
+from auratrade.journal.portfolio_scorecard import (
+    Decision,
+    Marks,
+    Scorecard,
+    period_json,
+    score,
 )
 from auratrade.llm.portfolio_facts import (
     AccountFacts,
@@ -45,7 +55,7 @@ from auratrade.llm.portfolio_facts import (
     facts_to_json,
 )
 from auratrade.sim.funds import funds_market
-from auratrade.sim.portfolio import Market, PortfolioRun, Rules, simulate_portfolio
+from auratrade.sim.portfolio import BENCHMARK, Market, PortfolioRun, Rules, simulate_portfolio
 from auratrade.strategies.core_allocation import (
     realized_volatility,
     sma,
@@ -53,7 +63,7 @@ from auratrade.strategies.core_allocation import (
 )
 from auratrade.tax.israel import Lot
 
-TWIN, SIM = "TWIN", "SIM"
+TWIN, SIM, SPY = "TWIN", "SIM", "SPY"
 DRY_RUN_NOTE = (
     "dry_run: no orders are sent, so the account is your decided targets replayed through the "
     "simulator from the trial's start (#166)."
@@ -127,6 +137,8 @@ class Books:
     market: Market
     twin: PortfolioRun
     sim: PortfolioRun
+    spy: PortfolioRun
+    """The market fund bought at the first E and held: the scorecard's third line."""
 
 
 def run_books(
@@ -138,7 +150,8 @@ def run_books(
     *,
     rank_at_end: bool = False,
 ) -> Books:
-    """The twin and the book from ``start`` (the trial's first R) through ``end``'s close."""
+    """The twin, the book and SPY from ``start`` (the trial's first R) through ``end``'s
+    close."""
     at = {d: i for i, d in enumerate(market.days)}
     if start not in at or end not in at:
         raise ValueError(f"the funds' bars don't cover {start} to {end}")
@@ -153,14 +166,15 @@ def run_books(
     }
     twin = simulate_portfolio(market, Rules(), p, **kwargs)
     sim = simulate_portfolio(market, Rules(), p, book=book, **kwargs)
-    return Books(market, twin, sim)
+    spy = simulate_portfolio(market, BENCHMARK, p, **kwargs)
+    return Books(market, twin, sim, spy)
 
 
 def write_books(conn: Connection, books: Books) -> dict[str, Any]:
     """Rewrite `twin_book` whole from the runs (each evening's runs restart at the trial)."""
     conn.execute(delete(BookMark))
     out: dict[str, Any] = {}
-    for name, run in ((TWIN, books.twin), (SIM, books.sim)):
+    for name, run in ((TWIN, books.twin), (SIM, books.sim), (SPY, books.spy)):
         trades: dict[date, list[dict[str, Any]]] = defaultdict(list)
         for t in run.trades:
             trades[t.day].append(
@@ -184,12 +198,91 @@ def write_books(conn: Connection, books: Books) -> dict[str, Any]:
                     "trades": trades.get(day, []),
                     "halted": snap.halted,
                     "peak_equity": snap.peak,
+                    "tax_owed": snap.tax_owed,
                 }
             )
         if rows:
             conn.execute(insert(BookMark), rows)
         out[name] = {"sessions": len(rows), "equity": round(run.marks[-1], 2) if rows else None}
     return out
+
+
+def marks(run: PortfolioRun) -> Marks:
+    return Marks(
+        run.days,
+        run.marks,
+        [s.tax_owed for s in run.snapshots],
+        [s.realized for s in run.snapshots],
+    )
+
+
+def scored_decisions(conn: Connection, market: str) -> list[Decision]:
+    """The decided rebalances with the expectations the LLM stated (none when it held)."""
+    rows = conn.execute(
+        select(
+            PortfolioTarget.execution_session,
+            PortfolioTarget.level,
+            PortfolioTarget.rule_level,
+            PortfolioTarget.satellite,
+            PortfolioTarget.held_satellite,
+            LlmDecision.answer,
+        )
+        .outerjoin(LlmDecision, LlmDecision.id == PortfolioTarget.llm_decision_id)
+        .where(PortfolioTarget.kind == "REBALANCE", PortfolioTarget.status == "DECIDED")
+    )
+    out = []
+    for day, level, rule_level, satellite, held, answer in rows:
+        stated = None if held else (answer or {}).get("satellite")
+        # Answers before prompt pm-2 carry no number to score.
+        expectations = {
+            w["symbol"]: w["expected_vs_market"]
+            for w in stated or ()
+            if w.get("expected_vs_market") is not None and w["symbol"] != market
+        }
+        shift = (level if level is not None else rule_level) - rule_level
+        out.append(Decision(day, shift, dict(satellite or {}), expectations))
+    return out
+
+
+def scorecard(conn: Connection, risk: RiskConfig, data: FundData, books: Books) -> Scorecard:
+    p = risk.portfolio
+    return score(
+        marks(books.sim),
+        marks(books.twin),
+        marks(books.spy),
+        scored_decisions(conn, p.market),
+        {s: data.closes(s, total_return=True) for s in sorted(data.total_return)},
+        market=p.market,
+        cash=p.cash,
+        satellite_share=p.satellite_share,
+        tax_rate=p.tax_rate,
+        cfg=risk.portfolio_manager.scorecard,
+    )
+
+
+def write_scorecard(conn: Connection, card: Scorecard, books: Books) -> dict[str, Any]:
+    """Each month's results and the book's trades on its E into its journal row."""
+    trades: dict[date, list[dict[str, Any]]] = defaultdict(list)
+    for t in books.sim.trades:
+        trades[t.day].append(
+            {"symbol": t.symbol, "units": t.units, "price": t.price, "reason": t.reason}
+        )
+    for period in card.periods:
+        conn.execute(
+            update(PortfolioJournal)
+            .where(PortfolioJournal.execution_session == period.session)
+            .values(
+                results=finite(period_json(period)),
+                trades=trades.get(period.session, []),
+                updated_at=func.now(),
+            )
+        )
+    summary = card.summary()
+    return {
+        "through": str(card.through),
+        "months_complete": int(summary["months_complete"]),
+        "excess_after_tax": round(summary["excess_after_tax"], 6),
+    }
 
 
 def rebalance_at(calendar: MarketCalendar, ranking: date) -> Rebalance | None:
@@ -272,7 +365,7 @@ def build_facts(
         macro=macro_facts(conn, ranking),
         headlines=(),
         history=past_decisions(conn, session, pm.history_months),
-        scorecard=None,
+        scorecard=finite(scorecard(conn, risk, data, books).summary()),
         notes=(DRY_RUN_NOTE,),
     )
 
@@ -355,8 +448,12 @@ def past_decisions(conn: Connection, before: date, months: int) -> list[PastDeci
     rows = (
         orm.Session(conn)
         .execute(
-            select(PortfolioTarget, LlmDecision.answer)
+            select(PortfolioTarget, LlmDecision.answer, PortfolioJournal.results)
             .outerjoin(LlmDecision, LlmDecision.id == PortfolioTarget.llm_decision_id)
+            .outerjoin(
+                PortfolioJournal,
+                PortfolioJournal.execution_session == PortfolioTarget.execution_session,
+            )
             .where(
                 PortfolioTarget.status == "DECIDED",
                 PortfolioTarget.kind == "REBALANCE",
@@ -368,7 +465,7 @@ def past_decisions(conn: Connection, before: date, months: int) -> list[PastDeci
         .all()
     )
     out = []
-    for target, answer in reversed(rows):
+    for target, answer, results in reversed(rows):
         summary = (answer or {}).get("summary") or (
             "held (the LLM failed)" if target.fell_back else ""
         )
@@ -378,7 +475,7 @@ def past_decisions(conn: Connection, before: date, months: int) -> list[PastDeci
                 round((target.level or target.rule_level) - target.rule_level, 4),
                 None if target.held_satellite else target.satellite,
                 summary,
-                None,  # the after-tax excess over the twin comes with the scorecard (4.4)
+                ((results or {}).get("after_tax") or {}).get("excess"),
                 bool(target.fell_back),
             )
         )
@@ -452,7 +549,8 @@ def simulate_books(
     source: FundBars,
     session: date,
 ) -> dict[str, Any]:
-    """The twin and the book through ``session``'s close into `twin_book`."""
+    """The books through ``session``'s close into `twin_book`, and the scorecard into the
+    journal."""
     start = trial_start(conn)
     if start is None or start > session:
         return {"skipped": "the trial hasn't started"}
@@ -468,7 +566,9 @@ def simulate_books(
         decided_targets(conn),
         rank_at_end=is_ranking,
     )
-    return write_books(conn, books)
+    out = write_books(conn, books)
+    out["scorecard"] = write_scorecard(conn, scorecard(conn, risk, data, books), books)
+    return out
 
 
 def finite(value: Any) -> Any:

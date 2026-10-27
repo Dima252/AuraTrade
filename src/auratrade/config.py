@@ -1387,6 +1387,22 @@ class LlmConfig(_Strict):
     prices: dict[str, TokenPrices] = Field(min_length=1)
 
 
+class PmScorecardConfig(_Strict):
+    """The scorecard of the Portfolio Manager's decisions (README §5.5; task 4.4)."""
+
+    # An expectation within this of 0 calls the fund level with the market fund; it is right
+    # when the outcome is within it too.
+    flat_band: Positive
+    # The size is right when the outcome is within this factor of the expectation, either way.
+    size_factor: Annotated[float, Field(gt=1.0)]
+    bootstrap_months: PositiveInt
+    """The headline's interval starts once this many months are complete."""
+    block_months: PositiveInt
+    samples: PositiveInt
+    confidence: Annotated[float, Field(gt=0.0, lt=1.0)]
+    seed: int
+
+
 class PortfolioManagerConfig(_Strict):
     """The Portfolio Manager's facts and tools (README §5.4; task 4.2)."""
 
@@ -1403,6 +1419,7 @@ class PortfolioManagerConfig(_Strict):
     deadline: time
     """US/Eastern on E."""
     headline_sessions: PositiveInt
+    scorecard: PmScorecardConfig
 
 
 RiskConfig.model_rebuild()

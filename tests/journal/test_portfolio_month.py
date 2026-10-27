@@ -218,10 +218,12 @@ def test_a_month_end_to_end(world: Engine) -> None:
     assert evening(world, bars, R_OCT) == {
         "TWIN": {"sessions": 1, "equity": 100_000.0},
         "SIM": {"sessions": 1, "equity": 100_000.0},
+        "SPY": {"sessions": 1, "equity": 100_000.0},
+        "scorecard": {"through": "2026-10-30", "months_complete": 0, "excess_after_tax": 0.0},
     }
 
     # E: the decision, through the guardrails, recorded.
-    tilt = answer([weight("GLD", 0.10), weight("SPY", 0.10)], core_shift=0.1)
+    tilt = answer([weight("GLD", 0.10, 0.01), weight("SPY", 0.10)], core_shift=0.1)
     out = decide(world, bars, E_NOV, tilt)
     assert out["fell_back"] is None
     assert out["satellite"] == {"GLD": 0.1, "SPY": 0.1}
@@ -250,6 +252,13 @@ def test_a_month_end_to_end(world: Engine) -> None:
     assert nov.account.lots["GLD"][0].opened == E_NOV
     assert [d.session for d in nov.history] == [E_NOV]
     assert nov.history[0].summary == "A quiet month."
+    # The month is still open at R: its excess to date, and the scorecard so far.
+    assert nov.history[0].excess_vs_twin is not None
+    assert nov.scorecard is not None
+    assert nov.scorecard["months_complete"] == 0
+    assert nov.scorecard["expectations_scored"] == 0
+    # From the trial's R, where the month's excess runs from its E.
+    assert "excess_after_tax" in nov.scorecard
 
     # The next E: a hold.
     out = decide(world, bars, E_DEC, answer(None))
@@ -263,8 +272,40 @@ def test_a_month_end_to_end(world: Engine) -> None:
     traded = {t["symbol"] for t in mark(world, "SIM", E_DEC).trades}
     assert "GLD" not in traded
 
+    # The scorecard: November's decision is scored to December's E against the twin and SPY.
     with world.connect() as conn:
-        assert conn.scalar(select(PromptVersion.id).limit(1)).startswith("pm-1-")
+        rows = orm.Session(conn).scalars(select(PortfolioJournal)).all()
+    by_e = {j.execution_session: j for j in rows}
+    nov_r, dec_r = by_e[E_NOV].results, by_e[E_DEC].results
+    assert nov_r["complete"] is True
+    assert nov_r["end"] == str(E_DEC)
+    assert dec_r["complete"] is False
+    assert {t["symbol"] for t in by_e[E_NOV].trades} == {"SPY", "SSO", "GLD"}
+    tr = {
+        s: {b.session: b.close for b in v}
+        for s, v in bars.daily_bars(
+            ["GLD", "SPY", "BIL"], E_NOV, E_DEC, adjustment=Adjustment.ALL
+        ).items()
+    }
+    r = {s: tr[s][E_DEC] / tr[s][E_NOV] - 1 for s in tr}
+    assert nov_r["tilts"] == {"GLD": pytest.approx(0.1 * (r["GLD"] - r["SPY"]))}
+    assert nov_r["shift_score"] == pytest.approx(0.1 * (r["SPY"] - r["BIL"]))
+    (expectation,) = nov_r["expectations"]
+    assert expectation["symbol"] == "GLD"
+    assert expectation["expected"] == 0.01
+    assert expectation["actual"] == pytest.approx(r["GLD"] - r["SPY"])
+    assert dec_r["expectations"] == []  # open, and a hold states none
+    sim_b, twin_b = mark(world, "SIM", E_NOV), mark(world, "TWIN", E_NOV)
+    sim_e, twin_e = mark(world, "SIM", E_DEC), mark(world, "TWIN", E_DEC)
+    after = (sim_e.equity - sim_e.tax_owed) / (sim_b.equity - sim_b.tax_owed) - (
+        twin_e.equity - twin_e.tax_owed
+    ) / (twin_b.equity - twin_b.tax_owed)
+    assert nov_r["after_tax"]["excess"] == pytest.approx(after)
+    assert sim_e.tax_owed > 0  # gains and a dividend owe tax if sold
+    assert mark(world, "SPY", E_DEC).holdings.keys() == {"SPY"}
+
+    with world.connect() as conn:
+        assert conn.scalar(select(PromptVersion.id).limit(1)).startswith("pm-2-")
         decisions = orm.Session(conn).scalars(select(LlmDecision).order_by(LlmDecision.id)).all()
         journal = orm.Session(conn).scalars(select(PortfolioJournal)).all()
     assert [d.failure for d in decisions] == [None, None]

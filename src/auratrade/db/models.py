@@ -934,7 +934,7 @@ class VerdictOutcomeRow(Base):
 
 TARGET_KINDS = ("REBALANCE", "EVENT")
 TARGET_STATUSES = ("ALLOCATED", "DECIDED")
-BOOKS = ("TWIN", "SIM")
+BOOKS = ("TWIN", "SIM", "SPY")
 LOT_KINDS = ("LOT", "INCOME")
 
 
@@ -1040,8 +1040,9 @@ class TaxLot(Base):
 
 
 class BookMark(Base):
-    """The twin's simulated account each session (README §5.5) and, in `dry_run`, the book's
-    own decisions replayed (SIM, #166): rewritten whole each evening from the trial's start."""
+    """The twin's simulated account each session (README §5.5), in `dry_run` the book's own
+    decisions replayed (SIM, #166), and SPY bought and held (the scorecard's third line, task
+    4.4): rewritten whole each evening from the trial's start."""
 
     __tablename__ = "twin_book"
     __table_args__ = (CheckConstraint(_in("book", BOOKS), name="book"),)
@@ -1055,6 +1056,8 @@ class BookMark(Base):
     trades: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
     halted: Mapped[bool] = mapped_column(Boolean)
     peak_equity: Mapped[float] = mapped_column(Double)
+    tax_owed: Mapped[float] = mapped_column(Double, server_default=text("0"))
+    """The estimated tax if everything were sold at the close: equity less it is "after tax"."""
     updated_at: Mapped[datetime] = _created()
 
 

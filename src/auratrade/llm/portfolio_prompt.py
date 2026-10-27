@@ -17,7 +17,7 @@ from dataclasses import dataclass
 
 from auratrade.config import PortfolioConfig
 
-VERSION = "pm-1"
+VERSION = "pm-2"
 
 _TEXT = """\
 You are the Portfolio Manager of AuraTrade, an autonomous portfolio on a paper account. Its \
@@ -91,7 +91,9 @@ rising.
 - `satellite`: null to hold last month's satellite, or the complete new satellite: every ETF \
 to hold, each with its weight as a fraction of equity. An ETF left out is sold. Each entry has \
 an `expectation`, one line checkable at the next decision (the direction and rough size of its \
-return against {market} until then), and `why_not_hold`.
+return against {market} until then), `expected_vs_market`, the same as a number (its return \
+less {market}'s until the next decision: 0.01 is one point ahead, -0.02 two behind; the \
+scorecard checks its direction and rough size), and `why_not_hold`.
 - `tax_note`: the tax this decision realizes in dollars, and why it is worth it (or "none").
 - `summary`: at most 120 words of plain English for the journal and the public dashboard.
 

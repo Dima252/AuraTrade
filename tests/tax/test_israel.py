@@ -145,3 +145,33 @@ class TestFifoGain:
     def test_nothing_sold_and_no_lots(self) -> None:
         assert fifo_gain(self.LOTS, 0.0, 50.0) == 0.0
         assert fifo_gain((), 2.0, 50.0) == 100.0
+
+
+class TestTaxIfSold:
+    def test_the_years_gains_the_sale_and_the_income(self) -> None:
+        book = two_lots()  # cost 2,500
+        book.sell("SPY", JUNE, 10, 1200.0)  # +200 realized; 10 units at 1,500 left
+        book.add_income(JUNE, 40.0)
+        # (200 + (1,800 - 1,500)) x 25% + (40 + 10 pending) x 25%
+        assert book.tax_if_sold(2020, {"SPY": 1800.0}, 10.0) == pytest.approx(137.5)
+
+    def test_a_loss_offsets_gains_but_not_income(self) -> None:
+        book = TaxBook(0.25, carry=500.0)
+        book.buy("SPY", JAN, 10, 1000.0)
+        book.add_income(JUNE, 100.0)
+        # 300 unrealized less 500 carried in: no gain tax, the income still taxed.
+        assert book.tax_if_sold(2020, {"SPY": 1300.0}) == pytest.approx(25.0)
+
+    def test_after_the_year_closes_the_sale_falls_in_the_next(self) -> None:
+        book = two_lots()
+        book.sell("SPY", JUNE, 10, 1200.0)
+        book.add_income(JUNE, 40.0)
+        book.close_year(2020)  # paid: 50 on the gain, 10 on the income
+        assert book.tax_if_sold(2020, {"SPY": 1800.0}) == pytest.approx(75.0)
+        assert book.tax_if_sold(2021, {"SPY": 1800.0}) == pytest.approx(75.0)
+
+    def test_every_lot_needs_a_value(self) -> None:
+        with pytest.raises(ValueError, match="no value"):
+            two_lots().tax_if_sold(2020, {})
+        with pytest.raises(ValueError, match="negative pending"):
+            two_lots().tax_if_sold(2020, {"SPY": 1.0}, -1.0)

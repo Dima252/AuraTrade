@@ -117,8 +117,14 @@ def answer(
     return body
 
 
-def weight(symbol: str, w: float) -> dict[str, Any]:
-    return {"symbol": symbol, "weight": w, "expectation": "flat", "why_not_hold": "unchanged"}
+def weight(symbol: str, w: float, expected: float = 0.0) -> dict[str, Any]:
+    return {
+        "symbol": symbol,
+        "weight": w,
+        "expectation": "flat",
+        "expected_vs_market": expected,
+        "why_not_hold": "unchanged",
+    }
 
 
 def run(api: Api, f: PmFacts | None = None, *, increases_allowed: bool = True) -> PmResult:
@@ -151,7 +157,7 @@ def test_a_normal_month_tilts_and_shifts_within_the_limits() -> None:
     assert result.enforced.targets == pytest.approx(
         book_targets(1.4, {"GLD": 0.10, "QQQ": 0.10}, P)
     )
-    assert result.prompt_id.startswith("pm-1-")
+    assert result.prompt_id.startswith("pm-2-")
 
     body = api.requests[0]
     assert "Holding is the default" in body["system"][0]["text"]

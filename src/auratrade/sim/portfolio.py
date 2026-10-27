@@ -214,6 +214,10 @@ class Snapshot:
     """Uninvested cash with the payouts earned but not yet paid."""
     halted: bool
     peak: float
+    tax_owed: float = 0.0
+    """The estimated tax if everything were sold at this close (`TaxBook.tax_if_sold`)."""
+    realized: float = 0.0
+    """The year's realized gains so far."""
 
 
 @dataclass(slots=True)
@@ -396,8 +400,20 @@ class _Simulation:
         self.run.marks.append(value)
         if self.snapshots:
             a = self.acct
-            cash = a.cash + math.fsum(a.accrued.values())
-            self.run.snapshots.append(Snapshot(dict(a.units), cash, self.halt.on, self.halt.peak))
+            accrued = math.fsum(a.accrued.values())
+            # Every lot's fund: a sale's float dust can leave a lot whose units are gone.
+            values = {s: a.units.get(s, 0.0) * prices[s] for s in a.tax.symbols()}
+            owed = a.tax.tax_if_sold(day.year, values, accrued)
+            self.run.snapshots.append(
+                Snapshot(
+                    dict(a.units),
+                    a.cash + accrued,
+                    self.halt.on,
+                    self.halt.peak,
+                    owed,
+                    a.tax.realized(day.year),
+                )
+            )
 
     def finish(self, end: int) -> None:
         day = self.m.days[end]
