@@ -33,7 +33,7 @@ from auratrade.db.models import (
 from auratrade.jobs import allocate as allocate_job
 from auratrade.jobs import portfolio_manager as pm_job
 from auratrade.jobs.base import NY, JobContext
-from auratrade.journal.decisions import deadline, is_execution
+from auratrade.journal.decisions import deadline, is_execution, news_window
 from auratrade.journal.portfolio import simulate_books
 from auratrade.llm.portfolio_facts import Event, EventKind, facts_from_json
 from tests.llm.test_client import Api, client, fixture
@@ -225,7 +225,7 @@ def test_a_month_end_to_end(world: Engine) -> None:
     out = decide(world, bars, E_NOV, tilt)
     assert out["fell_back"] is None
     assert out["satellite"] == {"GLD": 0.1, "SPY": 0.1}
-    assert out["level"] == pytest.approx(1.4)
+    assert out["book_level"] == pytest.approx(1.4)
     assert out["increases_allowed"] is True
     (row,) = targets(world)
     assert row.status == "DECIDED"
@@ -254,7 +254,7 @@ def test_a_month_end_to_end(world: Engine) -> None:
     # The next E: a hold.
     out = decide(world, bars, E_DEC, answer(None))
     assert out["held_satellite"] is True
-    assert out["level"] == pytest.approx(RISK.portfolio.up_level)
+    assert out["book_level"] == pytest.approx(RISK.portfolio.up_level)
     dec = targets(world)[1]
     assert dec.held_satellite
     assert dec.satellite == pytest.approx({"GLD": 0.1, "SPY": 0.1})
@@ -323,7 +323,7 @@ def test_an_event_decides_at_once_and_only_reduces_risk(world: Engine) -> None:
         event=event,
     )
     assert out["increases_allowed"] is False
-    assert out["level"] <= RISK.portfolio.capped_level
+    assert out["book_level"] <= RISK.portfolio.capped_level
     rows = targets(world)
     assert [r.kind for r in rows] == ["REBALANCE", "EVENT"]
     event_row = rows[1]
@@ -375,3 +375,15 @@ def test_a_late_answer_on_e_holds(world: Engine) -> None:
     out = dict(spec.run(context("portfolio_manager", E_NOV)) or {})
     assert out["fell_back"] == "DEADLINE"
     assert api.requests == []  # no request starts after the deadline
+
+
+def test_a_replay_reads_no_news_after_e(world: Engine) -> None:
+    with world.connect() as conn:
+        calendar = load_calendar(conn)
+    open_e = datetime.combine(E_NOV, time(9, 30), tzinfo=NY)
+    later = open_e + timedelta(days=20)
+    start, end = news_window(calendar, RISK, E_NOV, later)
+    assert end == open_e
+    assert start == datetime.combine(date(2026, 10, 26), time(9, 30), tzinfo=NY)
+    morning = datetime.combine(E_NOV, time(8, 45), tzinfo=NY)
+    assert news_window(calendar, RISK, E_NOV, morning)[1] == morning

@@ -169,7 +169,7 @@ def decide_rebalance(
     if row.status == "DECIDED":
         return {"skipped": "already decided"}
     facts = facts_from_json(row.facts)
-    news_start, news_end = _news_window(calendar, risk, session, m.now)
+    news_start, news_end = news_window(calendar, risk, session, m.now)
     facts = replace(facts, headlines=headlines(m.news, risk, news_start, news_end))
     first = window_start(calendar, trial_start(conn) or row.ranking_session, risk)
     data = fetch_funds(m.funds, risk, first, row.ranking_session)
@@ -219,7 +219,7 @@ def decide_event(
     previous = facts_from_json(last.facts)
     halted = fresh.trend.halted or event.kind == "HALT"
     trend = replace(previous.trend, halted=halted)
-    news_start, news_end = _news_window(calendar, risk, session, m.now)
+    news_start, news_end = news_window(calendar, risk, session, m.now)
     facts = replace(
         fresh,
         ranking_session=last.ranking_session,
@@ -330,7 +330,7 @@ def summary(result: PmResult, allowed: bool) -> dict[str, Any]:
     return {
         "fell_back": result.outcome.failure,
         "held_satellite": result.held_satellite,
-        "level": round(e.level, 4),
+        "book_level": round(e.level, 4),
         "satellite": {k: round(v, 4) for k, v in e.satellite.items()},
         "clips": [f.rule.value for f in e.findings],
         "increases_allowed": allowed,
@@ -368,11 +368,15 @@ def _turn(t: Turn) -> dict[str, Any]:
     }
 
 
-def _news_window(
+def news_window(
     calendar: MarketCalendar, risk: RiskConfig, session: date, now: datetime
 ) -> tuple[datetime, datetime]:
+    """From ``headline_sessions`` back to now, but never past E's open: a replay of an earlier
+    session must not read the news that came after it (look-ahead)."""
     back = calendar.n_sessions_back(session, risk.portfolio_manager.headline_sessions)
-    return back.open_at, now
+    e = calendar.session_for(session)
+    end = now if e is None else min(now, e.open_at)
+    return back.open_at, end
 
 
 def is_execution(calendar: MarketCalendar, session: date) -> bool:

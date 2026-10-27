@@ -91,7 +91,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 **Phase 4: LLM layer** (after a 3.23 pass or near miss, #156)
 - [x] 4.1 👤 The Claude client (structured outputs, caching, refusals); the cost estimate for your OK *(2026-10-27: `llm/client.py`, `risk.yaml` `llm:`, 100% branch coverage; readings #162. You approved the estimate ($0.20-0.40 a decision, about $3-5 a year) and the recording: one real call, $0.017, replayed in the tests)*
 - [x] 4.2 The Portfolio Manager: facts, tools, schema, prompt, the final ETF list, guardrail wiring, the hold fallback *(#164, #165: a failure holds; the list is final; the real prompt measured at ~8,500 tokens, ~$0.15-0.30 a decision)*
-- [ ] 4.3 `allocate` + `portfolio_manager` + the twin in `simulate`, in `dry_run`; migration (targets, tax lots, twin, journal)
+- [x] 4.3 `allocate` + `portfolio_manager` + the twin in `simulate`, in `dry_run`; migration (targets, tax lots, twin, journal) *(#166: in `dry_run` the account is the simulated book; first real decision on dev, $0.058; a month replayed in `tests/journal/test_portfolio_month.py`)*
 - [ ] 4.4 The scorecard (book vs twin vs SPY, before and after the estimated tax)
 
 **Phase 5: Execution**
