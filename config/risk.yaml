@@ -564,3 +564,15 @@ portfolio:  # README §5.4, §6-§8: the portfolio manager (#154-#155); docs/bac
     max_session_gap_days: 7
     blind_max_flips_per_year: 4
     blind_max_halt_share: 0.30
+
+llm:  # README §9; see auratrade.llm.client (task 4.1). The model and its effort are settings (PM_MODEL, PM_EFFORT).
+  max_tokens: 16000                  # per response, thinking included; non-streaming stays under the SDK's timeout
+  max_turns: 6                       # tool rounds in one decision; the last must answer
+  request_timeout_seconds: 300       # one attempt; the job's deadline cuts it shorter
+  max_retries: 2                     # the SDK's retries of 408/409/429/5xx and connection errors
+  fallbacks: true                    # server-side fallbacks on a refusal (fallbacks "default"); the answering model is stored
+  cost_alert_usd: 1.00               # one decision (all its turns) above this alerts
+  prices:                            # US$ per million tokens; cache writes at the 5-minute rate (1.25x input)
+    claude-opus-5-5: {input: 4.00, output: 20.00, cache_write: 5.00, cache_read: 0.20}
+    claude-opus-5: {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}
+    claude-opus-4-8: {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}

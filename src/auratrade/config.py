@@ -453,6 +453,7 @@ class RiskConfig(_Strict):
     baseline: BaselineConfig
     scorecard: ScorecardConfig
     portfolio: PortfolioConfig
+    llm: LlmConfig
 
     @cached_property
     def config_hash(self) -> str:
@@ -1351,6 +1352,29 @@ class PortfolioConfig(_Strict):
         if self.max_etf_weight > self.satellite_share:
             raise ValueError("portfolio max_etf_weight can't exceed satellite_share")
         return self
+
+
+class TokenPrices(_Strict):
+    """One model's list prices, US$ per million tokens."""
+
+    input: Positive
+    output: Positive
+    cache_write: Positive
+    cache_read: Positive
+
+
+class LlmConfig(_Strict):
+    """The Claude client (README §9; task 4.1); see ``auratrade.llm.client``."""
+
+    max_tokens: PositiveInt
+    max_turns: PositiveInt
+    request_timeout_seconds: Positive
+    max_retries: Annotated[int, Field(ge=0)]
+    fallbacks: bool
+    cost_alert_usd: Positive
+    # Keyed by model id. A model missing here (a server-side fallback's) is priced at the
+    # dearest listed, so a cost is never understated.
+    prices: dict[str, TokenPrices] = Field(min_length=1)
 
 
 RiskConfig.model_rebuild()

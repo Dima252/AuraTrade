@@ -1,0 +1,21 @@
+{
+  "id": "msg_01AnswerTurn",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+    {"type": "thinking", "thinking": "", "signature": "EqQBCkYIBxgCKkAnswer"},
+    {"type": "text", "text": "{\"core_shift\": -0.1, \"summary\": \"Trim the core while volatility is high.\"}"}
+  ],
+  "stop_reason": "end_turn",
+  "stop_sequence": null,
+  "stop_details": null,
+  "usage": {
+    "input_tokens": 6648,
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 1668,
+    "output_tokens": 1815,
+    "output_tokens_details": {"thinking_tokens": 792},
+    "service_tier": "standard"
+  }
+}
