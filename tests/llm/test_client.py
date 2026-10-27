@@ -369,6 +369,44 @@ def test_an_answer_in_time_is_kept() -> None:
     assert outcome.ok
 
 
+# --- the recorded call (scripts/record_claude_fixtures.py, 2026-10-27) ------------------------
+
+
+class Weight(pydantic.BaseModel):
+    symbol: str
+    weight: float
+
+
+class RecordedAnswer(pydantic.BaseModel):
+    core_shift: float
+    satellite: list[Weight]
+    summary: str
+
+
+def test_the_recorded_call_replays_to_a_validated_answer() -> None:
+    api = Api(fixture("recorded_turn1"), fixture("recorded_turn2"))
+    calls: list[str] = []
+    outcome = client(api).decide(
+        system="s", content="facts", answer=RecordedAnswer, tools=[facts_tool(calls)]
+    )
+    assert outcome.ok
+    assert outcome.value is not None
+    assert outcome.value.core_shift == 0.1
+    assert outcome.value.satellite == [Weight(symbol="GLD", weight=0.1)]
+    assert calls == ["GLD"]
+    # The real tool_use block carries `caller`; it goes back as received.
+    echoed = api.requests[1]["messages"][1]["content"]
+    assert echoed[0]["caller"] == {"type": "direct"}
+    first, last = outcome.turns
+    # `usage.iterations` comes without a fallback too, its model null: the requested model.
+    assert not outcome.fallback
+    assert (first.cache_write_tokens, last.cache_read_tokens) == (1049, 1049)
+    assert last.thinking_tokens == 214
+    assert first.cost_usd == pytest.approx((4 * 4 + 1049 * 5 + 55 * 20) / 1e6)
+    assert last.cost_usd == pytest.approx((2 * 4 + 1049 * 0.2 + 93 * 5 + 501 * 20) / 1e6)
+    assert outcome.cost_usd == pytest.approx(0.0171, abs=1e-4)
+
+
 # --- construction -----------------------------------------------------------------------------
 
 
