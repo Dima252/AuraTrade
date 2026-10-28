@@ -1,6 +1,5 @@
-"""The public tools as a remote MCP server: a Lambda function whose URL takes AWS IAM auth, so
-only the account's own credentials reach it, through `mcp-proxy-for-aws` (README §5.10, task 6.4
-step 2, #175).
+"""The public tools as a remote MCP server: a Lambda function with a public URL, for any MCP
+client (README §5.10, task 6.4 step 2, #175). `infra/stacks/mcp.py` bounds what it can cost.
 
 MCP's Streamable HTTP in its stateless, JSON-response form: each POST is one JSON-RPC exchange
 answered in full, so nothing lives between invocations and no session needs a sticky route.
@@ -24,9 +23,10 @@ from auratrade.mcp_server.__main__ import public_deps
 from auratrade.mcp_server.server import ServerDeps, build_server
 
 SNAPSHOT = "MCP_SNAPSHOT"
+SNAPSHOT_MAX_AGE = 60.0
 PATH = "/mcp"
-# The Host is the function URL's own and IAM decides who gets in; DNS rebinding guards a server
-# on a laptop's localhost, not this one.
+# The Host is the function URL's own; DNS rebinding guards a server on a laptop's localhost, not
+# this one.
 ANY_HOST = TransportSecuritySettings(enable_dns_rebinding_protection=False)
 # Set again by httpx for the request it sends to the app.
 HOP_HEADERS = frozenset({"host", "content-length", "transfer-encoding", "connection"})
@@ -34,7 +34,8 @@ HOP_HEADERS = frozenset({"host", "content-length", "transfer-encoding", "connect
 
 @cache
 def _deps() -> ServerDeps:
-    return public_deps(os.environ.get(SNAPSHOT))
+    # The snapshot changes once an evening: one S3 read a minute per container, however busy.
+    return public_deps(os.environ.get(SNAPSHOT), max_age=SNAPSHOT_MAX_AGE)
 
 
 def handler(event: dict[str, Any], context: object) -> dict[str, Any]:

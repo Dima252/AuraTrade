@@ -1,4 +1,4 @@
-"""Synthesizes the remote MCP server's stack offline (no AWS calls) and checks who can reach it
+"""Synthesizes the remote MCP server's stack offline (no AWS calls) and checks what bounds it
 (README §5.10, #175)."""
 
 from __future__ import annotations
@@ -13,9 +13,17 @@ cdk = pytest.importorskip("aws_cdk")
 assertions = pytest.importorskip("aws_cdk.assertions")
 s3 = pytest.importorskip("aws_cdk.aws_s3")
 
-from stacks.mcp import FUNCTION_NAME, SNAPSHOT_KEY, McpStack  # noqa: E402
+from stacks.mcp import (  # noqa: E402
+    BREAKER_CALLS_PER_HOUR,
+    BREAKER_NAME,
+    CONCURRENCY,
+    FUNCTION_NAME,
+    SNAPSHOT_KEY,
+    McpStack,
+)
 
 Template = assertions.Template
+Match = assertions.Match
 ENV = cdk.Environment(account="123456789012", region="us-east-1")
 
 
@@ -32,30 +40,70 @@ def template() -> Any:
     return Template.from_stack(stack)
 
 
-def test_only_the_accounts_own_credentials(template: Any) -> None:
-    # A request without them is refused before the function runs: no stranger's bill, no
-    # stranger taking the trading jobs' concurrency.
-    template.has_resource_properties("AWS::Lambda::Url", {"AuthType": "AWS_IAM"})
-    template.resource_count_is("AWS::Lambda::Permission", 0)
-    template.resource_count_is("AWS::CloudFront::Distribution", 0)
-
-
-def test_the_function(template: Any) -> None:
+def _function(template: Any, name: str) -> dict[str, Any]:
     [fn] = template.find_resources(
-        "AWS::Lambda::Function", {"Properties": {"FunctionName": FUNCTION_NAME}}
+        "AWS::Lambda::Function", {"Properties": {"FunctionName": name}}
     ).values()
-    props = fn["Properties"]
+    return dict(fn["Properties"])
+
+
+def test_a_public_url_capped_at_one_run(template: Any) -> None:
+    # Public: any MCP client, no auth (it serves only what the site shows). One run at a time,
+    # which caps a function URL at 10 requests a second and leaves the trading jobs' concurrency.
+    template.has_resource_properties("AWS::Lambda::Url", {"AuthType": "NONE"})
+    props = _function(template, FUNCTION_NAME)
+    assert props["ReservedConcurrentExecutions"] == CONCURRENCY == 1
     assert props["PackageType"] == "Image"
+    assert props["ImageConfig"]["Command"] == ["auratrade.mcp_server.remote.handler"]
     assert props["Timeout"] <= 60
-    assert "ReservedConcurrentExecutions" not in props  # the account's limit is 10
     variable = props["Environment"]["Variables"]["MCP_SNAPSHOT"]["Fn::Join"][1]
     assert variable[0] == "s3://"
     assert variable[-1] == f"/{SNAPSHOT_KEY}"
+    template.resource_count_is("AWS::CloudFront::Distribution", 0)
 
 
-def test_it_reads_the_snapshot_alone(template: Any) -> None:
-    [policy] = template.find_resources("AWS::IAM::Policy").values()
-    [statement] = policy["Properties"]["PolicyDocument"]["Statement"]
+def test_the_breaker_switches_the_server_off(template: Any) -> None:
+    template.has_resource_properties(
+        "AWS::CloudWatch::Alarm",
+        {
+            "MetricName": "Invocations",
+            "Namespace": "AWS/Lambda",
+            "Statistic": "Sum",
+            "Period": 3600,
+            "Threshold": BREAKER_CALLS_PER_HOUR,
+            "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+            "TreatMissingData": "notBreaching",
+            "AlarmActions": [Match.object_like({"Fn::GetAtt": Match.any_value()})],
+        },
+    )
+    breaker = _function(template, BREAKER_NAME)
+    assert breaker["ImageConfig"]["Command"] == ["auratrade.mcp_breaker.handler"]
+    assert breaker["Environment"]["Variables"]["MCP_FUNCTION"] == FUNCTION_NAME
+    assert "ReservedConcurrentExecutions" not in breaker
+    # The alarm may invoke it; nothing else is granted an invoke.
+    template.has_resource_properties(
+        "AWS::Lambda::Permission",
+        {"Action": "lambda:InvokeFunction", "Principal": "lambda.alarms.cloudwatch.amazonaws.com"},
+    )
+
+
+def _statements(template: Any, role_prefix: str) -> list[dict[str, Any]]:
+    policies = template.find_resources("AWS::IAM::Policy")
+    [policy] = [p for name, p in policies.items() if name.startswith(role_prefix)]
+    return list(policy["Properties"]["PolicyDocument"]["Statement"])
+
+
+def test_the_breaker_may_only_switch_off_and_read_the_bot(template: Any) -> None:
+    off, bot = _statements(template, "Breaker")
+    assert off["Action"] == "lambda:PutFunctionConcurrency"
+    assert "Fn::GetAtt" in off["Resource"]  # the server's ARN, no wildcard
+    assert bot["Action"] == "ssm:GetParameters"
+    names = [r["Fn::Join"][1][-1].rsplit(":parameter", 1)[1] for r in bot["Resource"]]
+    assert names == ["/auratrade/paper/TELEGRAM_BOT_TOKEN", "/auratrade/paper/TELEGRAM_CHAT_ID"]
+
+
+def test_the_server_reads_the_snapshot_alone(template: Any) -> None:
+    [statement] = _statements(template, "Server")
     assert statement["Action"] == "s3:GetObject"
     assert statement["Resource"]["Fn::Join"][1][-1] == f"/{SNAPSHOT_KEY}"
 
@@ -63,6 +111,7 @@ def test_it_reads_the_snapshot_alone(template: Any) -> None:
 def test_the_image_is_the_mcp_target() -> None:
     app, _ = _app()
     assets = json.loads((Path(app.synth().directory) / "Mcp.assets.json").read_text())
+    # One image for the server and the breaker.
     [image] = assets["dockerImages"].values()
     assert image["source"]["dockerBuildTarget"] == "mcp"
 

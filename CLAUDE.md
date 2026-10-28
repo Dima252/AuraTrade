@@ -101,7 +101,7 @@ uv run python scripts/reset_trading_state.py --env-file .env.paper   # plan clea
 uv run python scripts/preview_site.py     # the public site and its dashboard on 127.0.0.1:8000 (the local snapshot; --snapshot FILE for another)
 uv run python scripts/rehearse_orders.py plan --level 1.3 --satellite SPY=0.15,GLD=0.05   # dev only: a decided rebalance for today, traded by the real execute_close (then `clear`)
 uv run --env-file .env.paper python -m auratrade.mcp_server   # the read-only MCP server over stdio (6.4; Claude Code reads .mcp.json; --public: the snapshot's tools only)
-cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade   # the remote MCP server, IAM auth: yours only (user's OK first, #175); its McpUrl goes to mcp-proxy-for-aws
+cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade   # the public remote MCP server (user's OK first; needs Lambda concurrency > 10, #175); prints McpUrl
 uv run --env-file .env.paper auratrade flatten --confirm   # emergency: kill switch on, sell everything (market hours); docs/runbook.md for every alert
 cd infra && npx aws-cdk deploy AuraTradePaper -c trading_mode=paper --profile auratrade   # the stack on AWS (user's OK first; 1.8, then 6.1 with the portfolio's jobs; deploys the site first, #171)
 ```

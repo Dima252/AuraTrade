@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from functools import cache
@@ -64,12 +65,27 @@ class Snapshot:
         *,
         http: Callable[[str], httpx.Response] | None = None,
         s3: Callable[[str, str], bytes | None] | None = None,
+        max_age: float = 0.0,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._location = location
         self._http = http or (lambda url: httpx.get(url, timeout=10.0, follow_redirects=True))
         self._s3 = s3 or _s3_object
+        self._max_age = max_age
+        self._clock = clock
+        self._kept: tuple[float, Mapping[str, Any]] | None = None
 
     def read(self) -> Mapping[str, Any]:
+        """The snapshot, or the last one read within `max_age` seconds (a remote server under
+        load shouldn't fetch an evening's file on every call)."""
+        now = self._clock()
+        if self._kept is not None and now - self._kept[0] < self._max_age:
+            return self._kept[1]
+        data = self._fetch()
+        self._kept = (now, data)
+        return data
+
+    def _fetch(self) -> Mapping[str, Any]:
         where = self._location
         if where is None:
             raise SourceError("no snapshot location: start the server with --snapshot")

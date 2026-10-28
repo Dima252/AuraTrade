@@ -182,3 +182,26 @@ def test_a_bucket_error(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sources, "_s3_client", lambda: _S3("SlowDown"))
     with pytest.raises(ClientError):
         sources._s3_object("b", "k")
+
+
+def test_the_snapshot_kept_for_its_max_age() -> None:
+    reads: list[str] = []
+    now = [0.0]
+
+    def s3(bucket: str, key: str) -> bytes | None:
+        reads.append(key)
+        return b'{"n": %d}' % len(reads)
+
+    snap = Snapshot("s3://b/data/snapshot.json", s3=s3, max_age=60, clock=lambda: now[0])
+
+    assert snap.read() == {"n": 1}
+    now[0] = 59.9
+    assert snap.read() == {"n": 1}
+    now[0] = 60.0
+    assert snap.read() == {"n": 2}
+    assert len(reads) == 2
+    # Without a max age (the local server) every call reads afresh.
+    fresh = Snapshot("s3://b/data/snapshot.json", s3=s3)
+    fresh.read()
+    fresh.read()
+    assert len(reads) == 4

@@ -148,6 +148,7 @@ def test_the_handler_reads_its_snapshot_from_the_environment(
         deps = remote._deps()
         assert deps.operator is None
         assert deps.snapshot._location == "s3://site-bucket/data/snapshot.json"
+        assert deps.snapshot._max_age == remote.SNAPSHOT_MAX_AGE
         assert remote._deps() is deps
         response = remote.handler(_event(_call("tools/list")), None)
         assert response["statusCode"] == 200
