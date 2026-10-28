@@ -1,4 +1,4 @@
-# What's next: status at 2026-10-28
+# What's next: status at 2026-10-28 (deployed)
 
 A handoff for the next session. The [progress tracker](execution-plan.md#progress-tracker) is the source of truth for task order; this page says where things stand and what blocks what. The earlier record (the setup system, the momentum book, the 1.8 acceptance log) is archived in [archive/next-steps-2026-10-26.md](archive/next-steps-2026-10-26.md).
 
@@ -11,14 +11,14 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 
 ## Next
 
-1. **The order rehearsal on `dev`:** the user resets the `dev` Alpaca account to $100,000; then, during market hours, the rehearsal's three passes (up-trend buys with SSO's stop, a down-trend sale through the stop sequence, `auratrade flatten`), and that evening's tax lots from the real fills.
-2. **Task 6.1, the deploy:** [runbook.md](runbook.md)'s start checklist. For the first rebalance to be Monday 2 Nov, it must be done before **Friday 30 Oct, 16:20 ET** (R's evening); otherwise the first E is Tuesday 1 Dec.
+1. **Deployed 2026-10-28** (task 6.1's checklist, [runbook.md](runbook.md)): the `paper` account (…0O7Z) at $100,000, the kill switch off. The site is https://dk5a9tokky27z.cloudfront.net.
+2. **Friday 30 Oct (R), evening:** `allocate` reads the trend and writes the facts; the trial starts there, and the dashboard's snapshot with it.
+3. **Monday 2 Nov (E):** `portfolio_manager` at 08:45 (a paid call), `execute_close` at 15:40: the first real orders. Check the fills, SSO's stop at the broker, and that evening's tax lots.
+4. **The carried 1.7 / 1.8 checks** (the stop hand check on SSO, the watchdog and dead-man's-switch tests, cost and Neon compute), then three rebalances unattended.
 
 ## Open items for the user
 
-- **The `paper` account** is reset to $100,000 in the Alpaca dashboard (it holds $5,000 and 7 SLN from the setup system).
-- **The `paper` database** is at migration 0006; the checklist migrates it to head (0012).
-- **The old stack (`AuraTradePaper`)** still runs the setup skeleton with the kill switch on; the deploy replaces it.
+- **The order rehearsal on `dev`** wasn't run (`dev` not reset); it stays available (`scripts/rehearse_orders.py`).
 - **README §5.9** says LLM payloads go to S3; they are kept in `llm_decisions`. The user decides which is right.
 
 ## Environment notes
