@@ -101,7 +101,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 
 **Phase 6: The paper trial and the showcase**
 - [ ] 6.1 👤 `paper` reset to $100,000; deploy the portfolio's stack; kill switch off; the carried 1.7 / 1.8 checks; three monthly rebalances unattended
-- [ ] 6.2 The public dashboard (book vs twin vs SPY, exposure, the decision journal, the backtest's result)
+- [ ] 6.2 The public dashboard (book vs twin vs SPY, exposure, the decision journal, the backtest's result) *(built, #171: `simulate` publishes the snapshot to the site's `data/snapshot.json` (a grant on that key alone, `data/*` cached 5 minutes); `web/dashboard.js` draws returns before and after tax, exposure, the satellite, the scorecard and the journal; `scripts/preview_site.py` for a local look; checked by eye on a synthetic snapshot in light, dark and narrow. Left: `cdk deploy AuraTradePublicSite` (you; it goes with 6.1's deploy), then the page checked on the first real snapshot)*
 - [ ] 6.3 12 months of paper; the latitude rule (B4) pre-registered before month 12
 
 **Phase 7: Optional**

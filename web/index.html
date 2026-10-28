@@ -8,6 +8,7 @@
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
+  <script src="dashboard.js" defer></script>
 </head>
 <body>
   <header class="top">
@@ -17,6 +18,7 @@
         AuraTrade
       </a>
       <nav aria-label="Sections">
+        <a href="#results">Results</a>
         <a href="#how">How it works</a>
         <a href="#limits">Risk limits</a>
         <a href="#validation">Validation</a>
@@ -47,7 +49,17 @@
       </div>
     </section>
 
-    <section id="how" class="band">
+    <section id="results" class="band">
+      <div class="wrap">
+        <h2>The book so far</h2>
+        <p class="section-lede">The account against its rules-only twin and the S&amp;P 500, before and after the estimated tax, with every month's decision and its reasons. Updated each evening.</p>
+        <div id="dash" class="dash" aria-live="polite">
+          <p class="dash-empty">The paper trial hasn't started yet. From its first month, this section shows the book against the twin and the S&amp;P 500, the exposure history, the scorecard and the decision journal, updated every trading evening.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="band alt">
       <div class="wrap">
         <h2>Who decides what</h2>
         <p class="section-lede">The split is the core of the design: judgement goes to the model, arithmetic and safety stay in code.</p>
@@ -85,7 +97,7 @@
       </div>
     </section>
 
-    <section class="band alt">
+    <section class="band">
       <div class="wrap">
         <h2>The trend dial</h2>
         <p class="section-lede">How much of the S&amp;P 500 the core owns. A 2% buffer around the average keeps it from flipping on noise, and from selling, and paying tax, more than it must.</p>
@@ -106,7 +118,7 @@
       </div>
     </section>
 
-    <section id="limits" class="band">
+    <section id="limits" class="band alt">
       <div class="wrap">
         <h2>Limits the model can't override</h2>
         <p class="section-lede">Guardrails are pure functions with full branch coverage. They run on every decision the model proposes, and anything outside them is clipped or rejected.</p>
@@ -126,7 +138,7 @@
       </div>
     </section>
 
-    <section id="validation" class="band alt">
+    <section id="validation" class="band">
       <div class="wrap">
         <h2>How it's judged</h2>
         <p class="section-lede">The rules were backtested under a test fixed in advance; the LLM can't be honestly backtested, so its value is measured forward against a rules-only twin, and every decision is logged.</p>
@@ -148,7 +160,7 @@
       </div>
     </section>
 
-    <section id="status" class="band">
+    <section id="status" class="band alt">
       <div class="wrap">
         <h2>Build status</h2>
         <ol class="phases">
@@ -156,12 +168,12 @@
           <li class="done"><span aria-label="Phase 1, done">&#10003;</span>Data layer and skeleton</li>
           <li class="done"><span aria-label="Phase 2, done">&#10003;</span>Indicators and regime</li>
           <li class="done"><span aria-label="Phase 3, done">&#10003;</span>The portfolio rules and their backtest</li>
-          <li class="active"><span>4</span>LLM layer</li>
-          <li><span>5</span>Execution</li>
-          <li><span>6</span>Paper trial and dashboard</li>
+          <li class="done"><span aria-label="Phase 4, done">&#10003;</span>LLM layer</li>
+          <li class="done"><span aria-label="Phase 5, done">&#10003;</span>Execution</li>
+          <li class="active"><span>6</span>Paper trial and dashboard</li>
         </ol>
         <p class="note">The first designs picked stocks: chart-pattern breakouts in the style of Minervini, O'Neil and Kullamägi, then a momentum book. Both failed their backtests in October 2026, so the system became a portfolio manager.</p>
-        <p class="note">Performance, exposure and the monthly decision journal will appear here once the system runs on a $100,000 paper account, against the twin and the S&amp;P 500, before and after tax.</p>
+        <p class="note">The paper trial runs on a $100,000 Alpaca paper account for twelve months; its results are <a href="#results">at the top of this page</a>.</p>
       </div>
     </section>
   </main>

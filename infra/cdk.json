@@ -2,5 +2,8 @@
   "app": "uv run python app.py",
   "watch": {
     "include": ["app.py", "stacks/**", "../web/**"]
+  },
+  "context": {
+    "@aws-cdk/core:defaultCrossStackReferences": "strong"
   }
 }

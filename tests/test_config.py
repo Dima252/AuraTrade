@@ -24,6 +24,7 @@ ENV_VARS = [
     "PM_EFFORT",
     "STORAGE_BACKEND",
     "STORAGE_S3_BUCKET",
+    "SITE_S3_BUCKET",
     "DATABASE_URL",
 ]
 

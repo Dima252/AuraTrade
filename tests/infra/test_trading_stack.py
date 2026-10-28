@@ -12,6 +12,7 @@ import pytest
 
 cdk = pytest.importorskip("aws_cdk")
 assertions = pytest.importorskip("aws_cdk.assertions")
+s3 = pytest.importorskip("aws_cdk.aws_s3")
 
 from stacks.trading import (  # noqa: E402
     FUNCTIONS,
@@ -143,8 +144,51 @@ def test_every_function_reads_only_its_parameter_path(template: Any) -> None:
 
 def test_only_storage_jobs_reach_the_bucket(template: Any) -> None:
     for spec in FUNCTIONS:
-        assert ("s3:PutObject" in policy_text(template, spec.job)) is spec.storage, spec.job
+        text = policy_text(template, spec.job)
+        assert ("s3:PutObject" in text) is (spec.storage or spec.publishes), spec.job
+        assert ("s3:GetObject" in text) is spec.storage, spec.job
     assert {f.job for f in FUNCTIONS if f.storage} == {"post_market", "ingest"}
+    assert {f.job for f in FUNCTIONS if f.publishes} == {"simulate"}
+    # simulate writes the snapshot only: `public/*`, nothing read.
+    assert '"/public/*"' in policy_text(template, "simulate")
+
+
+@pytest.fixture(scope="module")
+def site_template() -> Any:
+    app = cdk.App()
+    site = cdk.Stack(app, "Site", env=ENV)
+    bucket = s3.Bucket(site, "SiteBucket")
+    stack = TradingStack(app, "Trading", env_name="paper", site_bucket=bucket, env=ENV)
+    return Template.from_stack(stack)
+
+
+def test_only_simulate_publishes_to_the_site(site_template: Any) -> None:
+    fns = functions(site_template)
+    for job, props in fns.items():
+        env = props["Environment"]["Variables"]
+        assert ("SITE_S3_BUCKET" in env) is (job == "simulate"), job
+        assert ("SiteBucket" in policy_text(site_template, job)) is (job == "simulate"), job
+    text = policy_text(site_template, "simulate")
+    # One key, written, never read or listed.
+    assert '"/data/snapshot.json"' in text
+    site_statements = [
+        s
+        for doc in json.loads(text)
+        for s in doc["Statement"]
+        if "SiteBucket" in json.dumps(s["Resource"])
+    ]
+    actions = {
+        a
+        for s in site_statements
+        for a in ([s["Action"]] if isinstance(s["Action"], str) else s["Action"])
+    }
+    assert actions
+    assert all(a.startswith(("s3:PutObject", "s3:Abort")) for a in actions)
+
+
+def test_without_a_site_nothing_is_published(template: Any) -> None:
+    for props in functions(template).values():
+        assert "SITE_S3_BUCKET" not in props["Environment"]["Variables"]
 
 
 def test_the_bucket_is_private_and_kept(template: Any) -> None:

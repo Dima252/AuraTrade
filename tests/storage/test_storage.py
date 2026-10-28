@@ -7,7 +7,7 @@ from botocore.response import StreamingBody
 from botocore.stub import Stubber
 
 from auratrade.config import Settings
-from auratrade.storage import LocalStore, S3Store, make_store
+from auratrade.storage import LocalStore, S3Store, make_site_store, make_store
 from auratrade.storage.base import validate_key
 
 
@@ -136,3 +136,20 @@ def test_make_store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     )
     assert isinstance(s3, S3Store)
     assert s3.bucket == "b"
+
+
+def test_make_site_store(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
+    assert make_site_store(Settings(_env_file=None)) is None  # type: ignore[call-arg]
+    site = make_site_store(Settings(_env_file=None, site_s3_bucket="site"))  # type: ignore[call-arg]
+    assert isinstance(site, S3Store)
+    assert site.bucket == "site"
+    client = boto3.client("s3", region_name="us-east-1")
+    store = S3Store("site", client, prefix="data/")
+    with Stubber(client) as stub:
+        stub.add_response(
+            "put_object",
+            {},
+            {"Bucket": "site", "Key": "data/snapshot.json", "Body": b"{}", "ContentType": "x"},
+        )
+        store.put("snapshot.json", b"{}", content_type="x")

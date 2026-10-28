@@ -14,14 +14,18 @@ from constructs import Construct
 
 WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 
-# The page ships no scripts and no third-party assets, so the policy can deny everything else.
+# The page ships one self-hosted script (the dashboard, reading data/snapshot.json) and no
+# inline code or third-party assets, so the policy can deny everything else.
 CONTENT_SECURITY_POLICY = (
-    "default-src 'none'; style-src 'self'; img-src 'self'; connect-src 'self'; "
+    "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; "
+    "connect-src 'self'; "
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 
-# Reserved for the nightly public snapshot that post_market will write; deploys must not prune it.
+# The nightly public snapshot `simulate` writes (README §5.8); deploys must not prune it.
 DATA_PREFIX = "data/*"
+# The snapshot changes once an evening: served fresh within minutes, not a day.
+DATA_TTL = Duration.minutes(5)
 
 
 class PublicSiteStack(Stack):
@@ -39,13 +43,13 @@ class PublicSiteStack(Stack):
         if (domain_name is None) != (hosted_zone_id is None):
             raise ValueError("domain_name and hosted_zone_id must be given together")
 
-        bucket = s3.Bucket(
+        self.bucket = bucket = s3.Bucket(
             self,
             "SiteBucket",
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
             encryption=s3.BucketEncryption.S3_MANAGED,
             enforce_ssl=True,
-            # Everything in it is rebuilt from git or by the next post_market run.
+            # Everything in it is rebuilt from git or by the next simulate run.
             removal_policy=RemovalPolicy.DESTROY,
             auto_delete_objects=True,
         )
@@ -90,16 +94,35 @@ class PublicSiteStack(Stack):
                 validation=acm.CertificateValidation.from_dns(zone),
             )
 
+        origin = origins.S3BucketOrigin.with_origin_access_control(bucket)
+        data_cache = cloudfront.CachePolicy(
+            self,
+            "DataCache",
+            default_ttl=DATA_TTL,
+            max_ttl=DATA_TTL,
+            min_ttl=Duration.seconds(0),
+            enable_accept_encoding_gzip=True,
+            enable_accept_encoding_brotli=True,
+        )
         distribution = cloudfront.Distribution(
             self,
             "Distribution",
             default_behavior=cloudfront.BehaviorOptions(
-                origin=origins.S3BucketOrigin.with_origin_access_control(bucket),
+                origin=origin,
                 viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
                 cache_policy=cloudfront.CachePolicy.CACHING_OPTIMIZED,
                 response_headers_policy=headers,
                 compress=True,
             ),
+            additional_behaviors={
+                DATA_PREFIX: cloudfront.BehaviorOptions(
+                    origin=origin,
+                    viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+                    cache_policy=data_cache,
+                    response_headers_policy=headers,
+                    compress=True,
+                )
+            },
             default_root_object="index.html",
             # S3 behind origin access control answers 403, not 404, for a missing key.
             error_responses=[
