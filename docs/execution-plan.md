@@ -97,7 +97,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 **Phase 5: Execution**
 - [x] 5.1 Rebalance orders (targets → whole-share orders, sells first, the drift band; SSO's OTO stop and its raise); the invariant and `stop_guard` for #155; chaos tests on the fake broker *(#168: `execution/rebalance.py` (pure, 100% branch), `execution/portfolio.py` (the rebalance, its retry, the halt's sale), `execution/funds.py` (SSO's level in `fund_stops`, splits); `jobs/execute_close.py`, run by hand until 5.2; migration 0010; the accept's chaos tests in `tests/execution/test_portfolio_chaos.py`)*
 - [x] 5.2 The daily checks (the halt turned on and off; the stop's proceeds into BIL), the slimmed ingest (the ETF list, macro, news), the new schedule (with `execute_close`); the earlier systems' slots retired *(#169: `execution/halt.py` (the halt and its peak in `system_flags`: on at `post_market`'s close, off on R in `allocate` on `paper`), `execution/portfolio.stop_proceeds` (into BIL at the next 15:40), `auratrade halt status|reset`; the chain ends with `allocate`, `portfolio_manager` 08:45, `execute_close` 15:40; ingest is the ETF list's bars, corporate actions, macro, retention; the setup system's code, tests, config sections and settings deleted, reconciliation the funds' only, the regime on three pillars; the nightly backup now covers the portfolio's tables. Events still reach the Portfolio Manager by hand)*
-- [ ] 5.3 Live tax lots from the broker's fills; the journal; the nightly snapshot
+- [x] 5.3 Live tax lots from the broker's fills; the journal; the nightly snapshot *(#170: `tax/live.py` (pure, 100% branch) rebuilds `tax_lots` whole each evening in `post_market` from the broker's activities (`Broker.activities`, the paper record recorded as a fixture); `account_snapshots` gains `holdings` and `tax_owed` (migration 0011); on `paper` the Portfolio Manager's account is the broker's (R's snapshot, the live lots, the live halt); the journal's `results.paper` carries the account's month; `journal/dashboard.py`: the allow-listed `public/snapshot.json`, written by `simulate`. Not yet seen on paper: a distribution entry)*
 
 **Phase 6: The paper trial and the showcase**
 - [ ] 6.1 👤 `paper` reset to $100,000; deploy the portfolio's stack; kill switch off; the carried 1.7 / 1.8 checks; three monthly rebalances unattended
@@ -528,7 +528,7 @@ The halt's daily check (`post_market` sets `halt_drawdown`; `execute_close` alre
 
 ### 5.3 Live tax lots and the journal (S)
 
-`tax_lots` from the broker's fills and distributions; the monthly journal; `post_market`'s snapshot for the dashboard.
+`tax_lots` from the broker's fills and distributions; the monthly journal; the snapshot for the dashboard (written by `simulate`, once the day's twin exists, #170).
 
 ---
 
@@ -540,7 +540,7 @@ You reset `paper` to $100,000 in the Alpaca dashboard; `cdk deploy AuraTradePape
 
 ### 6.2 The public dashboard (M)
 
-README §5.8 on the public site (`web/` + `data/snapshot.json`); `cdk deploy AuraTradePublicSite` (you).
+README §5.8 on the public site (`web/` + `data/snapshot.json`): `simulate` already writes the snapshot to `public/snapshot.json` in the trading stack's private bucket (5.3); this task copies it to the site's bucket (a cross-stack grant, the `data/*` prefix the site's deploys keep) and builds the page on it; `cdk deploy AuraTradePublicSite` (you).
 
 ### 6.3 Twelve months (with you)
 

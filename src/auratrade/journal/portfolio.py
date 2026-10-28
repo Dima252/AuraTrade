@@ -2,19 +2,22 @@
 
 - **The funds' bars** (split-adjusted and total-return, free Alpaca calls) for the core funds
   and the satellite list, from ``history_sessions`` before the trial's start to T.
-- **The books:** the twin (the rules on the whole account), SPY bought and held, and, in
-  `dry_run`, the book itself (its decided targets replayed, #166), all through
-  `sim/portfolio.py` from the trial's first R, written whole to `twin_book` each evening
-  (`simulate`), with the scorecard (README §5.5, `journal/portfolio_scorecard.py`) in each
-  month's `portfolio_journal` row.
+- **The books:** the twin (the rules on the whole account), SPY bought and held, and the book
+  itself (its decided targets replayed: in `dry_run` the account, #166; on `paper` the
+  like-for-like return beside the paper fills), all through `sim/portfolio.py` from the trial's
+  first R, written whole to `twin_book` each evening (`simulate`), with the scorecard (README
+  §5.5, `journal/portfolio_scorecard.py`) in each month's `portfolio_journal` row; on `paper`
+  the row's results also carry the account's own month (`paper`, task 5.3).
 - **On R** (`allocate`): the trend, the cap and the book's halt from the same runs (ranked at
   R), the rule level, the twin's targets, and the Portfolio Manager's facts, in an ALLOCATED
   `portfolio_targets` row for E. On `paper` the halt is the account's (`execution.halt`),
   turned off here on a DOWN -> UP flip or a new peak; in dry_run it is the simulated book's.
 
 The trial starts at the first R `allocate` ever ran on; both books start there from
-``dry_run_equity`` in cash. Until task 5.x trades the paper account, the simulated book *is* the
-account the Portfolio Manager sees.
+``dry_run_equity`` in cash. **The account the Portfolio Manager sees** is, in `dry_run`, the
+simulated book (#166); on `paper`, the broker's (task 5.3, #170): the close's snapshot, the
+live tax lots and the live halt's peak. Without that snapshot, or with its lots not rebuilt, no
+facts are written (fail closed: E holds).
 """
 
 from __future__ import annotations
@@ -23,8 +26,9 @@ import math
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Connection, delete, func, insert, orm, select, update
 
@@ -33,10 +37,12 @@ from auratrade.calendar.sessions import MarketCalendar
 from auratrade.config import RiskConfig
 from auratrade.data.alpaca_data import Adjustment, DailyBar
 from auratrade.db.models import (
+    AccountSnapshot,
     BookMark,
     LlmDecision,
     MacroObservation,
     MarketRegimeRow,
+    OrderRow,
     PortfolioJournal,
     PortfolioTarget,
 )
@@ -48,6 +54,7 @@ from auratrade.journal.portfolio_scorecard import (
     period_json,
     score,
 )
+from auratrade.journal.tax_lots import open_lots, realized_by_year
 from auratrade.llm.portfolio_facts import (
     AccountFacts,
     PastDecision,
@@ -66,11 +73,17 @@ from auratrade.strategies.core_allocation import (
     twin_targets,
 )
 from auratrade.tax.israel import Lot
+from auratrade.tax.live import carried_loss
 
 TWIN, SIM, SPY = "TWIN", "SIM", "SPY"
+NY = ZoneInfo("America/New_York")
 DRY_RUN_NOTE = (
     "dry_run: no orders are sent, so the account is your decided targets replayed through the "
     "simulator from the trial's start (#166)."
+)
+PAPER_NOTE = (
+    "paper: the account is the paper broker's. Paper fills are optimistic, so the scorecard "
+    "compares your decisions replayed through the simulator with the twin's (README §5.5)."
 )
 
 
@@ -264,19 +277,28 @@ def scorecard(conn: Connection, risk: RiskConfig, data: FundData, books: Books) 
     )
 
 
-def write_scorecard(conn: Connection, card: Scorecard, books: Books) -> dict[str, Any]:
-    """Each month's results and the book's trades on its E into its journal row."""
+def write_scorecard(
+    conn: Connection,
+    card: Scorecard,
+    books: Books,
+    paper: Mapping[date, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Each month's results and the book's trades on its E into its journal row; ``paper``
+    adds the account's own month (`paper_months`)."""
     trades: dict[date, list[dict[str, Any]]] = defaultdict(list)
     for t in books.sim.trades:
         trades[t.day].append(
             {"symbol": t.symbol, "units": t.units, "price": t.price, "reason": t.reason}
         )
     for period in card.periods:
+        results = period_json(period)
+        if paper is not None:
+            results["paper"] = paper.get(period.session)
         conn.execute(
             update(PortfolioJournal)
             .where(PortfolioJournal.execution_session == period.session)
             .values(
-                results=finite(period_json(period)),
+                results=finite(results),
                 trades=trades.get(period.session, []),
                 updated_at=func.now(),
             )
@@ -287,6 +309,55 @@ def write_scorecard(conn: Connection, card: Scorecard, books: Books) -> dict[str
         "months_complete": int(summary["months_complete"]),
         "excess_after_tax": round(summary["excess_after_tax"], 6),
     }
+
+
+def paper_months(
+    conn: Connection, card: Scorecard, funds: Sequence[str]
+) -> dict[date, dict[str, Any]]:
+    """The paper account over each scored month (`post_market`'s snapshots at its E and its
+    end, before and after the estimated tax) and its fills on E (README §5.5: the paper fills
+    reported beside the sim return). A month without both snapshots has no entry."""
+    days = {d for p in card.periods for d in (p.session, p.end)}
+    snaps = {
+        s.session_date: s
+        for s in orm.Session(conn).scalars(
+            select(AccountSnapshot).where(AccountSnapshot.session_date.in_(days))
+        )
+    }
+    fills: dict[date, list[dict[str, Any]]] = defaultdict(list)
+    orders = conn.execute(
+        select(
+            OrderRow.symbol,
+            OrderRow.side,
+            OrderRow.filled_qty,
+            OrderRow.filled_avg_price,
+            OrderRow.purpose,
+            OrderRow.created_at,
+        )
+        .where(OrderRow.filled_qty > 0, OrderRow.symbol.in_(funds))
+        .order_by(OrderRow.created_at)
+    )
+    for symbol, side, qty, price, purpose, created in orders:
+        if isinstance(created, datetime):
+            fills[created.astimezone(NY).date()].append(
+                {"symbol": symbol, "side": side, "units": qty, "price": price, "purpose": purpose}
+            )
+    out: dict[date, dict[str, Any]] = {}
+    for p in card.periods:
+        start, end = snaps.get(p.session), snaps.get(p.end)
+        if start is None or end is None:
+            continue
+        after_tax = None
+        if start.tax_owed is not None and end.tax_owed is not None:
+            after_tax = (end.equity - end.tax_owed) / (start.equity - start.tax_owed) - 1
+        out[p.session] = {
+            "start_equity": start.equity,
+            "end_equity": end.equity,
+            "before_tax": end.equity / start.equity - 1,
+            "after_tax": after_tax,
+            "trades": fills.get(p.session, []),
+        }
+    return out
 
 
 def rebalance_at(calendar: MarketCalendar, ranking: date) -> Rebalance | None:
@@ -317,9 +388,11 @@ def build_facts(
     session: date,
     *,
     halted: bool | None = None,
+    live: bool = False,
 ) -> PmFacts:
     """The facts on R for E, from the book ranked at R (`run_books(rank_at_end=True)`);
-    `halted` is the account's halt where it isn't the simulated book's."""
+    `halted` is the account's halt where it isn't the simulated book's. `live`: the account is
+    the broker's at ``ranking``'s close (`paper`), not the simulated book."""
     p, pm = risk.portfolio, risk.portfolio_manager
     market, sim = books.market, books.sim
     i = market.days.index(ranking)
@@ -340,25 +413,28 @@ def build_facts(
         r.halted if halted is None else halted,
     )
 
-    end = sim.end
-    equity = sim.marks[-1]
     prices = {s: market.prices[s][i] for s in market.prices}
-    weights = {s: u * prices[s] / equity for s, u in end.units.items()}
-    cash = end.cash + end.accrued
-    if cash > 0:
-        weights[p.cash] = weights.get(p.cash, 0.0) + cash / equity
-    lots: dict[str, Sequence[Lot]] = {s: end.tax.lots(s) for s in end.tax.symbols()}
-    account = AccountFacts(
-        equity=equity,
-        peak_equity=end.halt.peak,
-        weights=weights,
-        previous_satellite=previous_satellite(conn, session),
-        lots=lots,
-        prices=prices,
-        realized_this_year=end.tax.realized(session.year),
-        loss_carried=end.tax.carry,
-        satellite_tax_this_year=satellite_tax_this_year(conn, session),
-    )
+    if live:
+        account = live_account(conn, risk, ranking, session, prices)
+    else:
+        end = sim.end
+        equity = sim.marks[-1]
+        weights = {s: u * prices[s] / equity for s, u in end.units.items()}
+        cash = end.cash + end.accrued
+        if cash > 0:
+            weights[p.cash] = weights.get(p.cash, 0.0) + cash / equity
+        lots: dict[str, Sequence[Lot]] = {s: end.tax.lots(s) for s in end.tax.symbols()}
+        account = AccountFacts(
+            equity=equity,
+            peak_equity=end.halt.peak,
+            weights=weights,
+            previous_satellite=previous_satellite(conn, session),
+            lots=lots,
+            prices=prices,
+            realized_this_year=end.tax.realized(session.year),
+            loss_carried=end.tax.carry,
+            satellite_tax_this_year=satellite_tax_this_year(conn, session),
+        )
     market_tr = [data.closes(p.market, total_return=True)[d] for d in market.days[: i + 1]]
     etfs = []
     for symbol in p.satellite_list:
@@ -380,7 +456,42 @@ def build_facts(
         headlines=(),
         history=past_decisions(conn, session, pm.history_months),
         scorecard=finite(scorecard(conn, risk, data, books).summary()),
-        notes=(DRY_RUN_NOTE,),
+        notes=(PAPER_NOTE if live else DRY_RUN_NOTE,),
+    )
+
+
+def live_account(
+    conn: Connection, risk: RiskConfig, close: date, session: date, prices: Mapping[str, float]
+) -> AccountFacts:
+    """The broker's account at ``close`` for a decision on ``session``: `post_market`'s
+    snapshot (the funds' holdings, cash in the cash fund's name), the live lots, the live
+    halt's peak. Raises without the snapshot or with its lots not rebuilt (fail closed)."""
+    snap = (
+        orm.Session(conn)
+        .scalars(select(AccountSnapshot).where(AccountSnapshot.session_date == close))
+        .one_or_none()
+    )
+    if snap is None or snap.tax_owed is None:
+        raise ValueError(
+            f"no account snapshot with its tax lots at {close}: post_market didn't run, or "
+            "couldn't rebuild the lots"
+        )
+    equity = snap.equity
+    weights = {s: h["value"] / equity for s, h in snap.holdings.items()}
+    if snap.cash > 0:
+        cash = risk.portfolio.cash
+        weights[cash] = weights.get(cash, 0.0) + snap.cash / equity
+    realized = realized_by_year(conn)
+    return AccountFacts(
+        equity=equity,
+        peak_equity=live_halt.load(conn, equity).peak,
+        weights=weights,
+        previous_satellite=previous_satellite(conn, session),
+        lots=open_lots(conn),
+        prices=prices,
+        realized_this_year=realized.get(session.year, 0.0),
+        loss_carried=carried_loss(realized, session.year),
+        satellite_tax_this_year=satellite_tax_this_year(conn, session),
     )
 
 
@@ -534,7 +645,14 @@ def allocate(
         halted = bool(halt_check["on"])
         level = core_allocation.rule_level(r.state, r.capped, halted, risk.portfolio)
     facts = build_facts(
-        conn, risk, data, books, ranking, rebalance.execution, halted=halted if live else None
+        conn,
+        risk,
+        data,
+        books,
+        ranking,
+        rebalance.execution,
+        halted=halted if live else None,
+        live=live,
     )
     values = {
         "kind": "REBALANCE",
@@ -574,18 +692,42 @@ def allocate(
     return out
 
 
+@dataclass(frozen=True)
+class Evening:
+    out: dict[str, Any]
+    books: Books | None = None
+    """None before the trial starts."""
+    card: Scorecard | None = None
+
+
 def simulate_books(
     conn: Connection,
     calendar: MarketCalendar,
     risk: RiskConfig,
     source: FundBars,
     session: date,
+    *,
+    live: bool = False,
 ) -> dict[str, Any]:
     """The books through ``session``'s close into `twin_book`, and the scorecard into the
     journal."""
+    return evening(conn, calendar, risk, source, session, live=live).out
+
+
+def evening(
+    conn: Connection,
+    calendar: MarketCalendar,
+    risk: RiskConfig,
+    source: FundBars,
+    session: date,
+    *,
+    live: bool = False,
+) -> Evening:
+    """`simulate_books`, with the runs and the scorecard for the dashboard. `live`: the paper
+    account's month goes in the journal too."""
     start = trial_start(conn)
     if start is None or start > session:
-        return {"skipped": "the trial hasn't started"}
+        return Evening({"skipped": "the trial hasn't started"})
     first = window_start(calendar, start, risk)
     data = fetch_funds(source, risk, first, session)
     # On R the market ends before E, so R is ranked only when asked (its targets are E's).
@@ -599,8 +741,10 @@ def simulate_books(
         rank_at_end=is_ranking,
     )
     out = write_books(conn, books)
-    out["scorecard"] = write_scorecard(conn, scorecard(conn, risk, data, books), books)
-    return out
+    card = scorecard(conn, risk, data, books)
+    paper = paper_months(conn, card, fund_symbols(risk)) if live else None
+    out["scorecard"] = write_scorecard(conn, card, books, paper)
+    return Evening(out, books, card)
 
 
 def finite(value: Any) -> Any:

@@ -25,7 +25,8 @@ deleted behind the order layer's back.
 
 Orders fill two ways: by hand with `fill`, or through the fill model with `play`, which runs
 one bar (minute or daily) over the symbol's open orders with `sim.fills`, the same functions the
-trade simulator uses (README §5.12: one simulator, one fake broker).
+trade simulator uses (README §5.12: one simulator, one fake broker). Each fill is also an entry
+in the account's activities, as Alpaca records it; `distribute` adds a cash entry (task 5.3).
 """
 
 from __future__ import annotations
@@ -36,9 +37,12 @@ from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from auratrade.execution.broker import (
+    FILL,
     Account,
+    Activity,
     AdvancedOrderChangeError,
     BrokerError,
     BrokerOrder,
@@ -84,6 +88,8 @@ _RESERVING = frozenset(
 _REPLACEABLE = frozenset({OrderStatus.NEW, OrderStatus.HELD, OrderStatus.PARTIALLY_FILLED})
 # Orders working in the market: what a bar can fill.
 _WORKING = frozenset({OrderStatus.NEW, OrderStatus.PARTIALLY_FILLED})
+
+NY = ZoneInfo("America/New_York")
 
 PartialCancelLeg = Literal["cancel", "activate"]
 FaultKind = Literal["fail", "drop", "kill"]
@@ -144,6 +150,7 @@ class FakeBroker:
         self._ids = itertools.count(1)
         self._resting: set[str] = set()
         """Buys that jumped past their limit and now rest as limit orders."""
+        self._activities: list[Activity] = []
 
     # --- test controls -----------------------------------------------------------------
 
@@ -182,10 +189,36 @@ class FakeBroker:
         if status is OrderStatus.FILLED:
             self._set(order_id, filled_at=self.now)
         self._book(held.symbol, held.side, qty, price)
+        self._activities.append(
+            Activity(
+                id=self._activity_id(),
+                kind=FILL,
+                day=self.now.astimezone(NY).date(),
+                symbol=held.symbol,
+                side=held.side,
+                qty=float(qty),
+                price=price,
+                order_id=order_id,
+            )
+        )
         if held.order_class is OrderClass.OTO and held.side is Side.BUY and filled == held.qty:
             for leg_id in self._orders[order_id].leg_ids:
                 if self._orders[leg_id].order.status is OrderStatus.HELD:
                     self._set(leg_id, status=self._resting_status())
+
+    def distribute(self, symbol: str | None, amount: float, *, kind: str = "DIV") -> None:
+        """A cash entry today: a distribution (a withholding or a fee when negative), or
+        interest (``INT``, no symbol). The cash is credited."""
+        self.cash += amount
+        self._activities.append(
+            Activity(
+                id=self._activity_id(),
+                kind=kind,
+                day=self.now.astimezone(NY).date(),
+                symbol=symbol,
+                amount=amount,
+            )
+        )
 
     def play(self, symbol: str, bar: PriceBar, *, slip: float = 0.0) -> list[str]:
         """One bar through the fill model: entries first, then stops (so a leg the bar
@@ -321,6 +354,9 @@ class FakeBroker:
 
     # --- PriceSource ---------------------------------------------------------------------
 
+    def activities(self) -> list[Activity]:
+        return self._call("activities", lambda: list(self._activities))
+
     def prices(self, symbols: Iterable[str]) -> dict[str, float | None]:
         return {s: self._prices.get(s) for s in symbols}
 
@@ -371,6 +407,10 @@ class FakeBroker:
     def _set(self, order_id: str, **changes: object) -> None:
         entry = self._orders[order_id]
         entry.order = replace(entry.order, **changes)  # type: ignore[arg-type]
+
+    def _activity_id(self) -> str:
+        # Alpaca's ids start with the time, so they sort in the order things happened.
+        return f"{self.now:%Y%m%d%H%M%S}{len(self._activities):06d}::{uuid.uuid4()}"
 
     def _new_id(self) -> str:
         return f"fake-{next(self._ids):04d}"

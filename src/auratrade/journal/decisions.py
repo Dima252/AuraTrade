@@ -147,6 +147,8 @@ class Morning:
     funds: FundBars
     news: NewsSource
     now: datetime
+    live: bool = False
+    """`paper`: the account and the halt are the broker's, not the simulated book's."""
 
 
 def decide_rebalance(
@@ -215,7 +217,8 @@ def decide_event(
     market = data.market(risk, first)
     # Ranked at the last close as if it were R, for the account; the trend is the last R's.
     books = run_books(market, risk, start, close, decided_targets(conn), rank_at_end=True)
-    fresh = build_facts(conn, risk, data, books, close, session)
+    account_halt = read_flags(conn).halt_drawdown if m.live else None
+    fresh = build_facts(conn, risk, data, books, close, session, halted=account_halt, live=m.live)
     previous = facts_from_json(last.facts)
     halted = fresh.trend.halted or event.kind == "HALT"
     trend = replace(previous.trend, halted=halted)

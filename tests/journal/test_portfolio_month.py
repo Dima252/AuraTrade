@@ -5,16 +5,19 @@ the machine)."""
 
 from __future__ import annotations
 
+import dataclasses
+import json
 import math
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
 import structlog
-from sqlalchemy import Engine, insert, orm, select, update
+from sqlalchemy import Engine, delete, insert, orm, select, update
 
 from auratrade.calendar.sessions import load_calendar
 from auratrade.config import Settings, TradingMode, load_risk_config
@@ -26,17 +29,22 @@ from auratrade.db.models import (
     BookMark,
     LlmDecision,
     MarketSession,
+    OrderRow,
     PortfolioJournal,
     PortfolioTarget,
     PromptVersion,
     SystemFlag,
+    TaxLot,
 )
 from auratrade.jobs import allocate as allocate_job
 from auratrade.jobs import portfolio_manager as pm_job
+from auratrade.jobs import simulate as simulate_job_module
 from auratrade.jobs.base import NY, JobContext
+from auratrade.journal import dashboard
 from auratrade.journal.decisions import deadline, is_execution, news_window
-from auratrade.journal.portfolio import simulate_books
+from auratrade.journal.portfolio import PAPER_NOTE, simulate_books
 from auratrade.llm.portfolio_facts import Event, EventKind, facts_from_json
+from auratrade.storage.local import LocalStore
 from tests.llm.test_client import Api, client, fixture
 from tests.llm.test_portfolio_manager import answer, weight
 
@@ -161,6 +169,7 @@ def decide(
     *responses: Any,
     event: Event | None = None,
     alerts: Alerts | None = None,
+    mode: TradingMode = TradingMode.DRY_RUN,
 ) -> dict[str, Any]:
     api = Api(*responses)
     at = datetime.combine(session, time(8, 45), tzinfo=NY)
@@ -173,7 +182,7 @@ def decide(
         alerter_factory=lambda _s: alerts or Alerts(),
         now=lambda: at,
     )
-    return dict(spec.run(context("portfolio_manager", session)) or {})
+    return dict(spec.run(context("portfolio_manager", session, mode)) or {})
 
 
 def evening(engine: Engine, bars: Bars, session: date) -> dict[str, Any]:
@@ -442,17 +451,29 @@ def halt_flag(engine: Engine, on: bool, peak: float) -> None:
         )
 
 
-def account_snapshot(engine: Engine, day: date, equity: float) -> None:
+def account_snapshot(
+    engine: Engine,
+    day: date,
+    equity: float,
+    *,
+    holdings: dict[str, dict[str, float]] | None = None,
+    tax_owed: float | None = 0.0,
+) -> None:
+    """`post_market`'s snapshot: the funds' holdings, the rest in cash."""
+    held = holdings or {}
+    invested = sum(h["value"] for h in held.values())
     with engine.begin() as conn:
         conn.execute(
             insert(AccountSnapshot).values(
                 session_date=day,
                 equity=equity,
-                cash=equity,
-                long_market_value=0.0,
+                cash=equity - invested,
+                long_market_value=invested,
                 peak_equity=equity,
                 drawdown=0.0,
-                open_positions=0,
+                open_positions=len(held),
+                holdings=held,
+                tax_owed=tax_owed,
             )
         )
 
@@ -476,6 +497,93 @@ def test_on_paper_r_reads_the_accounts_halt_and_may_turn_it_off(
         assert read_flags(conn).halt_drawdown is halted
 
 
+def test_on_paper_the_account_is_the_brokers(world: Engine) -> None:
+    halt_flag(world, False, 120_000.0)
+    holdings = {
+        "SPY": {"units": 100.0, "value": 50_000.0},
+        "GLD": {"units": 50.0, "value": 10_000.0},
+    }
+    account_snapshot(world, R_OCT, 100_000.0, holdings=holdings, tax_owed=500.0)
+    with world.begin() as conn:
+        conn.execute(
+            insert(TaxLot),
+            [
+                lot("SPY", date(2026, 3, 2), 100.0, 45_000.0),
+                lot("GLD", date(2026, 3, 2), 50.0, 9_000.0),
+                lot("SPY", date(2025, 3, 3), 10.0, 5_000.0, date(2025, 9, 1), 4_000.0),
+                lot("SPY", date(2026, 3, 2), 10.0, 4_500.0, date(2026, 6, 1), 4_800.0),
+                lot("SPY", date(2026, 9, 18), 0.0, 120.0) | {"kind": "INCOME"},
+            ],
+        )
+    allocate(world, Bars(), R_OCT, TradingMode.PAPER)
+    (row,) = targets(world)
+    facts = facts_from_json(row.facts)
+    account = facts.account
+    assert account.equity == 100_000.0
+    assert account.weights == pytest.approx({"SPY": 0.5, "GLD": 0.1, "BIL": 0.4})
+    assert account.peak_equity == 120_000.0  # the live halt's, not the snapshot's
+    assert {s: [(x.opened, x.units, x.cost) for x in v] for s, v in account.lots.items()} == {
+        "GLD": [(date(2026, 3, 2), 50.0, 9_000.0)],
+        "SPY": [(date(2026, 3, 2), 100.0, 45_000.0)],
+    }
+    assert account.realized_this_year == pytest.approx(300.0)
+    assert account.loss_carried == pytest.approx(1_000.0)
+    assert facts.notes == (PAPER_NOTE,)
+
+
+def test_on_paper_without_the_lots_r_writes_nothing(world: Engine) -> None:
+    halt_flag(world, False, 100_000.0)
+    account_snapshot(world, R_OCT, 100_000.0, tax_owed=None)
+    with pytest.raises(ValueError, match="no account snapshot with its tax lots"):
+        allocate(world, Bars(), R_OCT, TradingMode.PAPER)
+    assert targets(world) == []
+
+
+def test_on_paper_an_event_reads_the_account_and_its_halt(world: Engine) -> None:
+    bars = Bars()
+    account_snapshot(world, R_OCT, 100_000.0)
+    halt_flag(world, False, 100_000.0)
+    allocate(world, bars, R_OCT, TradingMode.PAPER)
+    decide(world, bars, E_NOV, answer([weight("SPY", 0.20)]), mode=TradingMode.PAPER)
+    close = date(2026, 11, 11)
+    account_snapshot(world, close, 74_000.0)
+    halt_flag(world, True, 100_000.0)
+    event = Event(EventKind.HALT, "Equity closed at 74% of its peak.")
+    decide(
+        world,
+        bars,
+        date(2026, 11, 12),
+        answer([weight("SPY", 0.20)]),
+        event=event,
+        mode=TradingMode.PAPER,
+    )
+    event_row = targets(world)[1]
+    facts = facts_from_json(event_row.facts)
+    assert facts.account.equity == 74_000.0
+    assert facts.trend.halted
+    assert event_row.halted
+
+
+def lot(
+    symbol: str,
+    opened: date,
+    units: float,
+    cost: float,
+    closed: date | None = None,
+    proceeds: float | None = None,
+) -> dict[str, Any]:
+    return {
+        "kind": "LOT",
+        "symbol": symbol,
+        "opened": opened,
+        "units": units,
+        "cost": cost,
+        "closed": closed,
+        "proceeds": proceeds,
+        "realized_gain": None if proceeds is None else proceeds - cost,
+    }
+
+
 def test_in_dry_run_r_uses_the_simulated_books_halt(world: Engine) -> None:
     halt_flag(world, True, 200_000.0)
     out = allocate(world, Bars(), R_OCT)
@@ -483,3 +591,153 @@ def test_in_dry_run_r_uses_the_simulated_books_halt(world: Engine) -> None:
     assert "halt" not in out
     with world.connect() as conn:
         assert read_flags(conn).halt_drawdown is True  # the account's flag is left alone
+
+
+# --- the paper account's month and the dashboard (task 5.3) ----------------------------------
+
+
+class BrokenStore:
+    def put(self, key: str, data: bytes, *, content_type: str | None = None) -> None:
+        raise OSError("bucket unreachable")
+
+
+def simulate_job(
+    engine: Engine, bars: Bars, session: date, storage: Any, mode: TradingMode
+) -> dict[str, Any]:
+    spec = simulate_job_module.make_job(
+        engine_factory=lambda _s: engine, funds_factory=lambda _s: bars
+    )
+    ctx = context("simulate", session, mode)
+    return dict(spec.run(dataclasses.replace(ctx, storage=storage)) or {})
+
+
+def a_paper_month(world: Engine, bars: Bars) -> None:
+    """R, E with a tilt, the account's snapshots on each E (an order filled at E's 15:40), and
+    the next R and E (a hold), on `paper`."""
+    account_snapshot(world, R_OCT, 100_000.0)
+    halt_flag(world, False, 100_000.0)
+    allocate(world, bars, R_OCT, TradingMode.PAPER)
+    tilt = answer([weight("GLD", 0.10, 0.01), weight("SPY", 0.10)], core_shift=0.1)
+    decide(world, bars, E_NOV, tilt, mode=TradingMode.PAPER)
+    with world.begin() as conn:
+        conn.execute(
+            insert(OrderRow).values(
+                broker_id="b-1",
+                client_order_id="at-1",
+                symbol="GLD",
+                purpose="ENTRY",
+                side="buy",
+                order_type="limit",
+                order_class="simple",
+                time_in_force="day",
+                qty=70,
+                filled_qty=70,
+                filled_avg_price=142.0,
+                status="filled",
+                created_at=datetime.combine(E_NOV, time(15, 40), tzinfo=NY),
+            )
+        )
+    account_snapshot(world, E_NOV, 99_900.0, tax_owed=0.0)
+    account_snapshot(world, R_NOV, 101_000.0, tax_owed=200.0)
+    allocate(world, bars, R_NOV, TradingMode.PAPER)
+    decide(world, bars, E_DEC, answer(None), mode=TradingMode.PAPER)
+    account_snapshot(world, E_DEC, 101_500.0, tax_owed=300.0)
+
+
+def test_on_paper_the_journal_carries_the_accounts_month(world: Engine, tmp_path: Path) -> None:
+    bars = Bars()
+    a_paper_month(world, bars)
+    out = simulate_job(world, bars, E_DEC, LocalStore(tmp_path), TradingMode.PAPER)
+    assert out["dashboard_bytes"] > 0
+    with world.connect() as conn:
+        rows = orm.Session(conn).scalars(select(PortfolioJournal)).all()
+    by_e = {j.execution_session: j.results for j in rows}
+    paper = by_e[E_NOV]["paper"]
+    assert paper["before_tax"] == pytest.approx(101_500.0 / 99_900.0 - 1)
+    assert paper["after_tax"] == pytest.approx((101_500.0 - 300.0) / 99_900.0 - 1)
+    assert paper["trades"] == [
+        {"symbol": "GLD", "side": "buy", "units": 70, "price": 142.0, "purpose": "ENTRY"}
+    ]
+    # December's month opens and ends at E_DEC's close so far.
+    assert by_e[E_DEC]["paper"]["before_tax"] == 0.0
+    assert by_e[E_DEC]["paper"]["trades"] == []
+    # In dry_run the journal has no paper month.
+    simulate_job(world, bars, E_DEC, LocalStore(tmp_path), TradingMode.DRY_RUN)
+    with world.connect() as conn:
+        rows = orm.Session(conn).scalars(select(PortfolioJournal)).all()
+    assert all("paper" not in j.results for j in rows)
+
+
+def test_the_dashboard_snapshot_is_allow_listed(world: Engine, tmp_path: Path) -> None:
+    bars = Bars()
+    a_paper_month(world, bars)
+    store = LocalStore(tmp_path)
+    simulate_job(world, bars, E_DEC, store, TradingMode.PAPER)
+    text = store.get(dashboard.KEY).decode()
+    doc = json.loads(text)
+    assert set(doc) == {
+        "schema",
+        "generated_at",
+        "through",
+        "mode",
+        "note",
+        "series",
+        "exposure",
+        "journal",
+        "scorecard",
+    }
+    assert doc["mode"] == "paper"
+    assert doc["through"] == str(E_DEC)
+    first, last = doc["series"][0], doc["series"][-1]
+    assert first["session"] == str(R_OCT)
+    assert first["account"] == 100_000.0
+    assert last["account"] == 101_500.0
+    assert last["account_after_tax"] == 101_200.0
+    assert last["book"] > 0
+    assert last["twin_after_tax"] <= last["twin"]
+    assert [e["session"] for e in doc["exposure"]] == [str(E_NOV), str(E_DEC)]
+    nov = doc["exposure"][0]
+    assert nov["shift"] == pytest.approx(0.1)
+    assert nov["satellite"] == {"GLD": 0.1, "SPY": 0.1}
+    entry = doc["journal"][0]
+    assert entry["summary"] == "A quiet month."
+    assert entry["decision"]["satellite"][0]["symbol"] == "GLD"
+    assert entry["results"]["end"] == str(E_DEC)
+    assert doc["journal"][1]["decision"]["satellite"] is None  # a hold
+    # Nothing that identifies the account or its orders.
+    for word in ("b-1", "at-1", "order", "broker", "account_number", "stop", "units"):
+        assert word not in text
+
+
+def test_a_dashboard_that_cant_be_stored_doesnt_fail_simulate(world: Engine) -> None:
+    bars = Bars()
+    allocate(world, bars, R_OCT)
+    out = simulate_job(world, bars, R_OCT, BrokenStore(), TradingMode.DRY_RUN)
+    assert out["dashboard_bytes"] is None
+    assert out["books"]["TWIN"]["sessions"] == 1
+
+
+def test_a_paper_month_without_its_snapshots_is_left_out(world: Engine, tmp_path: Path) -> None:
+    bars = Bars()
+    a_paper_month(world, bars)
+    with world.begin() as conn:
+        conn.execute(delete(AccountSnapshot).where(AccountSnapshot.session_date == E_DEC))
+        conn.execute(
+            insert(OrderRow).values(
+                broker_id="b-2",
+                client_order_id="at-2",
+                symbol="SPY",
+                purpose="ENTRY",
+                side="buy",
+                order_type="limit",
+                order_class="simple",
+                time_in_force="day",
+                qty=1,
+                filled_qty=1,
+                status="filled",
+            )
+        )
+    simulate_job(world, bars, E_DEC, LocalStore(tmp_path), TradingMode.PAPER)
+    with world.connect() as conn:
+        rows = orm.Session(conn).scalars(select(PortfolioJournal)).all()
+    assert all(j.results["paper"] is None for j in rows)

@@ -1,10 +1,15 @@
-"""The account snapshot and the Telegram daily report written by `post_market` (README §5.7)."""
+"""The account snapshot and the Telegram daily report written by `post_market` (README §5.7).
+
+The snapshot carries the funds' holdings and, from the live tax lots (task 5.3), the tax a sale
+of everything at the close would owe: equity less it is the account "after the estimated tax".
+"""
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from dataclasses import dataclass, field
 from datetime import date
+from typing import Any
 
 from sqlalchemy import Connection, func, select
 from sqlalchemy.dialects.postgresql import insert
@@ -23,10 +28,35 @@ class Snapshot:
     drawdown: float
     open_positions: int
     previous_equity: float | None
+    holdings: dict[str, dict[str, float]] = field(default_factory=dict)
+    tax_owed: float | None = None
+
+    @property
+    def after_tax(self) -> float | None:
+        return None if self.tax_owed is None else self.equity - self.tax_owed
+
+
+def holdings(
+    positions: Iterable[BrokerPosition], funds: Collection[str]
+) -> dict[str, dict[str, float]]:
+    """The funds held at the close: units and value (at the cost when the broker gives no
+    price)."""
+    out = {}
+    for p in positions:
+        if p.qty > 0 and p.symbol in funds:
+            price = p.current_price if p.current_price is not None else p.avg_entry_price
+            out[p.symbol] = {"units": float(p.qty), "value": p.qty * price}
+    return dict(sorted(out.items()))
 
 
 def write_snapshot(
-    conn: Connection, session: date, account: Account, positions: Sequence[BrokerPosition]
+    conn: Connection,
+    session: date,
+    account: Account,
+    positions: Sequence[BrokerPosition],
+    *,
+    funds: Collection[str] = (),
+    tax_owed: float | None = None,
 ) -> Snapshot:
     """Upsert the session's snapshot; the peak is the highest equity on any earlier session or
     this one."""
@@ -42,7 +72,8 @@ def write_snapshot(
     peak = max(account.equity, previous_peak or 0.0)
     drawdown = 0.0 if peak <= 0 else max(0.0, 1 - account.equity / peak)
     open_positions = len([p for p in positions if p.qty > 0])
-    values: dict[str, object] = {
+    held = holdings(positions, funds)
+    values: dict[str, Any] = {
         "session_date": session,
         "equity": account.equity,
         "cash": account.cash,
@@ -50,6 +81,8 @@ def write_snapshot(
         "peak_equity": peak,
         "drawdown": drawdown,
         "open_positions": open_positions,
+        "holdings": held,
+        "tax_owed": tax_owed,
     }
     statement = insert(AccountSnapshot).values(values)
     conn.execute(
@@ -67,6 +100,8 @@ def write_snapshot(
         drawdown=drawdown,
         open_positions=open_positions,
         previous_equity=previous_equity,
+        holdings=held,
+        tax_owed=tax_owed,
     )
 
 
@@ -82,6 +117,7 @@ def daily_report(
     invariant_ok: bool,
     halted: bool = False,
     alerts: Sequence[str] = (),
+    tax_notes: Sequence[str] = (),
     mode: str,
 ) -> str:
     change = ""
@@ -94,6 +130,13 @@ def daily_report(
         f"Equity {_money(snapshot.equity)}{change}; cash {_money(snapshot.cash)}; "
         f"drawdown {snapshot.drawdown:.1%} from {_money(snapshot.peak_equity)}",
     ]
+    if snapshot.tax_owed is None:
+        lines.append("After the estimated tax: unknown (the tax lots weren't rebuilt)")
+    else:
+        lines.append(
+            f"After the estimated tax: {_money(snapshot.equity - snapshot.tax_owed)} "
+            f"({_money(snapshot.tax_owed)} if everything were sold now)"
+        )
     if halted:
         lines.append("Drawdown halt ON: no leverage (README §7.3)")
     held = [p for p in positions if p.qty > 0]
@@ -104,6 +147,9 @@ def daily_report(
         stop_text = f", stop {stop:.2f}" if stop is not None else ""
         lines.append(f"  {p.symbol} {p.qty} sh, cost {p.avg_entry_price:.2f}{price}{stop_text}")
     lines.append("Stops: the leveraged fund covered" if invariant_ok else "Stops: CHECK THE ALERTS")
+    if tax_notes:
+        lines.append(f"Tax lots: CHECK ({len(tax_notes)})")
+        lines.extend(f"  {note}" for note in tax_notes)
     if alerts:
         lines.append(f"Alerts today: {len(alerts)}")
     return "\n".join(lines)

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Protocol
 
@@ -134,6 +134,30 @@ class Account:
     equity: float
     cash: float
     long_market_value: float
+
+
+FILL = "FILL"
+
+
+@dataclass(frozen=True, slots=True)
+class Activity:
+    """One entry of the account's activity record: a fill (each partial fill its own), or a
+    cash entry (a distribution, interest, a withholding, a fee, a deposit), for the tax lots
+    (README §5.7)."""
+
+    id: str
+    """The broker's id; ids sort in the order the activities happened."""
+    kind: str
+    """``FILL``, or the broker's activity type (``DIV``, ``DIVNRA``, ``INT``, ``FEE``, ...)."""
+    day: date
+    """The session (New York) of a fill; the date of a cash entry."""
+    symbol: str | None = None
+    side: Side | None = None
+    qty: float = 0.0
+    price: float = 0.0
+    amount: float = 0.0
+    """A cash entry's net amount (negative for a withholding or a fee); 0 for a fill."""
+    order_id: str | None = None
 
 
 # --- requests ------------------------------------------------------------------------------
@@ -273,6 +297,10 @@ class Broker(Protocol):
         ...
 
     def cancel(self, order_id: str) -> None: ...
+
+    def activities(self) -> list[Activity]:
+        """The account's whole activity record, oldest first."""
+        ...
 
 
 class PriceSource(Protocol):
