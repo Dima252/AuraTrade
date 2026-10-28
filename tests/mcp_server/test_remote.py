@@ -28,7 +28,7 @@ def _event(
         "rawPath": path,
         "rawQueryString": "",
         "headers": {
-            # As CloudFront forwards them: the function URL's own host, the viewer's length.
+            # As the function URL hands them over: its own host, the client's length.
             "host": "abc.lambda-url.us-east-1.on.aws",
             "content-length": str(len(body)),
             "content-type": "application/json",

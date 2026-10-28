@@ -1,9 +1,10 @@
 """CDK entrypoint. From infra/: `npx aws-cdk synth`, `npx aws-cdk deploy AuraTradePublicSite`,
-`npx aws-cdk deploy AuraTradePaper -c trading_mode=paper`."""
+`npx aws-cdk deploy AuraTradePaper -c trading_mode=paper`, `npx aws-cdk deploy AuraTradeMcp`."""
 
 import os
 
 import aws_cdk as cdk
+from stacks.mcp import McpStack
 from stacks.public_site import PublicSiteStack
 from stacks.trading import TradingStack
 
@@ -30,5 +31,8 @@ TradingStack(
     site_bucket=site.bucket,
     env=env,
 )
+
+# The remote MCP server's public tools, for the account's own credentials only (#175).
+McpStack(app, "AuraTradeMcp", site_bucket=site.bucket, env=env)
 
 app.synth()

@@ -1,24 +1,18 @@
-"""Public project site: static files in a private S3 bucket, served by CloudFront (README §12),
-and the remote MCP server's public tools at `/mcp` (README §5.10, task 6.4 step 2)."""
+"""Public project site: static files in a private S3 bucket, served by CloudFront (README §12)."""
 
 from pathlib import Path
 
-from aws_cdk import CfnOutput, Duration, Environment, IgnoreMode, RemovalPolicy, Stack
+from aws_cdk import CfnOutput, Duration, Environment, RemovalPolicy, Stack
 from aws_cdk import aws_certificatemanager as acm
 from aws_cdk import aws_cloudfront as cloudfront
 from aws_cdk import aws_cloudfront_origins as origins
-from aws_cdk import aws_ecr_assets as ecr_assets
-from aws_cdk import aws_iam as iam
-from aws_cdk import aws_lambda as lambda_
-from aws_cdk import aws_logs as logs
 from aws_cdk import aws_route53 as route53
 from aws_cdk import aws_route53_targets as targets
 from aws_cdk import aws_s3 as s3
 from aws_cdk import aws_s3_deployment as s3deploy
 from constructs import Construct
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-WEB_DIR = REPO_ROOT / "web"
+WEB_DIR = Path(__file__).resolve().parents[2] / "web"
 
 # The page ships one self-hosted script (the dashboard, reading data/snapshot.json) and no
 # inline code or third-party assets, so the policy can deny everything else.
@@ -32,15 +26,6 @@ CONTENT_SECURITY_POLICY = (
 DATA_PREFIX = "data/*"
 # The snapshot changes once an evening: served fresh within minutes, not a day.
 DATA_TTL = Duration.minutes(5)
-SNAPSHOT_KEY = "data/snapshot.json"
-
-# The remote MCP server: one function URL behind the distribution. Its URL takes no auth (MCP
-# clients don't sign their POSTs, which origin access control requires), so a reserved
-# concurrency caps it: Lambda's concurrency is the account's, shared with the trading jobs, and
-# a flood of MCP calls must never throttle an order job. It also bounds the bill.
-MCP_PATH = "/mcp"
-MCP_FUNCTION = "auratrade-public-mcp"
-MCP_CONCURRENCY = 2
 
 
 class PublicSiteStack(Stack):
@@ -158,48 +143,6 @@ class PublicSiteStack(Stack):
             certificate=certificate,
         )
 
-        mcp = lambda_.DockerImageFunction(
-            self,
-            "McpServer",
-            function_name=MCP_FUNCTION,
-            code=lambda_.DockerImageCode.from_image_asset(
-                str(REPO_ROOT),
-                target="mcp",
-                platform=ecr_assets.Platform.LINUX_AMD64,
-                ignore_mode=IgnoreMode.DOCKER,  # the .dockerignore allow-list
-            ),
-            architecture=lambda_.Architecture.X86_64,
-            memory_size=512,
-            timeout=Duration.seconds(15),
-            reserved_concurrent_executions=MCP_CONCURRENCY,
-            environment={"MCP_SNAPSHOT": f"s3://{bucket.bucket_name}/{SNAPSHOT_KEY}"},
-            log_group=logs.LogGroup(
-                self,
-                "McpLogs",
-                log_group_name=f"/aws/lambda/{MCP_FUNCTION}",
-                retention=logs.RetentionDays.ONE_MONTH,
-                removal_policy=RemovalPolicy.DESTROY,
-            ),
-        )
-        # The snapshot alone, not even a listing: the server can show no more than the site (#174).
-        mcp.add_to_role_policy(
-            iam.PolicyStatement(
-                actions=["s3:GetObject"], resources=[bucket.arn_for_objects(SNAPSHOT_KEY)]
-            )
-        )
-        mcp_url = mcp.add_function_url(auth_type=lambda_.FunctionUrlAuthType.NONE)
-        distribution.add_behavior(
-            MCP_PATH,
-            origins.FunctionUrlOrigin(mcp_url),
-            # A POST can't follow a redirect to https.
-            viewer_protocol_policy=cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
-            allowed_methods=cloudfront.AllowedMethods.ALLOW_ALL,
-            cache_policy=cloudfront.CachePolicy.CACHING_DISABLED,
-            # The function URL routes on its own Host.
-            origin_request_policy=cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
-            response_headers_policy=headers,
-        )
-
         s3deploy.BucketDeployment(
             self,
             "DeploySite",
@@ -222,4 +165,3 @@ class PublicSiteStack(Stack):
         site_host = domain_name or distribution.distribution_domain_name
         CfnOutput(self, "SiteUrl", value=f"https://{site_host}")
         CfnOutput(self, "BucketName", value=bucket.bucket_name)
-        CfnOutput(self, "McpUrl", value=f"https://{site_host}{MCP_PATH}")
