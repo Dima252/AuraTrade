@@ -96,14 +96,12 @@ def test_cboe_history_parses_us_dates() -> None:
     history = cboe(server).history(CboeIndex.VIX3M)
     assert history.closes[date(2026, 10, 9)] == 17.77
     assert history.closes[date(2009, 9, 18)] == 26.54
-    assert history.last_date == date(2026, 10, 14)
     assert server.requests[0].url.path == "/api/global/us_indices/daily_prices/VIX3M_History.csv"
 
 
 def test_cboe_empty_history() -> None:
     history = cboe(Server(ok("DATE,OPEN,HIGH,LOW,CLOSE\n"))).history(CboeIndex.VIX)
     assert history.closes == {}
-    assert history.last_date is None
 
 
 def fred(server: Server) -> FredClient:

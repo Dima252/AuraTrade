@@ -1,4 +1,4 @@
-"""`post_market` (16:20, the head of the evening chain; README §3, §5.10, §10).
+"""`post_market` (16:20, the head of the evening chain; README §3, §5.7, §10).
 
     uv run python -m auratrade.jobs.post_market --session 2026-10-22 --dry-run
 

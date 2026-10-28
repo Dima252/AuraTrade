@@ -53,14 +53,6 @@ def table_key(name: str) -> str:
     return f"{TABLES_PREFIX}/{name}.parquet"
 
 
-def membership_key(year: int) -> str:
-    return f"{TABLES_PREFIX}/universe/year={year}.parquet"
-
-
-def news_key(year: int, month: int) -> str:
-    return f"{TABLES_PREFIX}/news/{year:04d}-{month:02d}.parquet"
-
-
 def to_bytes(table: pa.Table) -> bytes:
     buffer = io.BytesIO()
     pq.write_table(table, buffer)

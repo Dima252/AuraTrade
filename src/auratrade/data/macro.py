@@ -60,10 +60,6 @@ class CboeHistory:
     index: CboeIndex
     closes: dict[date, float]
 
-    @property
-    def last_date(self) -> date | None:
-        return max(self.closes) if self.closes else None
-
 
 class CboeClient:
     def __init__(

@@ -18,7 +18,7 @@ class JobStatus(StrEnum):
     SUCCEEDED = "SUCCEEDED"
     FAILED = "FAILED"
     SKIPPED_MARKET_CLOSED = "SKIPPED_MARKET_CLOSED"
-    SKIPPED_NOT_SATURDAY = "SKIPPED_NOT_SATURDAY"
+    SKIPPED_NOT_SATURDAY = "SKIPPED_NOT_SATURDAY"  # the setup system's weekly review: old runs only
     # A chained job that already succeeded (or is running) for the session.
     SKIPPED_ALREADY_RAN = "SKIPPED_ALREADY_RAN"
     # A chained job whose predecessor hasn't succeeded yet, before its deadline.

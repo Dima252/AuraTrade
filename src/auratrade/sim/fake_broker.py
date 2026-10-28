@@ -23,10 +23,9 @@ its answer (a dropped connection), or kill the process after it returns (`Proces
 `BaseException`, so no `except Exception` in the order code swallows it). An order can be
 deleted behind the order layer's back.
 
-Orders fill two ways: by hand with `fill`, or through the fill model with `play`, which runs
-one bar (minute or daily) over the symbol's open orders with `sim.fills`, the same functions the
-trade simulator uses (README §5.12: one simulator, one fake broker). Each fill is also an entry
-in the account's activities, as Alpaca records it; `distribute` adds a cash entry (task 5.3).
+Orders fill by hand with `fill` (a test's market decides what fills, and at what price). Each
+fill is also an entry in the account's activities, as Alpaca records it; `distribute` adds a cash
+entry (task 5.3).
 """
 
 from __future__ import annotations
@@ -65,13 +64,6 @@ from auratrade.execution.broker import (
     StopThroughMarketError,
     TimeInForce,
     WashTradeError,
-)
-from auratrade.sim.fills import (
-    PriceBar,
-    entry_on_bar,
-    sell_fill,
-    sell_limit_on_bar,
-    stop_on_bar,
 )
 
 # Open sell orders in these statuses hold their shares.
@@ -219,48 +211,6 @@ class FakeBroker:
                 amount=amount,
             )
         )
-
-    def play(self, symbol: str, bar: PriceBar, *, slip: float = 0.0) -> list[str]:
-        """One bar through the fill model: entries first, then stops (so a leg the bar
-        activated can stop out on it: the pessimistic order), then sells. The symbol's price
-        becomes the bar's close. Returns the ids of the orders filled."""
-        filled: list[str] = []
-
-        def working(match: Callable[[BrokerOrder], bool]) -> list[BrokerOrder]:
-            return [
-                o
-                for o in self.all_orders()
-                if o.symbol == symbol and o.status in _WORKING and match(o)
-            ]
-
-        for o in working(lambda o: o.side is Side.BUY):
-            trigger = o.stop_price if o.type is OrderType.STOP_LIMIT else None
-            step = entry_on_bar(
-                bar,
-                trigger=trigger,
-                limit=_level(o.limit_price),
-                slip=slip,
-                resting=o.id in self._resting,
-            )
-            if step.resting:
-                self._resting.add(o.id)
-            if step.price is not None:
-                self.fill(o.id, price=step.price)
-                filled.append(o.id)
-        for o in working(lambda o: o.is_sell_stop):
-            if (price := stop_on_bar(bar, stop=_level(o.stop_price), slip=slip)) is not None:
-                self.fill(o.id, price=price)
-                filled.append(o.id)
-        for o in working(lambda o: o.side is Side.SELL and not o.is_sell_stop):
-            if o.type is OrderType.MARKET:
-                price = sell_fill(bar.open, slip)
-            else:
-                price = sell_limit_on_bar(bar, limit=_level(o.limit_price), slip=slip)
-            if price is not None:
-                self.fill(o.id, price=price)
-                filled.append(o.id)
-        self._prices[symbol] = bar.close
-        return filled
 
     def open_market(self) -> None:
         self.market_open = True

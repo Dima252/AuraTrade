@@ -87,11 +87,15 @@ class TestMigrations:
                 engine.dispose()
 
     def test_migration_seeds_match_the_code(self) -> None:
-        source = (REPO_ROOT / "alembic/versions/0001_initial_data_layer.py").read_text(
-            encoding="utf-8"
-        )
-        seeded = dict(re.findall(r'\{"name": "(\w+)", "value": (True|False)\}', source))
-        assert {k: v == "True" for k, v in seeded.items()} == SEED
+        with temporary_database("auratrade_seed") as url:
+            upgrade(url)
+            engine = make_engine(url)
+            try:
+                with engine.connect() as conn:
+                    rows = dict(conn.execute(select(SystemFlag.name, SystemFlag.value)).all())
+            finally:
+                engine.dispose()
+        assert rows == SEED
 
 
 class TestFlags:
@@ -101,26 +105,24 @@ class TestFlags:
             flags = read_flags(conn)
         assert rows == SEED
         assert not flags.trading_enabled
-        assert not flags.entries_allowed
+        assert not flags.halt_drawdown
 
-    def test_enabled_without_halts_allows_entries(self, pg_engine: Engine) -> None:
+    def test_flags_read_as_written(self, pg_engine: Engine) -> None:
         with pg_engine.begin() as conn:
             conn.execute(
                 update(SystemFlag).where(SystemFlag.name == TRADING_ENABLED).values(value=True)
             )
-            assert read_flags(conn).entries_allowed
             conn.execute(
-                update(SystemFlag).where(SystemFlag.name == "halt_weekly_loss").values(value=True)
+                update(SystemFlag).where(SystemFlag.name == "halt_drawdown").values(value=True)
             )
-            assert not read_flags(conn).entries_allowed
+            flags = read_flags(conn)
+        assert (flags.trading_enabled, flags.halt_drawdown) == (True, True)
 
     def test_missing_rows_fail_closed(self, pg_engine: Engine) -> None:
         with pg_engine.begin() as conn:
             conn.execute(delete(SystemFlag))
             flags = read_flags(conn)
         assert not flags.trading_enabled
-        assert flags.halt_daily_loss
-        assert flags.halt_weekly_loss
         assert flags.halt_drawdown
 
 

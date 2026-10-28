@@ -102,7 +102,6 @@ class TestCounting:
         self, cal: MarketCalendar, day: date, days: int, long_weekend: bool
     ) -> None:
         assert cal.days_until_next_open(day) == days
-        assert cal.is_long_weekend(day) is long_weekend
 
 
 class TestCoverage:

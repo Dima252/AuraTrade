@@ -72,21 +72,3 @@ def change(values: Sequence[float], lookback: int) -> Series:
     return [
         values[t] / values[t - lookback] - 1 if t >= lookback else None for t in range(len(values))
     ]
-
-
-def at_window_high(values: Sequence[float], window: int) -> list[bool]:
-    """True where the value is the highest of its last ``window`` values (ties count).
-
-    False until a full window of history exists, so a short history never reads as a new high.
-    """
-    return [
-        h is not None and v >= h for v, h in zip(values, rolling_max(values, window), strict=True)
-    ]
-
-
-def at_window_low(values: Sequence[float], window: int) -> list[bool]:
-    """True where the value is the lowest of its last ``window`` values (ties count)."""
-    return [
-        lo is not None and v <= lo
-        for v, lo in zip(values, rolling_min(values, window), strict=True)
-    ]

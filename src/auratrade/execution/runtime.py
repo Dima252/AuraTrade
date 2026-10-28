@@ -195,7 +195,7 @@ class InvariantReport:
 
     @property
     def clean(self) -> bool:
-        """Nothing was wrong at the start of the run (entries may go ahead)."""
+        """Nothing was wrong at the start of the run (increases may go ahead)."""
         return not self.problems
 
     def details(self) -> dict[str, Any]:

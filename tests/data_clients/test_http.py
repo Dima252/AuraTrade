@@ -102,14 +102,11 @@ def test_transport_error_message_has_no_url() -> None:
     assert str(info.value) == "vendor: /v1/series: transport error ConnectError"
 
 
-def test_404_is_none_only_when_allowed() -> None:
+def test_404_is_an_error() -> None:
     server = Server(httpx.Response(404))
-    assert http(server).get_json_or_none(URL) is None
-    assert len(server.requests) == 1
     with pytest.raises(VendorError, match="HTTP 404"):
-        http(Server(httpx.Response(404))).get_json(URL)
-    with pytest.raises(VendorError, match="HTTP 403"):
-        http(Server(httpx.Response(403))).get_json_or_none(URL)
+        http(server).get_json(URL)
+    assert len(server.requests) == 1  # not retried
 
 
 def test_invalid_json_is_an_error() -> None:

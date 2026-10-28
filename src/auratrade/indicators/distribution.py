@@ -110,30 +110,3 @@ def step_rally_attempt(
             weak=advanced.day > last_strong_day,
         )
     return advanced, None
-
-
-def find_follow_through_day(
-    bars: Sequence[OHLCV],
-    correction_start: int,
-    *,
-    min_gain: float,
-    first_day: int,
-    last_strong_day: int,
-) -> FollowThroughDay | None:
-    """The first follow-through day after ``correction_start``, or ``None``."""
-    if not 0 <= correction_start < len(bars):
-        raise IndexError(f"session {correction_start} out of range")
-    state = start_rally_attempt(bars[correction_start], correction_start)
-    for t in range(correction_start + 1, len(bars)):
-        state, ftd = step_rally_attempt(
-            state,
-            bars[t - 1],
-            bars[t],
-            t,
-            min_gain=min_gain,
-            first_day=first_day,
-            last_strong_day=last_strong_day,
-        )
-        if ftd is not None:
-            return ftd
-    return None

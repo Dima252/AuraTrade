@@ -1,16 +1,15 @@
-"""`client_order_id`s (README §5.7.6): how the order layer finds its own orders again.
+"""`client_order_id`s (README §5.6.4): how the order layer finds its own orders again.
 
 Alpaca keeps ids unique for the account's lifetime and rejects a duplicate even after the first
 order was cancelled (spike 0.3b), so an id is the idempotency key:
 
-- **Entries** are deterministic: `at-20261022-NVDA-e1-1` is signal NVDA's tranche 1 for that
-  session, attempt 1. A retried job resubmits the same id, gets `client_order_id must be
-  unique`, and looks the order up instead of buying twice.
 - **Stops, sells and the portfolio's buys** carry a random suffix. A job decides them from the
   broker state it just reconciled, so a re-run decides afresh; within a run, a call retried
   after a dropped connection reuses its id (`orders.submit_once`).
 
 Leg ids are set by Alpaca (UUIDs), so legs are found through their parent, never by prefix.
+The setup system's entries (`at-20261022-NVDA-e1-1`: a signal's tranche and attempt) are still
+parsed, so an account's older orders are recognised as ours.
 """
 
 from __future__ import annotations

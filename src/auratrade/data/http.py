@@ -118,15 +118,6 @@ class VendorHttp:
     def get_json(self, url: str, params: Params | None = None) -> Any:
         return self._json(url, self.get(url, params))
 
-    def get_json_or_none(self, url: str, params: Params | None = None) -> Any:
-        """As `get_json`, but None for a 404 (never retried)."""
-        try:
-            return self.get_json(url, params)
-        except VendorError as exc:
-            if exc.status == httpx.codes.NOT_FOUND:
-                return None
-            raise
-
     def get_text(self, url: str, params: Params | None = None) -> str:
         return self.get(url, params).text
 

@@ -403,6 +403,12 @@ def stop_proceeds(section: Section, invariant: InvariantReport) -> dict[str, Any
         "already_in": round(bought, 2),
         "into": cash_fund,
     }
+    if bought == 0:
+        # The first run since the fill (README §5.9): the operator raises the event by hand.
+        desk.alert(
+            f"{lev}'s stop filled: {out['stopped']} shares sold for {proceeds:,.2f}; the "
+            f"proceeds go into {cash_fund}. Explain it with portfolio_manager --event STOP_FILLED."
+        )
     held = holdings(deps.broker, [cash_fund]).get(cash_fund, 0)
     blocks = Blocks(
         increases=tuple(increase_blocks(section, invariant)),

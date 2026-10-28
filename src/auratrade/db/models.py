@@ -559,7 +559,7 @@ class PositionEventRow(Base):
     created_at: Mapped[datetime] = _created()
 
 
-# --- The order layer (task 1.7, README §5.7, §10) ----------------------------------------------
+# --- The order layer (task 1.7, README §5.6, §10) ----------------------------------------------
 
 # Who decided a signal: the walking skeleton's rule-only pick (task 1.7). Phase 5 adds the
 # Portfolio Manager. Kept apart so "your numbers" and the go-live statistics never count the
@@ -573,7 +573,8 @@ EXIT_REASONS = (*PLAN_RULES, "MANUAL")
 
 
 class Signal(Base):
-    """The queue (README §5.7): one entry order to place, decided the evening before."""
+    """The setup system's queue (archived README §5.7): one entry order, decided the evening
+    before."""
 
     __tablename__ = "signals"
     __table_args__ = (
@@ -656,7 +657,7 @@ class Position(Base):
     closed_session: Mapped[date | None] = mapped_column(Date)
     regime_at_entry: Mapped[str | None] = mapped_column(Text)
     # A sale the plan decided that hasn't happened yet (no fill, a closed market): the next
-    # order job with the market open retries it (README §5.7.2, #124).
+    # order job with the market open retries it (README §5.6.2, #124).
     exit_pending: Mapped[str | None] = mapped_column(Text)
     exit_pending_since: Mapped[datetime | None]
     exit_reason: Mapped[str | None] = mapped_column(Text)
@@ -811,7 +812,7 @@ class WatchlistRow(Base):
 
 
 class BreakoutRow(Base):
-    """A trigger of the full scan, ungated, and its result 5 sessions later (README §5.12);
+    """A trigger of the full scan, ungated, and its result 5 sessions later (archived README §5.12);
     the leadership-health pillar reads the complete ones. 90 days in Postgres (README §10)."""
 
     __tablename__ = "breakout_tracker"

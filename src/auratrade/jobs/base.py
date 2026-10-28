@@ -18,7 +18,7 @@ twice for a session: a run that finds it succeeded, or running, records
 `SKIPPED_ALREADY_RAN`.
 
 **Quiet jobs** (`stop_guard`, every 5 minutes) open the database only when they act (README
-§5.7, §12): the runner skips the calendar and the RUNNING heartbeat, and records the run only
+§5.6.1, §12): the runner skips the calendar and the RUNNING heartbeat, and records the run only
 when it fails or its output says `acted`. The job checks the broker's clock instead.
 """
 
@@ -47,7 +47,6 @@ from auratrade.storage import ObjectStore
 
 NY = ZoneInfo("America/New_York")
 MAX_ERROR_CHARS = 2000
-SATURDAY = 5
 
 log = structlog.get_logger(__name__)
 
@@ -57,8 +56,7 @@ class GuardPolicy(StrEnum):
 
     SESSION_TODAY = "session_today"  # morning and intraday jobs
     EVENING = "evening"  # today was a session; chained when in the evening chain
-    ANY_DAY = "any_day"  # analyst_collect
-    SATURDAY = "saturday"  # weekly_review, regardless of sessions
+    ANY_DAY = "any_day"  # no calendar guard (no scheduled job uses it now)
     WATCHDOG = "watchdog"  # always runs; the job checks only heartbeats expected that day
     MARKET_HOURS = "market_hours"  # stop_guard: the job asks the broker's clock itself
 
@@ -269,9 +267,6 @@ class JobRunner:
             case GuardPolicy.SESSION_TODAY | GuardPolicy.EVENING:
                 if not self.deps.calendar.is_session(session_date):
                     return JobStatus.SKIPPED_MARKET_CLOSED
-            case GuardPolicy.SATURDAY:
-                if session_date.weekday() != SATURDAY:
-                    return JobStatus.SKIPPED_NOT_SATURDAY
             case GuardPolicy.ANY_DAY | GuardPolicy.WATCHDOG | GuardPolicy.MARKET_HOURS:
                 pass
         return None

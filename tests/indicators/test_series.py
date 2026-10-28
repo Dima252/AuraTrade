@@ -3,8 +3,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from auratrade.indicators.series import (
-    at_window_high,
-    at_window_low,
     change,
     check_same_length,
     rolling_max,
@@ -41,11 +39,6 @@ def test_change() -> None:
     assert result[0] is None
     assert result[1:] == [pytest.approx(0.1), pytest.approx(0.1)]
     assert change([100, 110, 121], 2) == [None, None, pytest.approx(0.21)]
-
-
-def test_window_high_and_low_count_ties_and_need_full_history() -> None:
-    assert at_window_high([1, 2, 2, 1, 3], 2) == [False, True, True, False, True]
-    assert at_window_low([3, 2, 2, 3, 1], 2) == [False, True, True, False, True]
 
 
 def test_validation() -> None:

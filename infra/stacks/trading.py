@@ -7,7 +7,7 @@ functions on one container image, started by EventBridge Scheduler on `jobs.sche
   `scripts/put_parameters.py`); each function reads them at start (`auratrade.parameters`).
   Nothing secret is in the template.
 - **Trading mode** is a deploy-time choice and defaults to `dry_run`: paper orders need
-  `-c trading_mode=paper`, and `live` is refused here as it is by the settings (Phase 8).
+  `-c trading_mode=paper`, and `live` is refused here as it is by the settings (CLAUDE.md §3.1).
 - **Schedules** fire in `America/New_York` on weekdays; the jobs' calendar guards skip
   holidays. Order jobs keep Lambda's async retries (they are idempotent through
   `client_order_id`); the others don't retry, since the next slot or the chain's fallback
@@ -49,7 +49,7 @@ class Function:
     job: str
     memory_mb: int
     timeout_s: int
-    # Lambda's async retries: on for order jobs (README §5.7, plan 1.8), off otherwise.
+    # Lambda's async retries: on for order jobs (README §5.6, plan 1.8), off otherwise.
     retries: int = 0
     storage: bool = False
     # Writes the dashboard's snapshot: `public/` in storage, `data/snapshot.json` on the site.

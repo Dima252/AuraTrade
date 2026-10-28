@@ -7,7 +7,7 @@ A Neon branch made from `dev` carries `dev`'s positions, orders, signals, mismat
 tax lots and the leveraged fund's stop level. Against a different Alpaca account (README §12)
 they would read as mismatches and unprotected positions, and the chain would skip sessions `dev`
 already ran. This deletes them in one transaction and puts the flags back to their seed: **the
-kill switch on** (entries off), no halts, so the new environment trades only after `auratrade
+kill switch on** (increases off), the halt off, so the new environment trades only after `auratrade
 kill off`.
 
 Market data stays: bars, tickers, sessions, corporate actions, macro, earnings, fundamentals,

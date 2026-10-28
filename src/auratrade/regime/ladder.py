@@ -24,18 +24,3 @@ def most_conservative(*regimes: Regime) -> Regime:
     if not regimes:
         raise ValueError("need at least one regime")
     return min(regimes, key=rank)
-
-
-def downgrade(current: Regime, proposed: Regime | None) -> Regime:
-    """The regime after an outside view that may only lower it: the LLM view in the Portfolio
-    Manager, or the ``premarket_check`` downgrade.
-
-    ``None`` (no view) keeps ``current``. A proposed ``EARLY_UPTREND`` is valid only when the
-    state machine already computed it; anywhere else it is invalid, and an invalid view fails
-    closed to ``CORRECTION``.
-    """
-    if proposed is None:
-        return current
-    if proposed is Regime.EARLY_UPTREND and current is not Regime.EARLY_UPTREND:
-        return Regime.CORRECTION
-    return most_conservative(current, proposed)

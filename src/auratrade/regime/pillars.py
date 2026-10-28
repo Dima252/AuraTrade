@@ -142,7 +142,7 @@ def crisis_override(
     index_return: float | None,
     cfg: CrisisConfig,
 ) -> Crisis:
-    """No new entries (README §5.2), decided at a session's close for the next session.
+    """The crisis override (README §5.2), decided at a session's close for the next session.
 
     - ``ratios``: VIX/VIX3M at this session and the sessions before it, newest last, each from
       the latest values on or before that session (CBOE, or FRED when CBOE is late). The last

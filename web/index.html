@@ -80,7 +80,7 @@
               <li>Every target weight, share count and order price</li>
               <li>Leverage only through a 2x S&amp;P fund, never margin, with a stop at the broker</li>
               <li>Each ETF at most 10% of the account; no leveraged or inverse funds in the satellite</li>
-              <li>Fail closed: on any doubt, never more risk; a failed decision takes the rules' allocation</li>
+              <li>Fail closed: on any doubt, never more risk; a failed decision holds: the rule level and last month's satellite</li>
             </ul>
           </article>
         </div>
@@ -89,7 +89,7 @@
         <ol class="timeline">
           <li><time>Every evening</time><div><strong>Ingest, journal, twin.</strong> ETF bars, macro data and news come in; the rules-only twin is played forward; the drawdown is checked.</div></li>
           <li><time>Month end</time><div><strong>The trend.</strong> The market's month-end value is read against its 10-month average; the volatility cap and the halt set the rule level.</div></li>
-          <li><time>08:45</time><div><strong>Portfolio Manager.</strong> On the first session of the month, Claude sets the satellite and the core's shift, with its reasons. No valid decision by noon means the rules' allocation.</div></li>
+          <li><time>08:45</time><div><strong>Portfolio Manager.</strong> On the first session of the month, Claude sets the satellite and the core's shift, with its reasons. No valid decision by noon means holding: the rule level and last month's satellite.</div></li>
           <li><time>15:40</time><div><strong>Rebalance.</strong> Holdings more than 5 points off target are traded back to it: sales first, then buys, as limit orders.</div></li>
           <li><time>09:35–16:00</time><div><strong>Stop guard.</strong> Every 5 minutes, code checks that the leveraged fund's stop at the broker covers every share.</div></li>
         </ol>

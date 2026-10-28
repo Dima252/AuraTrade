@@ -119,14 +119,6 @@ class TestGuard:
         )
         assert len(spy.contexts) == 1
 
-    def test_saturday_policy(self, make_harness: MakeHarness) -> None:
-        h = make_harness(sessions=SESSIONS)
-        spy = Spy()
-        job = spec("weekly_review", GuardPolicy.SATURDAY, spy)
-        assert h.runner.run(job, session=SAT).status is JobStatus.SUCCEEDED
-        assert h.runner.run(job, session=date(2026, 10, 9)).status is JobStatus.SKIPPED_NOT_SATURDAY
-        assert len(spy.contexts) == 1
-
     @pytest.mark.parametrize("policy", [GuardPolicy.ANY_DAY, GuardPolicy.WATCHDOG])
     def test_any_day_policies_ignore_the_calendar(
         self, make_harness: MakeHarness, policy: GuardPolicy

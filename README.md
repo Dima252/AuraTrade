@@ -6,7 +6,7 @@ Python computes the trend, every target and every price, and enforces hard risk 
 
 > **Strategy change (#153-#156, 2026-10-26/27):** three stock-selection strategies failed their pre-registered tests: the chart-pattern setups (twice) and a momentum book (#152). The system became the portfolio manager this README describes ([docs/strategy-change-portfolio.md](docs/strategy-change-portfolio.md), [docs/portfolio-plan.md](docs/portfolio-plan.md)). The earlier specs are archived in [docs/archive/](docs/archive/) (`README-setup-system.md`, `README-momentum-book.md`). The momentum book's code is deleted (#161), and the setup system's went in task 5.2 (#169).
 >
-> **Status:** the backtest passed its pre-registered gate ([docs/backtests/portfolio.md](docs/backtests/portfolio.md), #160): after Israeli tax +9.2% a year against +8.7% for the S&P proxy held, 1928-2026, with a shallower worst drawdown; a thin edge, and a tie since the rules were published. Next: the LLM layer. Sections that describe components not built yet are the spec they will be built to. The build plan and progress tracker are in [docs/execution-plan.md](docs/execution-plan.md); the builder's working rules are in [CLAUDE.md](CLAUDE.md).
+> **Status:** the backtest passed its pre-registered gate ([docs/backtests/portfolio.md](docs/backtests/portfolio.md), #160): after Israeli tax +9.2% a year against +8.7% for the S&P proxy held, 1928-2026, with a shallower worst drawdown; a thin edge, and a tie since the rules were published. The LLM layer, the execution and the dashboard are built (Phases 4-5, task 6.2) and were checked end to end on `dev` before the deploy (#172); next is the paper trial (task 6.1). The build plan and progress tracker are in [docs/execution-plan.md](docs/execution-plan.md); the builder's working rules are in [CLAUDE.md](CLAUDE.md).
 >
 > **Disclaimer:** this is experimental software and a portfolio project. It runs on an Alpaca **paper** account; no live money is planned. Nothing here is financial or tax advice; the Israeli tax model is a simplification (§17).
 
@@ -55,8 +55,8 @@ Python computes the trend, every target and every price, and enforces hard risk 
 flowchart TD
     subgraph EVE["Evening pipeline (after close, session T)"]
         PM1[post_market<br/>reconcile · tax lots · account snapshot · drawdown check]
-        ING[ingest<br/>ETF bars · macro · news]
-        SIM[simulate<br/>the twin · scorecard]
+        ING[ingest<br/>ETF bars · corporate actions · macro]
+        SIM[simulate<br/>the twin · scorecard · dashboard snapshot]
         REG[regime<br/>a fact for the LLM]
         ALC[allocate<br/>on R: trend state · rule level · facts]
         PM1 --> ING --> SIM --> REG --> ALC
@@ -93,7 +93,7 @@ flowchart TD
     EVE --> DB
     DAY --> DB
     PM1 --> S3
-    PM1 --> WEB
+    SIM --> WEB
     GR -. violations .-> TG
     PM1 -. daily report .-> TG
 ```
@@ -104,7 +104,7 @@ flowchart TD
 - **Monthly decisions, daily protection.** The trend is read on the **ranking session R** (the last session of each month) and the book trades on the **execution session E** (the next full session). Between rebalances only the broker stop, the drawdown halt and reconciliation act.
 - **The rule level is known the evening before.** `allocate` computes it on R's close; the Portfolio Manager decides the next morning, in real time; the trades go in at the 15:40 decision price.
 - **The twin is computed, not traded.** `simulate` plays the rules-only portfolio forward each evening through `sim/portfolio.py`, the same simulation the backtest uses.
-- **Postgres is the queue** (`signals`, `portfolio_targets`).
+- **Postgres is the queue** (`portfolio_targets`: the decision on E, then each `execute_close` run on it).
 - **The evening pipeline is chained, not timed.** Each evening job starts only after its predecessor succeeded for the same session (checked in `job_runs`), and on success it invokes the next one. The scheduled times in §3 are fallback starts; a job whose predecessor hasn't succeeded waits up to 30 minutes past its fallback time, then fails closed (no increase of exposure next session) and alerts.
 - **Every job fits in Lambda's 15-minute limit;** anything over 10 minutes alerts.
 - **Trades go in at 15:40, not at the open.** The close has the day's best liquidity. Sells go first, then buys, each as a marketable limit on the decision price.
@@ -119,7 +119,7 @@ All times are US/Eastern (EventBridge Scheduler, `America/New_York`). **Every jo
 |---|---|---|
 | **Evening (session T)** | | |
 | 16:20 | `post_market` | Reconcile; **tax lots** rebuilt from the broker's fills and distributions; the account snapshot (holdings, the estimated tax); **the drawdown check** (turns the halt on, §7.3); Telegram daily report |
-| 17:00 | `ingest` | Bars for the ETF list (§5.1), the macro series, news |
+| 17:00 | `ingest` | Bars and corporate actions for the ETF list (§5.1), the macro series; news is fetched by the Portfolio Manager on demand |
 | 17:15 (fallback) | `simulate` | The **twin** for session T (§5.5); the scorecard once a month's results are complete; the dashboard's snapshot (§5.8) |
 | 17:25 (fallback) | `regime` | The regime classifier: a fact for the LLM, no rule reads it |
 | 17:35 (fallback) | `allocate` | **On R:** the trend state, the volatility, the halt → **the rule level** and the twin's targets; the Portfolio Manager's facts. Other sessions: nothing, unless an event needs explaining |
@@ -170,7 +170,7 @@ if session is None:
 | An ETF on the list has no bar | Halted or delisted | No buy of it; held units are marked at the last close and alerted |
 | SPY has no bar, or the macro series are stale | Ingest validation | `INCOMPLETE` → no increase of exposure next session, plus an alert |
 
-**Intraday prices:** the 15:40 decision price is the last IEX trade if ≤ 2 minutes old, else the IEX quote midpoint if fresh, else none (#120). For the ETFs on the list the IEX spread is narrow (the skeleton's wide-spread finding of 2026-10-23 concerned small caps). A sale with no decision price waits for the next session (the stop rests); a buy falls back to the delayed SIP last trade as its reference, with the limit bounding the fill (#144).
+**Intraday prices:** the 15:40 decision price is the last IEX trade if ≤ 2 minutes old, else the IEX quote midpoint if fresh, else none (#120). For the ETFs on the list the IEX spread is narrow (the skeleton's wide-spread finding of 2026-10-23 concerned small caps). A fund with no decision price isn't traded that run: the trade stays owed to the retry (§3), and the leveraged fund's stop keeps resting (§5.6).
 
 ---
 
@@ -202,7 +202,7 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
 
 ### 5.4 Portfolio Manager (`portfolio_manager`, LLM, real-time)
 
-- **Runs** at 08:45 on E (or its retry), and on an **event**: the drawdown halt turned on, the leveraged fund's stop filled, a held ETF's corporate action. On events it explains and may only reduce risk.
+- **Runs** at 08:45 on E (or its retry), and on an **event**: the drawdown halt turned on, the leveraged fund's stop filled, a held ETF's corporate action. On events it explains and may only reduce risk. Events are raised by hand for now (`portfolio_manager --event`, #169); the alerts say when.
 - **Inputs:**
   - the trend state, the SMA and the distance to each buffer edge, the volatility, the halt, **the rule level and the twin's targets**;
   - account state: equity, cash, holdings and their weights, drawdown, **tax lots** (unrealized gains, the year's realized gains, the loss carried forward), **the tax a full sale of each holding would realize now, and the satellite's tax budget left this year** (#163). In `dry_run` it is the simulated book's (#166); on `paper`, the broker's: R's `account_snapshots` row, the live `tax_lots` and the live halt's peak, and without that row or with its lots not rebuilt no facts are written, so E holds (#170);
@@ -219,7 +219,7 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
 - **The approved list** (`portfolio.satellite_list`): QQQ (Nasdaq-100), IWM (US small caps), AVUV (US small-cap value), MTUM (momentum), QUAL (quality), VEA (developed ex-US), VWO (emerging markets), GLD (gold), IEF (7-10y Treasuries), TLT (20y+ Treasuries), DBMF (managed futures), BIL (T-bills), SPY (neutral). No leveraged or inverse products. Final (task 4.2: all 13, with SSO, active and tradable on Alpaca on 2026-10-27, #165); changed only by a decision.
 - **Can't:** buy outside the list, use leverage in the satellite, lift the ceiling, block a sale toward a lower target or a stop, or name a price.
 - **On failure** (error, timeout, refusal, invalid schema, missed deadline): the book **holds** (#164): no shift, so the core takes the rule level, and last month's satellite (the neutral before the first decision). It is exactly the answer `{"core_shift": 0, "satellite": null}`, goes through the same guardrails, realizes no satellite tax and adds no risk; an alert goes out.
-- **Built** (task 4.2): `llm/portfolio_manager.py` (the answer, the tools, the run), `llm/portfolio_facts.py` (the facts and their rendering), `llm/portfolio_prompt.py` (the versioned prompt, filled from `risk.yaml`); the jobs that gather the facts come in task 4.3.
+- **Built** (task 4.2): `llm/portfolio_manager.py` (the answer, the tools, the run), `llm/portfolio_facts.py` (the facts and their rendering), `llm/portfolio_prompt.py` (the versioned prompt, filled from `risk.yaml`); the jobs that gather the facts and record the decision, `allocate` and `portfolio_manager`, in task 4.3 (#166).
 
 ### 5.5 The twin and the scorecard
 
@@ -227,7 +227,7 @@ On R, `allocate` runs them on SPY's adjusted closes (live) and writes the rule l
 - **The core rule on the whole account:** the rule level of §6 applied to 100% of equity, with no satellite of its own (R1 of the plan). **It is also the book at neutral** (no shift, the satellite in SPY, #163), so everything the LLM does, satellite and core shift, and the tax its changes realize, shows up as the difference.
 - **Simulated each evening** by `simulate` through `sim/portfolio.py` on daily bars, at the decision prices the book traded at (or the close, when the book didn't trade), with the same costs and the same tax model.
 - **Like for like.** Paper fills are optimistic (§17), so the book's own decisions are also replayed through `sim/portfolio.py` (the **sim return**); comparisons use the sim return, with paper fills reported alongside.
-- **In `dry_run`** (until task 5.1 trades the paper account) the sim return *is* the book (#166): both run from the trial's first R, from `portfolio_manager.dry_run_equity` in cash, on the real funds' bars (split-adjusted closes as the price, the distributions from the total-return closes), rewritten whole into `twin_book` (`TWIN`, `SIM`) each evening, and the account the Portfolio Manager sees is the simulated book's. The book's replay trades each holding only if its own target changed or it drifted past the band (§7.1), as the order layer will; the twin, like the backtest, rebalances the whole account when any target changes.
+- **The sim return and the twin** run from the trial's first R, from `portfolio_manager.dry_run_equity` in cash, on the real funds' bars (split-adjusted closes as the price, the distributions from the total-return closes), rewritten whole into `twin_book` (`TWIN`, `SIM`) each evening. In `dry_run`, where no orders are sent, the sim return *is* the book and the Portfolio Manager sees it as the account (#166); on `paper` the account is the broker's (task 5.3, #170). The book's replay trades each holding only if its own target changed or it drifted past the band (§7.1), as the order layer does; the twin, like the backtest, rebalances the whole account when any target changes.
 
 **The scorecard** (the evidence for whether the LLM adds value; `journal/portfolio_scorecard.py`, pure, task 4.4, #167):
 - **Each decision is scored over its month:** from its E's close (after its trades) to the next E's; the latest decision's month runs to the last close and is open. **After the estimated tax** means equity less the tax a sale of everything at that close would owe (the year's realized gains and income so far, the unrealized gains, net of the loss carried forward; `TaxBook.tax_if_sold`), so realizing a gain costs nothing at once (the tax was owed either way); its cost is the tax paid at the year's end, which stops compounding.
@@ -282,7 +282,7 @@ The public site (`AuraTradePublicSite`, #108, #134) becomes the project's showca
   | Drawdown halt (−25%, `portfolio.drawdown_halt`, §7.3) | Leverage: the level is at most 1.0x | Same |
   | `auratrade flatten --confirm` (manual only) | Turns the kill switch on, then sells every position: the leveraged fund with the sell sequence (its stop restored if the sale fails), the rest with marketable limits; during market hours only (#172) | Nothing automatic ever calls it |
 - **The kill switch is a database flag, not an environment variable,** read by every job at start. A new database starts with it on.
-- **Operator commands:** `auratrade kill on|off|status`, `auratrade mismatches` / `resolve <id> --note "…"`, `auratrade halt status|reset`, `auratrade flatten --confirm`. `docs/runbook.md` says what to do for each alert; it is written before the paper trial.
+- **Operator commands:** `auratrade kill on|off|status`, `auratrade mismatches` / `resolve <id> --note "…"`, `auratrade halt status|reset`, `auratrade flatten --confirm`. `docs/runbook.md` says what to do for each alert, and has the trial's start checklist (#172).
 - **Watchdog** heartbeats and an external dead-man's switch (healthchecks.io), as built in 1.8 (#133).
 - **Telegram alerts:** failures, guardrail clips, the halt, a stop fill, mismatches, refusals, incomplete data, calendar disagreements.
 - **Logs:** structlog → CloudWatch; LLM payloads → S3.
@@ -344,7 +344,7 @@ The rules (#154), all in `risk.yaml` `portfolio:`; the backtest's exact versions
 
 ## 8. Risk management and guardrails
 
-Guardrails are pure Python functions (`auratrade/guardrails/portfolio.py`) with 100% branch coverage. They run on **every** LLM decision. Violations are clipped or rejected, logged to `guardrail_events`, and alerted (#155).
+Guardrails are pure Python functions (`auratrade/guardrails/portfolio.py`) with 100% branch coverage. They run on **every** LLM decision. Violations are clipped or rejected, recorded on the decision's `portfolio_targets` row (`findings`) and in the month's journal (`clips`), and alerted (#155).
 
 | Guardrail | Default | Behaviour |
 |---|---|---|
@@ -376,7 +376,7 @@ The setup system's guardrails went with its code in task 5.2 (#169).
 |---|---|---|---|---|
 | Portfolio Manager | `claude-opus-5-5` | Real-time, with tools, the shared prefix cached | `high` | 1 per rebalance (12 a year), plus rare events |
 
-**Expected LLM cost: about $0.20-0.40 a decision, under $1 a month** (estimated in task 4.1, #162, from the 0.3g spike's measured call: $0.10 for a 3,400-token context and two turns). Assumed for the portfolio: about 3,000 tokens of system prompt and tools (cached), 10,000 of facts, 2-4 turns of about 2,500 output tokens each (thinking included) at effort `high`, the conversation cached from turn to turn. One decision a month plus a few events a year: **about $3-5 a year**. **Measured on the real prompt** (task 4.2, #165, Anthropic's free token count): 3,200 tokens of cached prefix (the system prompt, the four tools, the answer's schema) and about 8,500 with a full month's facts, below the 13,000 assumed, so **about $0.15-0.30 a decision**. **The first real decision** (task 4.3, a replay of 2026-10-01 on dev, #166) took one turn and no tools and **cost $0.058** (7,341 tokens written to the cache, 1,044 out); one with tool rounds costs more. **Cost alert:** above `llm.cost_alert_usd` ($1.00) for one decision, all its turns; the worst case inside the limits (6 turns at the 16,000-token cap) is about $2.
+**Expected LLM cost: about $0.15-0.30 a decision, under $1 a month** (measured on the real prompt in task 4.2, #165; first estimated in task 4.1, #162, from the 0.3g spike's measured call: $0.10 for a 3,400-token context and two turns). Assumed for the portfolio: about 3,000 tokens of system prompt and tools (cached), 10,000 of facts, 2-4 turns of about 2,500 output tokens each (thinking included) at effort `high`, the conversation cached from turn to turn. One decision a month plus a few events a year: **about $3-5 a year**. **Measured on the real prompt** (task 4.2, #165, Anthropic's free token count): 3,200 tokens of cached prefix (the system prompt, the four tools, the answer's schema) and about 8,500 with a full month's facts, below the 13,000 assumed, so **about $0.15-0.30 a decision**. **The first real decision** (task 4.3, a replay of 2026-10-01 on dev, #166) took one turn and no tools and **cost $0.058** (7,341 tokens written to the cache, 1,044 out); one with tool rounds costs more. **Cost alert:** above `llm.cost_alert_usd` ($1.00) for one decision, all its turns; the worst case inside the limits (6 turns at the 16,000-token cap) is about $2.
 
 **API usage:**
 - one client (`llm/client.py`) runs a decision to a validated answer or a named failure (`API_ERROR`, `TIMEOUT`, `DEADLINE`, `REFUSAL`, `TRUNCATED`, `INVALID_OUTPUT`, `TOO_MANY_TURNS`, `UNEXPECTED_STOP`); it never raises for an API problem, so every failure takes the twin's path; its limits are `risk.yaml` `llm:`;
@@ -492,7 +492,8 @@ AuraTrade/
 │   ├── indicators/               # moving averages, volume, distribution days (the regime's, the charts')
 │   ├── regime/                   # the regime classifier (a fact for the LLM)
 │   ├── strategies/               # core_allocation (the trend dial, #154)
-│   ├── tax/                      # israel: FIFO lots, realized gains, offsets, carry-forward, income
+│   ├── tax/                      # israel: FIFO lots, realized gains, offsets, carry-forward, income;
+│   │                             # live: the account's lots from the broker's activities (5.3)
 │   ├── guardrails/               # portfolio (#155)
 │   ├── llm/                      # the Claude client, the Portfolio Manager's schema and prompt (Phase 4)
 │   ├── execution/                # broker interface + Alpaca adapter, orders, the stop invariant,
@@ -500,8 +501,9 @@ AuraTrade/
 │   │                             # orders, pure), portfolio.py (the rebalance, the halt's sale, the stop's
 │   │                             # proceeds), funds.py (the leveraged fund's level, splits), halt.py (5.2)
 │   ├── journal/                  # portfolio.py (the books, the facts on R), decisions.py (the decision on E
-│   │                             # and events, recorded), portfolio_scorecard.py (4.4), report, backup
-│   ├── sim/                      # the one fill model (fills.py), the fake broker (the order layer's
+│   │                             # and events, recorded), portfolio_scorecard.py (4.4), tax_lots.py,
+│   │                             # report, dashboard.py (the public snapshot), backup
+│   ├── sim/                      # the fill prices (fills.py), the fake broker (the order layer's
 │   │                             # chaos tests), portfolio.py (3.20), funds.py (the market from the real
 │   │                             # funds' bars, 4.3)
 │   ├── charts.py                 # the Portfolio Manager's get_chart
@@ -745,6 +747,7 @@ The earlier systems' backtest rules and gates are archived (`docs/archive/README
 | 170 | The live tax lots, the journal and the snapshot (5.3) | *Taken under the user's delegation.* **The lots are rebuilt whole each evening** from the broker's activity record (`GET /v2/account/activities`; on paper: `FILL`, `JNLC`, `FEE` so far), not added to fill by fill: a replay can't drift from the broker, a missed evening heals itself, and the record is a few hundred entries a year. Each fill (a partial fill too) is its own lot, tagged with its order; the funds only (anything else is a mismatch, §5.6); income is the positive `DIV*`/`INT*` entries, a withholding skipped (the model taxes the gross; a foreign withholding is credited against it); fees aren't modelled (cents). **What doesn't add up is reported, not blocking:** a sale beyond the lots counts its unknown units at no cost (never a low estimate), lots that differ from the positions and entries the lots don't apply (a split) go in the daily report; the estimate changes no order, and the split already opens a mismatch (#168). **`account_snapshots` gains `holdings` and `tax_owed`** (migration 0011); the twin and SPY on the same day are `twin_book`'s rows (a join, not copied columns). **On `paper` the Portfolio Manager sees the broker's account:** R's snapshot (or the last close's for an event), the live lots, the realized gains and the carried loss from them, the live halt's peak and flag; without the snapshot, or with its lots not rebuilt, `allocate` writes nothing and E holds (fail closed). `dry_run` keeps the simulated book (#166). **The journal on `paper`** adds the account's month beside the scored sim return (`results.paper`: before and after the estimated tax, and E's fills from the `orders` mirror). **The dashboard's snapshot moves from `post_market` to `simulate`:** at 16:20 the day's twin doesn't exist yet. It is built field by field (the series, the exposure history, the journal, the scorecard) with no ids, stops or units, written to `public/snapshot.json` in the private bucket; publishing it to the site's bucket is task 6.2's (a cross-stack grant). **Found:** the paper account holds a setup-era position (SLN, 7 shares), cleared by 6.1's reset; whether paper credits distributions is still unseen (§17). |
 | 171 | The public dashboard (6.2) | *Taken under the user's delegation.* **`simulate` publishes the snapshot straight to the site's bucket** (`data/snapshot.json`), after its private copy, rather than a copy job or an S3 replication: one writer, one key, and a failure of either copy is logged without failing the job or the other copy. The grant is cross-stack: `AuraTradePaper` takes `AuraTradePublicSite`'s bucket and gives `simulate` alone `PutObject` on that key, never a read or a list; so the site deploys first, and `cdk deploy AuraTradePaper` deploys it too unless run with `--exclusively`. **`data/*` has its own CloudFront behaviour** with a 5-minute cache (the default caches a day), the same headers and origin. **The content-security policy gains `script-src 'self'`** for the page's one script; nothing inline, nothing third-party, and the script builds no markup from the snapshot (text only, checked by a test). **The page draws its own charts** in SVG, without a library (the policy allows none from elsewhere, and the site stays a few files); returns since the trial began, after tax by default, as that is the goal; sessions evenly spaced. **Found and fixed:** on AWS `simulate` had no write to the storage bucket, so 5.3's private snapshot would have failed there; it now has `PutObject` on `public/*` only |
 | 172 | The pre-deploy check (6.1) | *Asked for by the user 2026-10-28 ("a full end to end check of the system here" before deploying).* The jobs ran on `dev` in `paper` mode on real data, the evening chain and the order jobs, and the portfolio's orders were rehearsed against the `dev` paper account (`scripts/rehearse_orders.py`: a marked, decided rebalance for today that the real `execute_close` trades; `dev` only). **Found and fixed:** (1) after a missed evening `regime` failed every night (it needed the previous session's row), which stopped the chain before `allocate`, so a missed evening near month-end would have skipped the trend read: it now continues from the last stored row through the gap; (2) `auratrade flatten --confirm` was documented but not built: it now exists, and turns the kill switch on first so nothing buys back; (3) the dashboard drew nothing for a series with isolated values, and its axis was ambiguous; (4) two alerts still spoke of "entries". **Found, for 6.1:** the `paper` database is at migration 0006 and nothing in the deploy migrates it; `docs/runbook.md` (the start checklist and every alert) is written. **Left as it is:** sessions gap-filled by a later `ingest` keep `PENDING` (only blocks increases, fail closed); LLM payloads are kept in `llm_decisions`, not S3 as §5.9 says (for the user) |
+| 173 | The pre-deploy sweep | *Asked for by the user 2026-10-28 ("a full sweep over the codebase and documentation, make sure everything is relevant and correct").* **Removed** (nothing outside its own tests used it): the setup system's indicators, the bar-by-bar entry and stop fill model and the fake broker's `play`, the weekly chart and chart storage, Alpaca minute bars and assets, 23 setup guardrail rules, the Saturday job policy, two breadth windows and the weekly chart's settings in `risk.yaml`, and the daily and weekly loss halts: their rows read as "on" when missing, so migration 0012 deletes them. **Found and fixed:** a fill of the leveraged fund's stop at the broker was never alerted, though §5.9 promises it and the event is raised by hand: `execute_close` now alerts once, on the first run after the fill (`--event STOP_FILLED`, in the runbook); §4 still described the setup system's SIP fallback for a buy without a decision price (none exists: the fund isn't traded that run, §5.6); §8 named a `guardrail_events` table that was never built (the findings are on `portfolio_targets` and in the journal); events are raised by hand (§5.4); the README's status, the architecture diagram (the snapshot is `simulate`'s), the code's README section numbers from before the renumbering, "Phase 8" live trading, and the package's "swing trading" and "momentum book" descriptions |
 
 ---
 
