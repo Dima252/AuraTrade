@@ -34,6 +34,7 @@ Every alert starts `[AuraTrade <env>]`. None of them needs an answer for the sys
 | `ingest …: steps failed, data left as it was` | Corporate actions, macro or retention failed | Nothing urgent; the next evening retries |
 | `database at N MB of 512 MB` | Neon's free tier is filling | Check `retention` in `risk.yaml`; prune or archive |
 | `stop invariant repaired for …` | SSO's stop didn't cover every share; the job placed or fixed it | Check the stop in the Alpaca dashboard. `STILL UNPROTECTED` means the fix failed: place a GTC stop by hand at the level in `fund_stops` |
+| `SSO's stop filled: … Explain it with portfolio_manager --event STOP_FILLED` | The broker's stop sold SSO; the proceeds go into BIL (this run, or the next 15:40) until the next E (§7.2) | Optionally explain it: `portfolio_manager --event STOP_FILLED --detail "…"` (paid, about $0.15-0.30) |
 | `SSO is through its stop level: selling …` | The price is below the stop level; the code sells, as the stop would have | Nothing; the proceeds go into BIL at the next 15:40 |
 | `… sale … rejected …; restoring the stop` | A sale failed; the stop is back | The next run tries again. Check the Alpaca status page |
 | `unknown position at the broker` | The account holds something outside the funds | Sell or explain it by hand, then `auratrade resolve <id> --note "…"`. Increases are blocked until then |

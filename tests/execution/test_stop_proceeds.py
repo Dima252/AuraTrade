@@ -45,6 +45,9 @@ def test_the_proceeds_go_into_the_cash_fund(world: World) -> None:
     assert world.fake.position("BIL") == 225
     assert world.fake.cash >= 0
     assert protected(world)
+    [alert] = [t for t in world.alerts.texts if "stop filled" in t]
+    assert "298 shares sold for 20,711.00" in alert
+    assert "--event STOP_FILLED" in alert
 
 
 def test_later_runs_buy_only_what_is_still_owed(world: World) -> None:
@@ -52,7 +55,9 @@ def test_later_runs_buy_only_what_is_still_owed(world: World) -> None:
     world.run(execute_close.make_job, session=NEXT)
     # 225 filled at 91.50, under the limit: 123.50 of the proceeds is still owed, one share.
     at_close(world, MONDAY)
+    world.alerts.texts.clear()
     monday = world.run(execute_close.make_job, session=MONDAY)
+    assert not any("stop filled" in t for t in world.alerts.texts)  # once, not every day
     assert (monday["stop_proceeds"]["already_in"], monday["stop_proceeds"]["shares"]) == (
         225 * 91.5,
         1,
