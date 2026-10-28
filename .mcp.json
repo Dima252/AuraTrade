@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "auratrade": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--env-file",
+        ".env.paper",
+        "python",
+        "-m",
+        "auratrade.mcp_server",
+        "--snapshot",
+        "https://dk5a9tokky27z.cloudfront.net/data/snapshot.json"
+      ],
+      "env": {
+        "AWS_PROFILE": "auratrade",
+        "AWS_REGION": "us-east-1"
+      }
+    }
+  }
+}
