@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from sqlalchemy import Engine
 
 from auratrade.calendar.sessions import load_calendar
-from auratrade.config import Settings
+from auratrade.config import Settings, TradingMode
 from auratrade.db.engine import engine_from_settings
 from auratrade.jobs.allocate import alpaca
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
@@ -78,6 +78,7 @@ def make_job(
             funds_factory(ctx.settings),
             news_factory(ctx.settings),
             now(),
+            live=ctx.settings.trading_mode is TradingMode.PAPER,
         )
         with engine.begin() as conn:
             if event is None:

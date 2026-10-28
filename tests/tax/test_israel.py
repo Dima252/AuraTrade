@@ -27,6 +27,14 @@ class TestLots:
         assert (book.units("SPY"), book.cost_basis("SPY")) == (5, 750.0)
         assert book.realized(2020) == 650.0
 
+    def test_a_sale_records_the_pieces_it_closed_with_their_refs(self) -> None:
+        book = TaxBook(0.25)
+        book.buy("SPY", JAN, 10, 1000.0, ref="a")
+        book.buy("SPY", JUNE, 10, 1500.0, ref="b")
+        sale = book.sell("SPY", date(2020, 9, 1), 15, 2400.0)
+        assert sale.closed == (Lot(JAN, 10, 1000.0, "a"), Lot(JUNE, 5, 750.0, "b"))
+        assert book.lots("SPY") == [Lot(JUNE, 5, 750.0, "b")]
+
     def test_the_lots_returned_are_copies(self) -> None:
         book = two_lots()
         book.lots("SPY")[0].units = 0

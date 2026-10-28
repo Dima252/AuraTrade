@@ -736,8 +736,8 @@ class TradeJournalRow(Base):
 
 
 class AccountSnapshot(Base):
-    """Equity at each session's `post_market` (README §5.10); the risk multiplier comes in
-    Phase 5."""
+    """The account at each session's `post_market` (README §5.7). ``risk_multiplier`` was the
+    setup system's, no longer written."""
 
     __tablename__ = "account_snapshots"
 
@@ -750,6 +750,11 @@ class AccountSnapshot(Base):
     open_positions: Mapped[int] = mapped_column(SmallInteger)
     risk_multiplier: Mapped[float | None] = mapped_column(Double)
     details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
+    holdings: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
+    """{symbol: {"units": .., "value": ..}} at the close, the funds only (task 5.3)."""
+    tax_owed: Mapped[float | None] = mapped_column(Double)
+    """The estimated tax if everything were sold at the close, from the live lots: equity less
+    it is "after tax". None when the lots couldn't be rebuilt that evening."""
     created_at: Mapped[datetime] = _created()
 
 
@@ -1025,7 +1030,8 @@ class PortfolioTarget(Base):
 
 
 class TaxLot(Base):
-    """The live account's tax lots and income (README §5.7), from the broker's fills (5.3)."""
+    """The live account's tax lots and income (README §5.7), rebuilt whole each evening from
+    the broker's activities (`tax.live`, task 5.3): open lots, closed pieces, income."""
 
     __tablename__ = "tax_lots"
     __table_args__ = (CheckConstraint(_in("kind", LOT_KINDS), name="kind"),)

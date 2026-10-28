@@ -6,6 +6,7 @@ Real vendor responses, recorded once from free endpoints, so tests and CI never 
 |---|---|---|---|
 | `alpaca/calendar_*.json` | 2026-10-09 | `GET /v2/calendar` | no |
 | `alpaca/bars_daily_all.json` | 2026-10-26 | SIP daily bars for MTUM and SPY with `adjustment=all` (total return; the total-return stage's tests), 2026-09-16 to 09-22 | no |
+| `alpaca/account_activities.json` | 2026-10-28 | `GET /v2/account/activities` on the paper account (a deposit, a CAT fee, two partial fills; no distribution yet). The account number in the fee's description is replaced with `PA0000000000` | no |
 | `alpaca/` (the rest) | 2026-10-15 | SIP daily bars (forced into 3 pages with `limit=3`), IEX minute bars, the recent-SIP `403`, IEX latest trades and quotes, corporate actions (splits, dividends, mergers, spin-offs, name changes), assets, news (2 pages of 2) | assets to 6 symbols |
 | `cboe/` | 2026-10-15 | `_VIX.json` / `_VIX3M.json` delayed quotes (intraday, so `last_trade_time` isn't the settlement), history CSVs | CSVs to the first 2 and last 6 rows |
 | `fred/` | 2026-10-15 | `VIXCLS` observations; the `400` for an unregistered key | no |

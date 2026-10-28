@@ -9,9 +9,10 @@ class, recognised by Alpaca's message.
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from datetime import UTC, datetime
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 from alpaca.common.exceptions import APIError
@@ -35,7 +36,9 @@ from alpaca.trading.requests import (
 from auratrade.config import DecisionPriceConfig
 from auratrade.data.alpaca_data import AlpacaDataClient
 from auratrade.execution.broker import (
+    FILL,
     Account,
+    Activity,
     AdvancedOrderChangeError,
     BrokerError,
     BrokerOrder,
@@ -63,6 +66,9 @@ from auratrade.execution.prices import decision_price
 
 # Alpaca's page limit; the order layer's listings are far smaller.
 MAX_ORDERS = 500
+# The activities endpoint's largest page.
+ACTIVITY_PAGE = 100
+NY = ZoneInfo("America/New_York")
 
 _ERRORS: tuple[tuple[str, type[BrokerError]], ...] = (
     ("client_order_id must be unique", DuplicateClientOrderIdError),
@@ -167,6 +173,32 @@ def flatten(orders: Iterable[AlpacaOrder]) -> Iterator[BrokerOrder]:
         yield to_broker_order(order)
         for leg in order.legs or ():
             yield to_broker_order(leg, parent_id=str(order.id))
+
+
+def to_activity(raw: Mapping[str, Any]) -> Activity:
+    """One entry of `GET /v2/account/activities`: a fill carries its execution's time, qty and
+    price; a cash entry its date and net amount (shapes recorded from the paper account)."""
+    kind = str(raw["activity_type"])
+    if kind == FILL:
+        at = datetime.fromisoformat(str(raw["transaction_time"]).replace("Z", "+00:00"))
+        return Activity(
+            id=str(raw["id"]),
+            kind=kind,
+            day=at.astimezone(NY).date(),
+            symbol=str(raw["symbol"]),
+            side=Side(str(raw["side"])),
+            qty=float(raw["qty"]),
+            price=float(raw["price"]),
+            order_id=raw.get("order_id"),
+        )
+    return Activity(
+        id=str(raw["id"]),
+        kind=kind,
+        day=date.fromisoformat(str(raw["date"])),
+        symbol=raw.get("symbol"),
+        qty=float(raw.get("qty") or 0.0),
+        amount=float(raw.get("net_amount") or 0.0),
+    )
 
 
 def to_request(request: OrderRequest) -> Any:
@@ -318,6 +350,18 @@ class AlpacaBroker:
 
     def cancel(self, order_id: str) -> None:
         _call(lambda: self._client.cancel_order_by_id(order_id))
+
+    def activities(self) -> list[Activity]:
+        out: list[Activity] = []
+        params: dict[str, Any] = {"direction": "asc", "page_size": ACTIVITY_PAGE}
+        while True:
+            page = _call(lambda: self._client.get("/account/activities", dict(params)))
+            if not isinstance(page, list):
+                raise BrokerError(f"activities: expected a list, got {type(page).__name__}")
+            out.extend(to_activity(raw) for raw in page)
+            if len(page) < ACTIVITY_PAGE:
+                return out
+            params["page_token"] = page[-1]["id"]
 
 
 class AlpacaPrices:

@@ -3,11 +3,12 @@
     uv run python scripts/reset_trading_state.py --env-file .env.paper            # plan
     uv run python scripts/reset_trading_state.py --env-file .env.paper --apply    # clear
 
-A Neon branch made from `dev` carries `dev`'s positions, orders, signals, mismatches and job
-runs. Against a different Alpaca account (README §12) they would read as mismatches and
-unprotected positions, and the chain would skip sessions `dev` already ran. This deletes them in
-one transaction and puts the flags back to their seed: **the kill switch on** (entries off), no
-halts, so the new environment trades only after `auratrade kill off`.
+A Neon branch made from `dev` carries `dev`'s positions, orders, signals, mismatches, job runs,
+tax lots and the leveraged fund's stop level. Against a different Alpaca account (README §12)
+they would read as mismatches and unprotected positions, and the chain would skip sessions `dev`
+already ran. This deletes them in one transaction and puts the flags back to their seed: **the
+kill switch on** (entries off), no halts, so the new environment trades only after `auratrade
+kill off`.
 
 Market data stays: bars, tickers, sessions, corporate actions, macro, earnings, fundamentals,
 bases and the regime history are the same for every environment.
@@ -43,6 +44,8 @@ TRADING_TABLES = frozenset(
         "position_events",
         "trade_journal",
         "account_snapshots",
+        "tax_lots",
+        "fund_stops",
         "system_flags",
     }
 )

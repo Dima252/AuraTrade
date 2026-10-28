@@ -15,7 +15,7 @@ from __future__ import annotations
 import math
 from collections import deque
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 # A sale of the whole holding may differ from the units held by float noise.
@@ -28,6 +28,8 @@ class Lot:
     units: float
     cost: float
     """What these units cost, in USD."""
+    ref: str | None = None
+    """Where the lot came from (the live journal's order id); the backtest leaves it None."""
 
 
 def fifo_gain(lots: Sequence[Lot], units: float, price: float) -> float:
@@ -51,6 +53,8 @@ class Sale:
     units: float
     proceeds: float
     cost: float
+    closed: tuple[Lot, ...] = field(default=(), compare=False)
+    """The lot pieces the sale closed, oldest first (their units and cost)."""
 
     @property
     def gain(self) -> float:
@@ -85,27 +89,31 @@ class TaxBook:
         self._income: dict[int, float] = {}
         self._closed: int | None = None
 
-    def buy(self, symbol: str, day: date, units: float, cost: float) -> None:
+    def buy(
+        self, symbol: str, day: date, units: float, cost: float, *, ref: str | None = None
+    ) -> None:
         if not (units > 0 and cost >= 0 and math.isfinite(units) and math.isfinite(cost)):
             raise ValueError(f"buy of {symbol}: units must be positive and the cost finite")
         self._open(day.year)
-        self._lots.setdefault(symbol, deque()).append(Lot(day, units, cost))
+        self._lots.setdefault(symbol, deque()).append(Lot(day, units, cost, ref))
 
     def sell(self, symbol: str, day: date, units: float, proceeds: float) -> Sale:
         if proceeds < 0:
             raise ValueError(f"sale of {units} {symbol} for {proceeds}")
         self._open(day.year)
-        sale = Sale(symbol, day, units, proceeds, self._take(symbol, units))
+        cost, closed = self._take(symbol, units)
+        sale = Sale(symbol, day, units, proceeds, cost, tuple(closed))
         self._realized[day.year] = self._realized.get(day.year, 0.0) + sale.gain
         return sale
 
     def withdraw(self, symbol: str, units: float) -> float:
         """Remove ``units`` FIFO without realizing a gain: the backtest's tax payment, sold
         without the further tax the sale would owe (pre-registration §3.8). The cost removed."""
-        return self._take(symbol, units)
+        return self._take(symbol, units)[0]
 
-    def _take(self, symbol: str, units: float) -> float:
-        """Close ``units`` FIFO, splitting the last lot pro rata; the cost of what was closed."""
+    def _take(self, symbol: str, units: float) -> tuple[float, list[Lot]]:
+        """Close ``units`` FIFO, splitting the last lot pro rata; the cost of what was closed,
+        and the pieces."""
         held = self.units(symbol)
         # Relative: on a holding of millions of units, float noise exceeds any fixed tolerance.
         tolerance = UNITS_TOLERANCE * max(1.0, held)
@@ -113,21 +121,24 @@ class TaxBook:
             raise ValueError(f"sale of {units} {symbol} with {held} held")
         lots = self._lots[symbol]
         left, cost = min(units, held), 0.0
+        closed: list[Lot] = []
         while left > tolerance and lots:
             lot = lots[0]
             if lot.units <= left + tolerance:
                 cost += lot.cost
                 left -= lot.units
-                lots.popleft()
+                closed.append(lots.popleft())
             else:
                 share = left / lot.units
-                cost += lot.cost * share
-                lot.cost -= lot.cost * share
+                piece = Lot(lot.opened, left, lot.cost * share, lot.ref)
+                cost += piece.cost
+                lot.cost -= piece.cost
                 lot.units -= left
+                closed.append(piece)
                 left = 0.0
         if not lots:
             del self._lots[symbol]
-        return cost
+        return cost, closed
 
     def add_income(self, day: date, amount: float) -> None:
         if amount < 0:
@@ -142,7 +153,7 @@ class TaxBook:
         return math.fsum(lot.cost for lot in self._lots.get(symbol, ()))
 
     def lots(self, symbol: str) -> list[Lot]:
-        return [Lot(lot.opened, lot.units, lot.cost) for lot in self._lots.get(symbol, ())]
+        return [Lot(lot.opened, lot.units, lot.cost, lot.ref) for lot in self._lots.get(symbol, ())]
 
     def symbols(self) -> list[str]:
         return sorted(self._lots)

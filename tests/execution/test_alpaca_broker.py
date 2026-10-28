@@ -5,7 +5,8 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -27,14 +28,17 @@ from alpaca.trading.requests import (
 from auratrade.config import load_risk_config
 from auratrade.data.alpaca_data import Quote, Trade
 from auratrade.execution.alpaca_broker import (
+    ACTIVITY_PAGE,
     AlpacaBroker,
     AlpacaPrices,
     flatten,
     map_error,
+    to_activity,
     to_broker_order,
     to_request,
 )
 from auratrade.execution.broker import (
+    Activity,
     AdvancedOrderChangeError,
     BrokerError,
     BrokerUnavailableError,
@@ -332,3 +336,83 @@ def test_prices_follow_the_decision_price_rule() -> None:
     prices = AlpacaPrices(StubData(), cfg, clock=lambda: NOW)  # type: ignore[arg-type]
     assert prices.prices(["F", "AMD", "NVDA"]) == {"AMD": 100.0, "F": 12.3, "NVDA": None}
     assert prices.prices([]) == {}
+
+
+# --- the account's activities (task 5.3) -----------------------------------------------------
+
+ACTIVITIES = Path(__file__).parents[1] / "fixtures" / "alpaca" / "account_activities.json"
+# Alpaca's documented shape for a cash dividend (paper recorded none yet).
+DIVIDEND = {
+    "id": "20261102000000000::0c3c8bde-0000-4000-8000-000000000001",
+    "activity_type": "DIV",
+    "date": "2026-11-02",
+    "net_amount": "3.48",
+    "symbol": "BIL",
+    "qty": "12",
+    "per_share_amount": "0.29",
+}
+
+
+class ActivityClient(StubClient):
+    def __init__(self, pages: list[Any]) -> None:
+        super().__init__()
+        self.pages = pages
+
+    def get(self, path: str, params: dict[str, Any]) -> Any:
+        self.calls.append(("get", (path, params)))
+        page = self.pages.pop(0)
+        if isinstance(page, Exception):
+            raise page
+        return page
+
+
+def test_a_recorded_fill_and_cash_entries_map() -> None:
+    raw = json.loads(ACTIVITIES.read_text(encoding="utf-8"))
+    deposit, fee, partial, fill = (to_activity(r) for r in raw)
+    assert (deposit.kind, deposit.day, deposit.amount, deposit.symbol) == (
+        "JNLC",
+        date(2026, 10, 8),
+        5000.0,
+        None,
+    )
+    assert (fee.kind, fee.amount) == ("FEE", -0.01)
+    # 14:26 UTC is 10:26 in New York: the fill's session.
+    assert partial == Activity(
+        id=raw[2]["id"],
+        kind="FILL",
+        day=date(2026, 10, 26),
+        symbol="SLN",
+        side=Side.BUY,
+        qty=6.0,
+        price=19.69,
+        order_id="b486c2a0-4fa9-48e8-bb22-5eb3b3cfa4c3",
+    )
+    assert fill.qty == 1.0
+    assert fill.order_id == partial.order_id
+    dividend = to_activity(DIVIDEND)
+    assert (dividend.kind, dividend.symbol, dividend.qty, dividend.amount) == (
+        "DIV",
+        "BIL",
+        12.0,
+        3.48,
+    )
+
+
+def test_activities_are_read_page_by_page_oldest_first() -> None:
+    raw = json.loads(ACTIVITIES.read_text(encoding="utf-8"))
+    full = [raw[3] | {"id": f"20261026{i:09d}::x"} for i in range(ACTIVITY_PAGE)]
+    client = ActivityClient([full, [DIVIDEND]])
+    out = AlpacaBroker(client).activities()  # type: ignore[arg-type]
+    assert len(out) == ACTIVITY_PAGE + 1
+    assert out[-1].kind == "DIV"
+    (_, (path, first)), (_, (_, second)) = client.calls
+    assert path == "/account/activities"
+    assert first == {"direction": "asc", "page_size": ACTIVITY_PAGE}
+    assert second["page_token"] == full[-1]["id"]
+
+
+def test_activities_fail_on_an_unexpected_body_or_an_error() -> None:
+    with pytest.raises(BrokerError, match="expected a list"):
+        AlpacaBroker(ActivityClient([{"message": "?"}])).activities()  # type: ignore[arg-type]
+    with pytest.raises(BrokerUnavailableError):
+        AlpacaBroker(ActivityClient([api_error(500, "boom")])).activities()  # type: ignore[arg-type]

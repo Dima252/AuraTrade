@@ -227,6 +227,27 @@ def test_fills_move_the_position_and_cash() -> None:
     assert [o.status for o in fake.open_orders()] == []
 
 
+def test_fills_and_cash_entries_are_the_accounts_activities() -> None:
+    fake = FakeBroker(cash=5000.0)
+    parent = entry(fake, qty=10, limit=100.0, stop=95.0, fill=False)
+    fake.fill(parent.id, qty=4)
+    fake.fill(parent.id)
+    fake.distribute("NVDA", 1.5)
+    fake.distribute(None, 0.2, kind="INT")
+    buys = fake.activities()
+    assert [(a.kind, a.qty, a.price, a.order_id) for a in buys[:2]] == [
+        ("FILL", 4.0, 100.0, parent.id),
+        ("FILL", 6.0, 100.0, parent.id),
+    ]
+    assert [(a.kind, a.symbol, a.amount) for a in buys[2:]] == [
+        ("DIV", "NVDA", 1.5),
+        ("INT", None, 0.2),
+    ]
+    assert [a.id for a in buys] == sorted(a.id for a in buys)
+    assert {a.day for a in buys} == {SESSION}
+    assert fake.account().cash == pytest.approx(4000.0 + 1.7)
+
+
 def test_sleep_runs_the_tests_hooks() -> None:
     fake = FakeBroker()
     seen: list[float] = []

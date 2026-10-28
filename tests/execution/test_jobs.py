@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from datetime import date
 
+import pytest
 from sqlalchemy import select
 
 from auratrade.config import TradingMode
 from auratrade.db.flags import TRADING_ENABLED
-from auratrade.db.models import AccountSnapshot, Mismatch, OrderRow
+from auratrade.db.models import AccountSnapshot, Mismatch, OrderRow, TaxLot
 from auratrade.execution.broker import LimitBuy, OrderStatus, OtoBuy, Side
 from auratrade.execution.store import entities
 from auratrade.jobs import execute_close, execute_open, post_market, stop_guard
@@ -87,6 +88,65 @@ def test_post_market_snapshot_report_and_backup(world: World) -> None:
         (snap,) = entities(conn, select(AccountSnapshot))
     assert snap.open_positions == 2
     assert snap.drawdown == 0.0
+
+
+def test_post_market_rebuilds_the_tax_lots_from_the_fills(world: World) -> None:
+    rebalanced(world)
+    world.clock.now = ny(TODAY, 16, 20)
+    world.fake.close_market()
+    spy = world.fake.prices(["SPY"])["SPY"]
+    assert spy is not None
+    world.fake.set_price("SPY", spy + 10.0)  # a gain of $10 a share since the buy
+    world.fake.distribute("SPY", 50.0)
+    out = world.run(post_market.make_job)
+    assert out["tax_notes"] == []
+    with world.engine.connect() as conn:
+        lots = entities(conn, select(TaxLot).order_by(TaxLot.symbol, TaxLot.kind))
+        (snap,) = entities(conn, select(AccountSnapshot))
+    assert [(r.kind, r.symbol, r.units) for r in lots] == [
+        ("INCOME", "SPY", 0.0),
+        ("LOT", "SPY", 139.0),
+        ("LOT", "SSO", 298.0),
+    ]
+    sso = world.fake.prices(["SSO"])["SSO"]
+    assert sso is not None
+    assert set(snap.holdings) == {"SPY", "SSO"}
+    assert snap.holdings["SPY"] == {"units": 139.0, "value": pytest.approx(139 * (spy + 10.0))}
+    # The SPY gain and the distribution, at 25%; SSO is at its cost.
+    assert snap.tax_owed == pytest.approx(0.25 * (139 * 10.0 + 50.0))
+    assert out["tax_owed"] == pytest.approx(snap.tax_owed, abs=0.01)
+    report = next(t for t in world.alerts.texts if "daily report" in t)
+    assert f"(${snap.tax_owed:,.2f} if everything were sold now)" in report
+
+
+def test_post_market_reports_lots_that_dont_add_up(world: World) -> None:
+    rebalanced(world)
+    world.clock.now = ny(TODAY, 16, 20)
+    world.fake.close_market()
+    world.fake.split_ex_date("SSO")
+    world.fake.distribute("SSO", 0.0, kind="SPLIT")
+    out = world.run(post_market.make_job)
+    assert out["tax_notes"] == ["2026-10-22 SPLIT in SSO: not applied to the lots"]
+    report = next(t for t in world.alerts.texts if "daily report" in t)
+    assert "Tax lots: CHECK (1)" in report
+
+
+def test_post_market_without_the_activities_keeps_the_lots_and_reports_the_tax_unknown(
+    world: World,
+) -> None:
+    rebalanced(world)
+    world.run(post_market.make_job)
+    world.fake.fail_next("activities")
+    out = world.run(post_market.make_job)
+    assert out["tax_lots"] is None
+    assert out["tax_owed"] is None
+    with world.engine.connect() as conn:
+        assert len(entities(conn, select(TaxLot))) == 2  # the evening before's
+        (snap,) = entities(conn, select(AccountSnapshot))
+    assert snap.tax_owed is None
+    report = next(t for t in reversed(world.alerts.texts) if "daily report" in t)
+    assert "After the estimated tax: unknown" in report
+    assert "the lots weren't rebuilt: BrokerUnavailableError" in report
 
 
 def test_post_market_cancels_a_buy_left_resting(world: World) -> None:
