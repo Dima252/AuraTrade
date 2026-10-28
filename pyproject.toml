@@ -32,7 +32,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
-    "boto3-stubs[lambda,s3,scheduler,ssm]>=1.43.110",
+    "boto3-stubs[lambda,logs,s3,scheduler,ssm]>=1.43.110",
     "botocore[crt]>=1.43.110",
     "hypothesis>=6.168.5",
     "mypy>=2.4.0",
@@ -45,6 +45,11 @@ dev = [
 ]
 # Research-only dependencies for backtest/ (filled in by Phases 2-3).
 backtest = []
+# The read-only MCP server (README §5.10), local only for now: kept out of the jobs' image.
+mcp = [
+    # 2.x: FastMCP became MCPServer.
+    "mcp>=2.3.0",
+]
 infra = [
     "aws-cdk-lib>=2.272.0",
     "constructs>=10.8.1",
@@ -58,8 +63,9 @@ spikes = [
 ]
 
 [tool.uv]
-# infra is a default group so CI synthesizes and tests the CDK stacks.
-default-groups = ["dev", "infra"]
+# infra is a default group so CI synthesizes and tests the CDK stacks; mcp so CI type-checks
+# and tests the MCP server.
+default-groups = ["dev", "infra", "mcp"]
 
 [tool.ruff]
 line-length = 100
