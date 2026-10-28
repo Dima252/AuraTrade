@@ -1,3 +1,4 @@
+import io
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -5,10 +6,12 @@ from typing import Any
 
 import httpx
 import pytest
+from botocore.exceptions import ClientError
 from sqlalchemy import insert, select, text
 from sqlalchemy.exc import DBAPIError
 
 from auratrade.db.models import SystemFlag
+from auratrade.mcp_server import sources
 from auratrade.mcp_server.sources import (
     LogReader,
     Snapshot,
@@ -141,3 +144,41 @@ def test_the_database_refuses_writes(migrated_url: str, pg_engine: object) -> No
             conn.execute(insert(SystemFlag).values(name="mcp_probe", value=True))
     finally:
         engine.dispose()
+
+
+def test_the_snapshot_from_the_bucket() -> None:
+    seen: list[tuple[str, str]] = []
+
+    def s3(bucket: str, key: str) -> bytes | None:
+        seen.append((bucket, key))
+        return b'{"mode": "paper"}'
+
+    assert Snapshot("s3://site-bucket/data/snapshot.json", s3=s3).read() == {"mode": "paper"}
+    assert seen == [("site-bucket", "data/snapshot.json")]
+    with pytest.raises(SourceError, match="no snapshot published yet"):
+        Snapshot("s3://site-bucket/data/snapshot.json", s3=lambda b, k: None).read()
+
+
+class _S3:
+    def __init__(self, code: str | None) -> None:
+        self.code = code
+
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]:  # noqa: N803
+        if self.code is not None:
+            raise ClientError({"Error": {"Code": self.code}}, "GetObject")
+        return {"Body": io.BytesIO(b"{}")}
+
+
+@pytest.mark.parametrize(
+    ("code", "found"), [(None, b"{}"), ("NoSuchKey", None), ("AccessDenied", None)]
+)
+def test_the_bucket_read(monkeypatch: pytest.MonkeyPatch, code: str | None, found: object) -> None:
+    # The role may read the one key and not list the bucket: a missing key is AccessDenied.
+    monkeypatch.setattr(sources, "_s3_client", lambda: _S3(code))
+    assert sources._s3_object("b", "k") == found
+
+
+def test_a_bucket_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sources, "_s3_client", lambda: _S3("SlowDown"))
+    with pytest.raises(ClientError):
+        sources._s3_object("b", "k")

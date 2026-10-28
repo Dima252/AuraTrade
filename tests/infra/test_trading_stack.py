@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import json
 from datetime import time
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -87,6 +88,17 @@ def test_one_function_per_job_on_one_image(template: Any) -> None:
         assert props["ImageConfig"]["Command"] == [f"auratrade.jobs.{job}.handler"]
         assert props["Architectures"] == ["x86_64"]
         assert props["Timeout"] <= 900
+
+
+def test_the_jobs_image_is_the_jobs_target() -> None:
+    # The Dockerfile's last stage is the MCP server's; the jobs never carry it.
+    app = cdk.App()
+    TradingStack(app, "Trading", env_name="paper", env=ENV)
+    assets = json.loads((Path(app.synth().directory) / "Trading.assets.json").read_text())
+    targets = {
+        image["source"].get("dockerBuildTarget") for image in assets["dockerImages"].values()
+    }
+    assert targets == {"jobs"}
 
 
 def test_the_trading_mode_defaults_to_dry_run(template: Any, paper_template: Any) -> None:

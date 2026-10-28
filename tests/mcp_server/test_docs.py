@@ -1,7 +1,9 @@
+import importlib
 from pathlib import Path
 
 import pytest
 
+from auratrade.config import REPO_ROOT
 from auratrade.mcp_server import docs
 
 README = """# Title
@@ -77,3 +79,16 @@ def test_the_real_readme_parses() -> None:
 def test_a_missing_file(tmp_path: Path) -> None:
     with pytest.raises(docs.NotFoundError):
         docs.read(tmp_path / "nope.md")
+
+
+def test_the_documents_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # The remote server's image keeps them beside the package.
+    monkeypatch.setenv("AURATRADE_DOCS_ROOT", str(tmp_path))
+    try:
+        moved = importlib.reload(docs)
+        assert tmp_path / "README.md" == moved.README
+        assert tmp_path / "docs" / "backtests" / "portfolio.md" == moved.BACKTEST
+    finally:
+        monkeypatch.delenv("AURATRADE_DOCS_ROOT")
+        importlib.reload(docs)
+    assert docs.README == REPO_ROOT / "README.md"

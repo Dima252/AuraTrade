@@ -5,7 +5,8 @@
 - **The broker:** typed as a `BrokerReader` (the account, positions, open orders); the order
   calls aren't on the type, so a write doesn't type-check.
 - **The logs:** CloudWatch's `FilterLogEvents`, nothing else.
-- **The snapshot:** the dashboard's allow-listed file (§5.8), from the site or a local file.
+- **The snapshot:** the dashboard's allow-listed file (§5.8), from the site, its bucket (the
+  remote server, whose role can read that one object) or a local file.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
+from functools import cache
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -53,13 +55,19 @@ def read_only_engine(url: str) -> Engine:
 
 
 class Snapshot:
-    """The dashboard's snapshot from an https URL (the site) or a local file."""
+    """The dashboard's snapshot from an https URL (the site), an `s3://bucket/key` (the site's
+    bucket) or a local file."""
 
     def __init__(
-        self, location: str | None, *, http: Callable[[str], httpx.Response] | None = None
+        self,
+        location: str | None,
+        *,
+        http: Callable[[str], httpx.Response] | None = None,
+        s3: Callable[[str, str], bytes | None] | None = None,
     ) -> None:
         self._location = location
         self._http = http or (lambda url: httpx.get(url, timeout=10.0, follow_redirects=True))
+        self._s3 = s3 or _s3_object
 
     def read(self) -> Mapping[str, Any]:
         where = self._location
@@ -72,6 +80,12 @@ class Snapshot:
             if response.status_code != 200:
                 raise SourceError(f"the snapshot's site answered HTTP {response.status_code}")
             data = response.json()
+        elif where.startswith("s3://"):
+            bucket, _, key = where.removeprefix("s3://").partition("/")
+            body = self._s3(bucket, key)
+            if body is None:
+                raise SourceError("no snapshot published yet: the trial's first evening writes it")
+            data = json.loads(body)
         else:
             path = Path(where)
             if not path.is_file():
@@ -80,6 +94,27 @@ class Snapshot:
         if not isinstance(data, dict):
             raise SourceError("the snapshot isn't a JSON object")
         return data
+
+
+@cache
+def _s3_client() -> Any:
+    import boto3
+
+    return boto3.client("s3")
+
+
+def _s3_object(bucket: str, key: str) -> bytes | None:
+    """The object's bytes, or None when it isn't there. Without ListBucket (the role reads one
+    key) S3 answers a missing key with AccessDenied, as CloudFront answers 403."""
+    from botocore.exceptions import ClientError
+
+    try:
+        body: bytes = _s3_client().get_object(Bucket=bucket, Key=key)["Body"].read()
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "AccessDenied"):
+            return None
+        raise
+    return body
 
 
 # Lambda's own lines worth an operator's eye, besides the jobs' warnings and errors.

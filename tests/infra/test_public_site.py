@@ -1,6 +1,9 @@
 """Synthesizes the public-site stack offline (no AWS calls) and checks its safety properties."""
 
+import json
 import re
+from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -11,6 +14,10 @@ from stacks.public_site import (  # noqa: E402
     CONTENT_SECURITY_POLICY,
     DATA_PREFIX,
     DATA_TTL,
+    MCP_CONCURRENCY,
+    MCP_FUNCTION,
+    MCP_PATH,
+    SNAPSHOT_KEY,
     WEB_DIR,
     PublicSiteStack,
 )
@@ -156,8 +163,7 @@ def test_the_snapshot_is_served_fresh(template: "assertions.Template") -> None:
     )
     distribution = next(iter(template.find_resources("AWS::CloudFront::Distribution").values()))
     config = distribution["Properties"]["DistributionConfig"]
-    [behavior] = config["CacheBehaviors"]
-    assert behavior["PathPattern"] == DATA_PREFIX
+    [behavior] = [b for b in config["CacheBehaviors"] if b["PathPattern"] == DATA_PREFIX]
     assert behavior["ViewerProtocolPolicy"] == "redirect-to-https"
     assert behavior["TargetOriginId"] == config["DefaultCacheBehavior"]["TargetOriginId"]
     assert (
@@ -255,3 +261,63 @@ def test_the_dashboard_script_builds_no_markup() -> None:
         assert banned not in js, banned
     assert re.findall(r'fetch\("([^"]*)"', js) == ["data/snapshot.json"]
     assert "http" not in js.replace("http://www.w3.org/2000/svg", "")
+
+
+def _mcp_behavior(template: "assertions.Template") -> dict[str, Any]:
+    distribution = next(iter(template.find_resources("AWS::CloudFront::Distribution").values()))
+    behaviors = distribution["Properties"]["DistributionConfig"]["CacheBehaviors"]
+    [behavior] = [b for b in behaviors if b["PathPattern"] == MCP_PATH]
+    return dict(behavior)
+
+
+def test_the_mcp_server_is_capped(template: "assertions.Template") -> None:
+    # The account's concurrency is shared with the trading jobs: the cap keeps a flood of MCP
+    # calls from throttling an order job.
+    assert 1 <= MCP_CONCURRENCY <= 5
+    template.has_resource_properties(
+        "AWS::Lambda::Function",
+        {
+            "FunctionName": MCP_FUNCTION,
+            "PackageType": "Image",
+            "ReservedConcurrentExecutions": MCP_CONCURRENCY,
+            "Timeout": Match.any_value(),
+            "Environment": {
+                "Variables": {
+                    "MCP_SNAPSHOT": {
+                        "Fn::Join": ["", ["s3://", {"Ref": Match.any_value()}, f"/{SNAPSHOT_KEY}"]]
+                    }
+                }
+            },
+        },
+    )
+    [fn] = template.find_resources(
+        "AWS::Lambda::Function", {"Properties": {"FunctionName": MCP_FUNCTION}}
+    ).values()
+    assert fn["Properties"]["Timeout"] <= 30  # under CloudFront's origin timeout
+
+
+def test_the_mcp_image_is_its_own_target() -> None:
+    app = cdk.App()
+    PublicSiteStack(app, "Site", env=ENV)
+    assets = json.loads((Path(app.synth().directory) / "Site.assets.json").read_text())
+    [image] = assets["dockerImages"].values()
+    assert image["source"]["dockerBuildTarget"] == "mcp"
+
+
+def test_the_mcp_server_reads_the_snapshot_alone(template: "assertions.Template") -> None:
+    policies = template.find_resources("AWS::IAM::Policy")
+    [policy] = [p for name, p in policies.items() if name.startswith("McpServer")]
+    [statement] = policy["Properties"]["PolicyDocument"]["Statement"]
+    assert statement["Action"] == "s3:GetObject"
+    assert statement["Resource"]["Fn::Join"][1][-1] == f"/{SNAPSHOT_KEY}"
+
+
+def test_the_mcp_url_is_public_behind_the_distribution(template: "assertions.Template") -> None:
+    template.has_resource_properties("AWS::Lambda::Url", {"AuthType": "NONE"})
+    behavior = _mcp_behavior(template)
+    assert behavior["ViewerProtocolPolicy"] == "https-only"
+    assert "POST" in behavior["AllowedMethods"]
+    # CachingDisabled and AllViewerExceptHostHeader, AWS's managed policies.
+    assert behavior["CachePolicyId"] == "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+    assert behavior["OriginRequestPolicyId"] == "b689b0a8-53d0-40ab-baf2-68738e2966ac"
+    template.has_output("McpUrl", {"Value": Match.any_value()})
