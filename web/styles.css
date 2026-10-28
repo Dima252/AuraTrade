@@ -223,6 +223,8 @@ h2.sub { margin-top: 56px; }
 .chart .line.s3, .chart .dot.s3 { stroke: var(--s3); }
 .chart .line.s4, .chart .dot.s4 { stroke: var(--s4); }
 .chart .dot { fill: var(--surface); stroke-width: 2; }
+.chart .pt.s1 { fill: var(--s1); } .chart .pt.s2 { fill: var(--s2); }
+.chart .pt.s3 { fill: var(--s3); } .chart .pt.s4 { fill: var(--s4); }
 .chart .hair { stroke: var(--muted); stroke-width: 1; }
 .chart .hit { fill: transparent; cursor: crosshair; }
 .tip {

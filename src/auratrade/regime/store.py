@@ -120,11 +120,15 @@ def load_data(
     )
 
 
-def read_state(conn: Connection, session: date) -> RegimeState | None:
-    data = conn.execute(
-        select(MarketRegimeRow.state).where(MarketRegimeRow.session_date == session)
-    ).scalar_one_or_none()
-    return None if data is None else RegimeState.from_json(data)
+def latest_state(conn: Connection, before: date) -> tuple[date, RegimeState] | None:
+    """The last stored session before ``before`` and the machine's state after it."""
+    row = conn.execute(
+        select(MarketRegimeRow.session_date, MarketRegimeRow.state)
+        .where(MarketRegimeRow.session_date < before)
+        .order_by(MarketRegimeRow.session_date.desc())
+        .limit(1)
+    ).one_or_none()
+    return None if row is None else (row.session_date, RegimeState.from_json(row.state))
 
 
 def write_results(conn: Connection, results: Sequence[RegimeResult], risk_hash: str) -> None:

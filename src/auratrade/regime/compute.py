@@ -10,7 +10,7 @@ from auratrade.config import RiskConfig
 from auratrade.regime.classifier import RegimeResult, classify
 from auratrade.regime.inputs import MissingDataError, build_inputs
 from auratrade.regime.state import RegimeState
-from auratrade.regime.store import load_data, read_state, write_results
+from auratrade.regime.store import latest_state, load_data, write_results
 
 
 def compute(
@@ -35,18 +35,28 @@ def compute(
     return results
 
 
-def run_session(conn: Connection, risk: RiskConfig, session: date) -> RegimeResult:
-    """The evening step: continue from the previous session's stored state."""
-    previous = load_calendar(conn).previous_session(session).day
-    state = read_state(conn, previous)
-    if state is None:
+def catch_up(conn: Connection, risk: RiskConfig, session: date) -> list[RegimeResult]:
+    """The evening step: continue the machine from the last stored session through
+    ``session``, classifying any sessions an evening missed on the way, so one missed evening
+    doesn't stop the chain (it runs before `allocate`). An empty table still needs a seed."""
+    calendar = load_calendar(conn)
+    found = latest_state(conn, session)
+    if found is None:
+        previous = calendar.previous_session(session).day
         raise MissingDataError(
-            f"no market_regime row for {previous}: seed it with "
+            f"no market_regime row before {session}: seed it with "
             f"`python -m auratrade.jobs.regime --from <first session> --session {previous}`"
         )
-    [result] = compute(conn, risk, [session], state)
-    write_results(conn, [result], risk.config_hash)
-    return result
+    last, state = found
+    days = [s.day for s in calendar.sessions_between(last, session)][1:]
+    results = compute(conn, risk, days, state)
+    write_results(conn, results, risk.config_hash)
+    return results
+
+
+def run_session(conn: Connection, risk: RiskConfig, session: date) -> RegimeResult:
+    """`catch_up`'s result for ``session``."""
+    return catch_up(conn, risk, session)[-1]
 
 
 def replay(

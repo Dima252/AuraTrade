@@ -1,4 +1,4 @@
-"""Operator commands (README §5.13).
+"""Operator commands (README §5.9).
 
     uv run auratrade kill on        # increases off; resting buy orders cancelled at once
     uv run auratrade kill off       # increases on (a fresh database starts with them off)
@@ -7,17 +7,21 @@
     uv run auratrade resolve 12 --note "DXJ split fixed by hand at the broker"
     uv run auratrade halt status    # the drawdown halt and its peak (README §7.3)
     uv run auratrade halt reset     # off, the peak at the broker's equity (after a paper reset)
+    uv run auratrade flatten --confirm   # kill switch on, then sell every position (market hours)
 
 The kill switch blocks increases of exposure only; it never touches a protective stop, a sale
 toward a lower target, the halt's sale or reconciliation (README §5.9). `kill on` cancels
 resting buy orders under the order lock; every order job also checks the flag and cancels any
-that remain.
+that remain. `flatten` is manual only: nothing automatic calls it. It turns the kill switch on
+first, so nothing buys the positions back, and sells the leveraged fund with the sell sequence
+(its stop restored if the sale fails), everything else with a marketable limit.
 """
 
 from __future__ import annotations
 
 import argparse
 import sys
+import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -28,9 +32,11 @@ from sqlalchemy import Engine, insert, select, update
 from auratrade.config import RiskConfig, Settings, TradingMode, load_risk_config
 from auratrade.db.flags import HALT_DRAWDOWN, TRADING_ENABLED, read_flags
 from auratrade.db.models import Mismatch, SystemFlag
+from auratrade.execution import funds
 from auratrade.execution import halt as drawdown_halt
-from auratrade.execution.broker import Broker
+from auratrade.execution.broker import Broker, PriceSource
 from auratrade.execution.orders import OrderDesk
+from auratrade.execution.rebalance import leveraged_stop
 from auratrade.execution.runtime import Lock
 from auratrade.execution.store import entities
 
@@ -43,6 +49,8 @@ class CliDeps:
     broker: Callable[[], Broker]
     lock: Callable[[], Lock]
     out: Callable[[str], None]
+    prices: Callable[[], PriceSource]
+    sleep: Callable[[float], None] = time.sleep
 
 
 def production_deps() -> CliDeps:
@@ -64,6 +72,18 @@ def production_deps() -> CliDeps:
             settings.alpaca_secret_key.get_secret_value(),
         )
 
+    def prices() -> PriceSource:
+        from auratrade.data.alpaca_data import AlpacaDataClient, alpaca_http
+        from auratrade.execution.alpaca_broker import AlpacaPrices
+
+        if settings.alpaca_api_key is None or settings.alpaca_secret_key is None:
+            raise SystemExit("ALPACA_API_KEY / ALPACA_SECRET_KEY not set")
+        http = alpaca_http(
+            settings.alpaca_api_key.get_secret_value(),
+            settings.alpaca_secret_key.get_secret_value(),
+        )
+        return AlpacaPrices(AlpacaDataClient(http), risk.execution.decision_price)
+
     def lock() -> Lock:
         assert settings.database_url is not None  # noqa: S101 - engine_from_settings checked it
         return OrderLock(
@@ -79,6 +99,7 @@ def production_deps() -> CliDeps:
         broker=broker,
         lock=lock,
         out=_print,
+        prices=prices,
     )
 
 
@@ -196,6 +217,56 @@ def halt(deps: CliDeps, action: str) -> int:
     return 0
 
 
+FLATTEN = "FLATTEN"
+
+
+def flatten(deps: CliDeps, confirm: bool) -> int:
+    if not confirm:
+        deps.out("flatten sells every position at the broker: run it with --confirm")
+        return 1
+    _set_trading(deps, False)
+    deps.out("kill switch ON: nothing is bought back until `auratrade kill off`")
+    if deps.settings.trading_mode is not TradingMode.PAPER:
+        deps.out("TRADING_MODE is not paper: no orders sent")
+        return 0
+    broker = deps.broker()
+    lev = deps.risk.portfolio.leveraged
+    with deps.lock().hold("cli_flatten"):
+        desk = OrderDesk(
+            broker=broker,
+            prices=deps.prices(),
+            cfg=deps.risk.execution,
+            session=datetime.now(ZoneInfo("America/New_York")).date(),
+            market_open=broker.is_market_open(),
+            sleep=deps.sleep,
+            alert=deps.out,
+        )
+        if not desk.market_open:
+            deps.out("the market is closed: nothing sold; run flatten during market hours")
+            return 1
+        deps.out(f"cancelled {desk.cancel_entries(why='flatten')} resting buy orders")
+        with deps.engine.connect() as conn:
+            current = funds.stop_level(conn, lev)
+        owed = 0
+        for position in sorted(broker.positions(), key=lambda p: p.symbol):
+            if position.symbol == lev:
+                level = (
+                    current.level
+                    if current is not None
+                    else leveraged_stop(desk.price(lev) or 0.0, None, deps.risk.portfolio)
+                )
+                result = desk.sell(lev, position.qty, FLATTEN, level)
+            else:
+                result = desk.sell_plain(position.symbol, position.qty, FLATTEN)
+            deps.out(f"{position.symbol}: sold {result.sold} of {position.qty} ({result.status})")
+            owed += result.owed
+    if owed:
+        deps.out(f"{owed} shares still held: run flatten again")
+        return 1
+    deps.out("flat")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="auratrade", description=__doc__.split("\n")[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -207,6 +278,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--note", required=True)
     h = sub.add_parser("halt", help="the drawdown halt: its state, or reset it")
     h.add_argument("action", choices=("status", "reset"))
+    f = sub.add_parser("flatten", help="kill switch on, then sell every position (manual only)")
+    f.add_argument("--confirm", action="store_true", help="really sell everything")
     return parser
 
 
@@ -223,6 +296,8 @@ def main(
                 return mismatches(deps)
             case "halt":
                 return halt(deps, args.action)
+            case "flatten":
+                return flatten(deps, args.confirm)
             case _:
                 return resolve(deps, args.id, args.note)
     finally:
