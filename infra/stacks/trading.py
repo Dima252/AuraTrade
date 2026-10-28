@@ -12,7 +12,9 @@ functions on one container image, started by EventBridge Scheduler on `jobs.sche
   holidays. Order jobs keep Lambda's async retries (they are idempotent through
   `client_order_id`); the others don't retry, since the next slot or the chain's fallback
   covers them.
-- **Storage:** one private bucket for the nightly backup and the bar retention archive.
+- **Storage:** one private bucket for the nightly backup, the bar retention archive and the
+  dashboard's snapshot; `simulate` also writes that snapshot, and only it, to the public site's
+  bucket (README §5.8, task 6.2).
 """
 
 from __future__ import annotations
@@ -50,6 +52,8 @@ class Function:
     # Lambda's async retries: on for order jobs (README §5.7, plan 1.8), off otherwise.
     retries: int = 0
     storage: bool = False
+    # Writes the dashboard's snapshot: `public/` in storage, `data/snapshot.json` on the site.
+    publishes: bool = False
 
 
 # Order jobs may wait for the order lock (`execution.lock_wait_max_seconds`) and for fills, so
@@ -63,7 +67,7 @@ FUNCTIONS: tuple[Function, ...] = (
     Function("stop_guard", 1024, 300),
     Function("ingest", 1024, 900, storage=True),
     # The twin, the book and SPY from the trial's start, on the funds' daily bars.
-    Function("simulate", 1024, 600),
+    Function("simulate", 1024, 600, publishes=True),
     Function("regime", 1024, 300),
     Function("allocate", 1024, 600),
     Function("watchdog", 512, 120),
@@ -103,6 +107,7 @@ class TradingStack(Stack):
         *,
         env_name: str,
         trading_mode: str = "dry_run",
+        site_bucket: s3.IBucket | None = None,
         env: Environment | None = None,
     ) -> None:
         super().__init__(scope, construct_id, env=env)
@@ -162,7 +167,11 @@ class TradingStack(Stack):
                 timeout=Duration.seconds(spec.timeout_s),
                 retry_attempts=spec.retries,
                 max_event_age=Duration.hours(1),
-                environment=environment,
+                environment=(
+                    {**environment, "SITE_S3_BUCKET": site_bucket.bucket_name}
+                    if spec.publishes and site_bucket is not None
+                    else environment
+                ),
                 log_group=logs.LogGroup(
                     self,
                     f"Logs-{spec.job}",
@@ -174,6 +183,10 @@ class TradingStack(Stack):
             fn.add_to_role_policy(read_parameters)
             if spec.storage:
                 bucket.grant_read_write(fn)
+            if spec.publishes:
+                bucket.grant_put(fn, "public/*")
+                if site_bucket is not None:
+                    site_bucket.grant_put(fn, "data/snapshot.json")
             functions[spec.job] = fn
 
         # Each evening job starts its successor (an async invoke); nothing else invokes.

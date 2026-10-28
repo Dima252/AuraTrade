@@ -12,7 +12,7 @@ env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-
 
 # Optional custom domain: `-c site_domain=example.com -c site_hosted_zone_id=Z123...`.
 # Without them the site is served on its *.cloudfront.net address.
-PublicSiteStack(
+site = PublicSiteStack(
     app,
     "AuraTradePublicSite",
     domain_name=app.node.try_get_context("site_domain"),
@@ -20,12 +20,14 @@ PublicSiteStack(
     env=env,
 )
 
-# The skeleton on the `paper` account. Without `-c trading_mode=paper` it deploys as `dry_run`.
+# The portfolio's jobs on the `paper` account. Without `-c trading_mode=paper` it deploys as
+# `dry_run`. It publishes the dashboard's snapshot to the site's bucket, so the site deploys first.
 TradingStack(
     app,
     "AuraTradePaper",
     env_name="paper",
     trading_mode=app.node.try_get_context("trading_mode") or "dry_run",
+    site_bucket=site.bucket,
     env=env,
 )
 

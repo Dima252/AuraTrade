@@ -10,6 +10,7 @@ assertions = pytest.importorskip("aws_cdk.assertions")
 from stacks.public_site import (  # noqa: E402
     CONTENT_SECURITY_POLICY,
     DATA_PREFIX,
+    DATA_TTL,
     WEB_DIR,
     PublicSiteStack,
 )
@@ -142,6 +143,32 @@ def test_security_headers(template: "assertions.Template") -> None:
         },
     )
     assert "unsafe" not in CONTENT_SECURITY_POLICY
+    # Scripts from the site itself only: no inline code, no third parties.
+    assert "script-src 'self';" in CONTENT_SECURITY_POLICY
+
+
+def test_the_snapshot_is_served_fresh(template: "assertions.Template") -> None:
+    ttl = int(DATA_TTL.to_seconds())
+    assert ttl <= 600
+    template.has_resource_properties(
+        "AWS::CloudFront::CachePolicy",
+        {"CachePolicyConfig": Match.object_like({"DefaultTTL": ttl, "MaxTTL": ttl, "MinTTL": 0})},
+    )
+    distribution = next(iter(template.find_resources("AWS::CloudFront::Distribution").values()))
+    config = distribution["Properties"]["DistributionConfig"]
+    [behavior] = config["CacheBehaviors"]
+    assert behavior["PathPattern"] == DATA_PREFIX
+    assert behavior["ViewerProtocolPolicy"] == "redirect-to-https"
+    assert behavior["TargetOriginId"] == config["DefaultCacheBehavior"]["TargetOriginId"]
+    assert (
+        behavior["ResponseHeadersPolicyId"]
+        == config["DefaultCacheBehavior"]["ResponseHeadersPolicyId"]
+    )
+
+
+def test_the_bucket_is_exposed_for_the_trading_stack() -> None:
+    stack = PublicSiteStack(cdk.App(), "Site", env=ENV)
+    assert stack.bucket.node.id == "SiteBucket"
 
 
 def test_deploy_never_prunes_the_data_prefix(template: "assertions.Template") -> None:
@@ -194,8 +221,11 @@ def test_domain_requires_zone() -> None:
 @pytest.mark.parametrize("page", ["index.html", "404.html"])
 def test_pages_fit_the_content_security_policy(page: str) -> None:
     html = (WEB_DIR / page).read_text(encoding="utf-8")
-    # script-src falls back to 'none' and style-src is 'self' only.
-    assert "<script" not in html
+    # script-src and style-src are 'self' only: files, never inline code.
+    for script in re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.S):
+        assert not script.strip()
+    assert set(re.findall(r'<script src="([^"]*)"', html)) <= {"dashboard.js"}
+    assert html.count("<script") == len(re.findall(r'<script src="', html))
     assert "<style" not in html
     assert not re.search(r"\sstyle=", html)
     assert not re.search(r"\son[a-z]+=", html)
@@ -209,3 +239,19 @@ def test_pages_carry_the_disclaimer(page: str) -> None:
     html = (WEB_DIR / page).read_text(encoding="utf-8")
     assert "Not financial advice" in html
     assert "paper" in html.lower()
+
+
+def test_the_dashboard_script_builds_no_markup() -> None:
+    js = (WEB_DIR / "dashboard.js").read_text(encoding="utf-8")
+    # Snapshot text reaches the page as text: no HTML parsing, no eval, nothing remote.
+    for banned in (
+        "innerHTML",
+        "outerHTML",
+        "insertAdjacentHTML",
+        "document.write",
+        "eval(",
+        "new Function",
+    ):
+        assert banned not in js, banned
+    assert re.findall(r'fetch\("([^"]*)"', js) == ["data/snapshot.json"]
+    assert "http" not in js.replace("http://www.w3.org/2000/svg", "")

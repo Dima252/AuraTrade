@@ -20,7 +20,7 @@ import structlog
 from sqlalchemy import Engine, delete, insert, orm, select, update
 
 from auratrade.calendar.sessions import load_calendar
-from auratrade.config import Settings, TradingMode, load_risk_config
+from auratrade.config import REPO_ROOT, Settings, TradingMode, load_risk_config
 from auratrade.data.alpaca_data import Adjustment, DailyBar
 from auratrade.data.news import NewsItem
 from auratrade.db.flags import HALT_DRAWDOWN, TRADING_ENABLED, read_flags
@@ -602,10 +602,17 @@ class BrokenStore:
 
 
 def simulate_job(
-    engine: Engine, bars: Bars, session: date, storage: Any, mode: TradingMode
+    engine: Engine,
+    bars: Bars,
+    session: date,
+    storage: Any,
+    mode: TradingMode,
+    site: Any = None,
 ) -> dict[str, Any]:
     spec = simulate_job_module.make_job(
-        engine_factory=lambda _s: engine, funds_factory=lambda _s: bars
+        engine_factory=lambda _s: engine,
+        funds_factory=lambda _s: bars,
+        site_factory=lambda _s: site,
     )
     ctx = context("simulate", session, mode)
     return dict(spec.run(dataclasses.replace(ctx, storage=storage)) or {})
@@ -715,6 +722,34 @@ def test_a_dashboard_that_cant_be_stored_doesnt_fail_simulate(world: Engine) -> 
     out = simulate_job(world, bars, R_OCT, BrokenStore(), TradingMode.DRY_RUN)
     assert out["dashboard_bytes"] is None
     assert out["books"]["TWIN"]["sessions"] == 1
+    assert "dashboard_published" not in out  # no site bucket: nothing to publish
+
+
+def test_the_snapshot_is_published_to_the_site(world: Engine, tmp_path: Path) -> None:
+    bars = Bars()
+    a_paper_month(world, bars)
+    store, site = LocalStore(tmp_path / "private"), LocalStore(tmp_path / "site")
+    out = simulate_job(world, bars, E_DEC, store, TradingMode.PAPER, site=site)
+    assert out["dashboard_published"] is True
+    assert site.list() == [dashboard.SITE_KEY]
+    assert site.get(dashboard.SITE_KEY) == store.get(dashboard.KEY)
+    # The page reads this schema; a new one needs web/dashboard.js changed with it.
+    assert json.loads(site.get(dashboard.SITE_KEY))["schema"] == dashboard.SCHEMA == 1
+    assert "doc.schema !== 1" in (REPO_ROOT / "web" / "dashboard.js").read_text(encoding="utf-8")
+
+
+def test_a_site_that_cant_be_reached_doesnt_fail_simulate(world: Engine, tmp_path: Path) -> None:
+    bars = Bars()
+    allocate(world, bars, R_OCT)
+    store = LocalStore(tmp_path)
+    out = simulate_job(world, bars, R_OCT, store, TradingMode.DRY_RUN, site=BrokenStore())
+    assert out["dashboard_published"] is False
+    assert out["dashboard_bytes"] > 0
+    assert store.exists(dashboard.KEY)
+    # The private copy failing doesn't stop the site's.
+    site = LocalStore(tmp_path / "site")
+    out = simulate_job(world, bars, R_OCT, BrokenStore(), TradingMode.DRY_RUN, site=site)
+    assert (out["dashboard_bytes"], out["dashboard_published"]) == (None, True)
 
 
 def test_a_paper_month_without_its_snapshots_is_left_out(world: Engine, tmp_path: Path) -> None:

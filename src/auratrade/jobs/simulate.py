@@ -6,8 +6,9 @@
 SPY bought and held, all through `sim/portfolio.py` from the trial's first R to T, written whole
 to `twin_book`, with the scorecard in each month's `portfolio_journal` row (task 4.4, #167); on
 `paper` the row carries the account's own month too (task 5.3). Then **the dashboard's
-snapshot** (README §5.8, `journal.dashboard`), now that the day's twin exists; a failure to
-store it is logged and doesn't fail the job. Nothing is written before the trial starts, or
+snapshot** (README §5.8, `journal.dashboard`), now that the day's twin exists, in storage and,
+when `SITE_S3_BUCKET` is set, on the public site (task 6.2); a failure to store or publish it
+is logged and doesn't fail the job. Nothing is written before the trial starts, or
 when T's data isn't COMPLETE (fail closed). The job places no orders, so `--dry-run` changes
 nothing here.
 """
@@ -28,12 +29,14 @@ from auratrade.jobs.allocate import alpaca
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
 from auratrade.journal import dashboard
 from auratrade.journal.portfolio import FundBars, evening
+from auratrade.storage import ObjectStore, make_site_store
 
 
 def make_job(
     *,
     engine_factory: Callable[[Settings], Engine] = engine_from_settings,
     funds_factory: Callable[[Settings], FundBars] = alpaca,
+    site_factory: Callable[[Settings], ObjectStore | None] = make_site_store,
 ) -> JobSpec:
     def run(ctx: JobContext) -> JobOutput:
         engine = engine_factory(ctx.settings)
@@ -52,6 +55,7 @@ def make_job(
             )
         out: dict[str, object] = {"books": done.out}
         if done.books is not None and done.card is not None:
+            doc: dict[str, object] | None = None
             try:
                 with engine.connect() as conn:
                     doc = dashboard.build(
@@ -68,6 +72,14 @@ def make_job(
             except Exception as exc:
                 ctx.log.error("dashboard_not_stored", error=f"{type(exc).__name__}: {exc}")
                 out["dashboard_bytes"] = None
+            site = site_factory(ctx.settings)
+            if site is not None and doc is not None:
+                try:
+                    dashboard.publish(site, doc, key=dashboard.SITE_KEY)
+                    out["dashboard_published"] = True
+                except Exception as exc:
+                    ctx.log.error("dashboard_not_published", error=f"{type(exc).__name__}: {exc}")
+                    out["dashboard_published"] = False
         out["seconds"] = round(time.monotonic() - started, 1)
         return out
 

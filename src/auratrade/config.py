@@ -75,6 +75,9 @@ class Settings(BaseSettings):
     storage_backend: Literal["local", "s3"] = "local"
     storage_local_dir: Path = REPO_ROOT / "var" / "storage"
     storage_s3_bucket: str | None = None
+    # The public site's bucket: `simulate` publishes the dashboard's snapshot under `data/`
+    # (README §5.8, task 6.2). Unset (locally), the snapshot stays in storage only.
+    site_s3_bucket: str | None = None
     # Lambda function name for a chained job; `{env}` and `{job}` are substituted.
     job_function_template: str = "auratrade-{env}-{job}"
     # The EventBridge Scheduler group whose schedules the watchdog checks (AWS only).

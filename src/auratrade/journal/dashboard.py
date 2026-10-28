@@ -1,7 +1,8 @@
 """The public dashboard's snapshot (README §5.8; task 5.3, #170): one allow-listed JSON file.
 
 Written by `simulate` each evening, once the day's twin exists, to ``public/snapshot.json`` in
-the private storage bucket; task 6.2 publishes it to the site. Every field is chosen here, never
+the private storage bucket and, on AWS, to ``data/snapshot.json`` in the site's bucket, where
+`web/dashboard.js` reads it (task 6.2). Every field is chosen here, never
 copied whole from a row, so nothing reaches it by accident: no order or broker ids, no account
 number, no stop levels, no units held. What it shows:
 
@@ -36,6 +37,8 @@ from auratrade.sim.portfolio import PortfolioRun
 from auratrade.storage.base import ObjectStore
 
 KEY = "public/snapshot.json"
+# Under the site store's `data/` prefix, which the site's deploys never prune.
+SITE_KEY = "snapshot.json"
 SCHEMA = 1
 NOTE = "Paper trading, not financial advice. Tax is estimated (25% Israeli capital gains)."
 ANSWER_FIELDS = ("core_shift", "core_reasoning", "tax_note")
@@ -165,8 +168,8 @@ def build(
     }
 
 
-def publish(storage: ObjectStore, doc: Mapping[str, Any]) -> int:
+def publish(storage: ObjectStore, doc: Mapping[str, Any], *, key: str = KEY) -> int:
     """Write the snapshot (non-finite numbers as null); its size in bytes."""
     data = json.dumps(finite(doc), indent=1).encode()
-    storage.put(KEY, data, content_type="application/json")
+    storage.put(key, data, content_type="application/json")
     return len(data)
