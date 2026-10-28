@@ -57,7 +57,7 @@ class TestSettings:
     @pytest.mark.parametrize("value", ["live", "LIVE"])
     def test_live_is_refused(self, monkeypatch: pytest.MonkeyPatch, value: str) -> None:
         monkeypatch.setenv("TRADING_MODE", value)
-        with pytest.raises(ValidationError, match="Phase 8"):
+        with pytest.raises(ValidationError, match="paper only"):
             make()
 
     def test_unknown_mode_is_an_error_not_a_fallback(self) -> None:

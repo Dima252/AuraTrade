@@ -17,7 +17,7 @@ from auratrade.db.models import DailyBar, MacroObservation, MarketRegimeRow, Mar
 from auratrade.jobs import regime as regime_job
 from auratrade.jobs.base import JobContext
 from auratrade.notify.alerts import LogAlerter
-from auratrade.regime.compute import catch_up, compute, replay, run_session
+from auratrade.regime.compute import catch_up, compute, replay
 from auratrade.regime.inputs import MissingDataError
 from auratrade.regime.store import load_data, write_results
 from auratrade.storage import LocalStore
@@ -152,13 +152,13 @@ class TestReplayAndStep:
         _replay(pg_engine, SESSIONS[12], SESSIONS[25])
         for day in SESSIONS[26:31]:
             with pg_engine.begin() as conn:
-                run_session(conn, RISK, day)
+                catch_up(conn, RISK, day)[-1]
         stepped = {r.session_date: (r.computed_regime, r.score, r.state) for r in _rows(pg_engine)}
         assert stepped == full
 
     def test_the_step_needs_a_seed(self, pg_engine: Engine, seeded: dict[str, int]) -> None:
         with pytest.raises(MissingDataError, match="seed it"), pg_engine.begin() as conn:
-            run_session(conn, RISK, SESSIONS[30])
+            catch_up(conn, RISK, SESSIONS[30])[-1]
 
     def test_the_step_fills_missed_evenings(
         self, pg_engine: Engine, seeded: dict[str, int]
@@ -192,7 +192,7 @@ class TestReplayAndStep:
                 )
             )
         with pytest.raises(MissingDataError, match="QQQ"), pg_engine.begin() as conn:
-            run_session(conn, RISK, SESSIONS[31])
+            catch_up(conn, RISK, SESSIONS[31])[-1]
 
     def test_a_recompute_keeps_the_portfolio_managers_view(
         self, pg_engine: Engine, seeded: dict[str, int]
@@ -220,7 +220,7 @@ class TestMacro:
                 delete(MacroObservation).where(MacroObservation.observation_date >= SESSIONS[30])
             )
             _macro(conn, [SESSIONS[30]], source="FRED")
-            result = run_session(conn, RISK, SESSIONS[31])  # one session stale: fine
+            result = catch_up(conn, RISK, SESSIONS[31])[-1]  # one session stale: fine
         assert result.features["macro_stale_sessions"] == 1
         assert not result.crisis.active
 
@@ -232,9 +232,9 @@ class TestMacro:
             conn.execute(
                 delete(MacroObservation).where(MacroObservation.observation_date > SESSIONS[30])
             )
-            run_session(conn, RISK, SESSIONS[31])
-            run_session(conn, RISK, SESSIONS[32])
-            third = run_session(conn, RISK, SESSIONS[33])
+            catch_up(conn, RISK, SESSIONS[31])[-1]
+            catch_up(conn, RISK, SESSIONS[32])[-1]
+            third = catch_up(conn, RISK, SESSIONS[33])[-1]
         assert third.crisis.reasons == ("macro_stale",)
         assert third.pillars.volatility == 0
         assert _rows(pg_engine)[-1].crisis

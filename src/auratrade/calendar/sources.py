@@ -18,7 +18,7 @@ from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponen
 
 NY = ZoneInfo("America/New_York")
 REGULAR_CLOSE = time(16, 0)
-# Paper only until Phase 8 (CLAUDE.md §3.1); the calendar is the same on every account.
+# Paper only (CLAUDE.md §3.1); the calendar is the same on every account.
 ALPACA_PAPER_URL = "https://paper-api.alpaca.markets"
 TIMEOUT_S = 15.0
 

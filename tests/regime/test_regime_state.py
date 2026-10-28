@@ -6,7 +6,7 @@ from dataclasses import replace
 
 from auratrade.config import DEFAULT_RISK_CONFIG, Regime, RegimeConfig, load_risk_config
 from auratrade.indicators.bars import Bar
-from auratrade.regime.state import RegimeState, Tracking, advance, early_uptrend_stepped, track
+from auratrade.regime.state import RegimeState, Tracking, advance, track
 from tests.regime.regime_helpers import ibd_regime
 
 CFG = ibd_regime(load_risk_config(DEFAULT_RISK_CONFIG).regime)
@@ -392,18 +392,6 @@ class TestEarlyUptrend:
         for _ in range(9):
             m.step(3)
         assert m.step(3, SPY=p(100, low=99)).regime is CORR
-
-    def test_the_step_up_after_ten_sessions(self) -> None:
-        kwargs = {"starter_sessions": 10, "min_score": 1}
-        m = after_ftd()
-        m.steps(9, score=0)
-        assert m.state is not None
-        assert not early_uptrend_stepped(m.state, 5, **kwargs)  # label 10: still starter
-        state = m.step(0)
-        assert not early_uptrend_stepped(state, 0, **kwargs)
-        assert early_uptrend_stepped(state, 1, **kwargs)
-        assert not early_uptrend_stepped(replace(state, no_ftd=True), 3, **kwargs)
-        assert not early_uptrend_stepped(replace(state, regime=CU), 3, **kwargs)
 
 
 class TestDistributionTracking:

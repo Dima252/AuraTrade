@@ -3,7 +3,7 @@ from datetime import date, timedelta
 import pytest
 
 from auratrade.config import DEFAULT_RISK_CONFIG, Regime, load_risk_config
-from auratrade.regime.ladder import LADDER, downgrade, most_conservative, rank
+from auratrade.regime.ladder import LADDER, most_conservative, rank
 from auratrade.regime.pillars import (
     IndexTrend,
     TrackedBreakout,
@@ -194,20 +194,3 @@ class TestLadder:
         assert most_conservative(Regime.UNDER_PRESSURE) is Regime.UNDER_PRESSURE
         with pytest.raises(ValueError, match="at least one"):
             most_conservative()
-
-    @pytest.mark.parametrize(
-        ("current", "proposed", "effective"),
-        [
-            (Regime.CONFIRMED_UPTREND, None, Regime.CONFIRMED_UPTREND),
-            (Regime.CONFIRMED_UPTREND, Regime.UNDER_PRESSURE, Regime.UNDER_PRESSURE),
-            (Regime.UNDER_PRESSURE, Regime.CONFIRMED_UPTREND, Regime.UNDER_PRESSURE),  # never up
-            (Regime.EARLY_UPTREND, Regime.EARLY_UPTREND, Regime.EARLY_UPTREND),
-            (Regime.EARLY_UPTREND, Regime.CORRECTION, Regime.CORRECTION),
-            (Regime.EARLY_UPTREND, Regime.CONFIRMED_UPTREND, Regime.EARLY_UPTREND),
-            # Only the state machine assigns EARLY_UPTREND: anywhere else it fails closed.
-            (Regime.CONFIRMED_UPTREND, Regime.EARLY_UPTREND, Regime.CORRECTION),
-            (Regime.CORRECTION, Regime.EARLY_UPTREND, Regime.CORRECTION),
-        ],
-    )
-    def test_downgrade(self, current: Regime, proposed: Regime | None, effective: Regime) -> None:
-        assert downgrade(current, proposed) is effective

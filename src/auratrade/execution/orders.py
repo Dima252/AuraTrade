@@ -1,4 +1,4 @@
-"""Order sequences (README §5.7): protect a position, the sell sequence, and selling at once
+"""Order sequences (README §5.6): protect a position, the sell sequence, and selling at once
 when the price is already through the stop. Every method runs under the single-writer lock
 (`execution.lock`), so no other job changes orders meanwhile.
 
@@ -200,7 +200,7 @@ class OrderDesk:
 
     def protect(self, symbol: str, level: float) -> ProtectResult:
         """Make the position's live GTC stops cover its full quantity at `level` or above
-        (README §5.7.1, #115): cancel the unfilled rest of a partly filled buy and any stray
+        (README §5.6.1, #115): cancel the unfilled rest of a partly filled buy and any stray
         sale, fix or cancel stops that are below the level or not GTC, then place a standalone
         GTC stop for whatever is uncovered. If the price is already through the level, the
         uncovered shares are sold at once instead (step 2)."""
@@ -289,7 +289,7 @@ class OrderDesk:
     # --- sales ---------------------------------------------------------------------------
 
     def sell(self, symbol: str, qty: int, reason: str, level: float) -> SaleResult:
-        """The sell sequence (README §5.7.2): reduce the stop (swapping legs for one standalone
+        """The sell sequence (README §5.6.2): reduce the stop (swapping legs for one standalone
         stop, #113), sell with a marketable limit, and restore the stop at once if the sale is
         rejected or doesn't fill. A full exit cancels the stops instead of reducing them."""
         if not self.market_open or symbol in self.blocked_sales:
@@ -349,7 +349,7 @@ class OrderDesk:
 
     def sell_now(self, symbol: str, qty: int, reason: str) -> SaleResult:
         """Sell shares that have no stop at once, escalating within the run: a marketable
-        limit, one re-price, then a market order (README §5.7.2). Before the open or after the
+        limit, one re-price, then a market order (README §5.6.2). Before the open or after the
         close nothing is sold: the 09:31 check run sells (#124)."""
         if qty <= 0:
             return SaleResult(symbol, 0, 0, SaleStatus.NOTHING)
@@ -460,7 +460,7 @@ class OrderDesk:
         return order.filled_qty
 
     def cancel_entries(self, symbols: Iterable[str] | None = None, *, why: str) -> int:
-        """Cancel open entry parents that haven't filled at all (their held legs go with them).
+        """Cancel open buys that haven't filled at all (an OTO's held leg goes with it).
         A partly filled one is left to `protect`, which keeps its filled shares covered."""
         wanted = None if symbols is None else set(symbols)
         count = 0

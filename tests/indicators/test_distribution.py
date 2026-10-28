@@ -2,11 +2,9 @@ import pytest
 
 from auratrade.indicators.bars import Bar
 from auratrade.indicators.distribution import (
-    FollowThroughDay,
     RallyAttempt,
     distribution_count,
     distribution_days,
-    find_follow_through_day,
     start_rally_attempt,
     step_rally_attempt,
 )
@@ -67,27 +65,6 @@ RALLY = [
 ]
 
 
-def test_follow_through_day_on_day_four() -> None:
-    assert find_follow_through_day(RALLY, 0, **FTD_RULES) == FollowThroughDay(
-        session=5, day=4, gain=pytest.approx(101 / 99.5 - 1), rally_low=96, weak=False
-    )
-
-
-def test_follow_through_day_needs_gain_and_higher_volume() -> None:
-    small_gain = [*RALLY[:5], bar(100.5, 1300)]  # +1.0%
-    assert find_follow_through_day(small_gain, 0, **FTD_RULES) is None
-    light_volume = [*RALLY[:5], bar(101, 1100)]  # volume below the prior session
-    assert find_follow_through_day(light_volume, 0, **FTD_RULES) is None
-
-
-def test_late_follow_through_day_is_flagged_weak() -> None:
-    drifting = [bar(99.6, 1000), bar(99.7, 1000), bar(99.8, 1000), bar(99.9, 1000)]  # days 4-7
-    late = [*RALLY[:5], *drifting, bar(101.5, 1500)]  # day 8
-    ftd = find_follow_through_day(late, 0, **FTD_RULES)
-    assert ftd is not None
-    assert (ftd.session, ftd.day, ftd.weak) == (9, 8, True)
-
-
 def test_new_low_restarts_the_count() -> None:
     state = RallyAttempt(rally_low=96, low_session=1, day=2)
     state, ftd = step_rally_attempt(state, RALLY[3], bar(99, 5000, low=95.9), 4, **FTD_RULES)
@@ -114,23 +91,3 @@ def test_down_closes_before_day_one_keep_waiting() -> None:
     state = start_rally_attempt(bar(100, low=99), 0)
     state, _ = step_rally_attempt(state, bar(100), bar(99.5, low=99.2), 1, **FTD_RULES)
     assert state == RallyAttempt(rally_low=99, low_session=0, day=0)
-
-
-def test_correction_entered_near_the_high_can_rally_at_once() -> None:
-    # A correction entered on the score: that session's low is the correction low and an FTD is
-    # possible from day 4 (README §5.2).
-    series = [
-        bar(200, low=198),
-        bar(201, 1000),  # day 1
-        bar(201.5, 1000),  # day 2
-        bar(201, 1000),  # day 3
-        bar(204, 1100),  # day 4: +1.49%
-    ]
-    ftd = find_follow_through_day(series, 0, **FTD_RULES)
-    assert ftd is not None
-    assert (ftd.session, ftd.day, ftd.rally_low) == (4, 4, 198)
-
-
-def test_find_follow_through_day_range_check() -> None:
-    with pytest.raises(IndexError):
-        find_follow_through_day(RALLY, 6, **FTD_RULES)

@@ -121,9 +121,6 @@ class MarketCalendar:
         gap a position is held through, not a market window."""
         return (self.next_session(day).day - day).days
 
-    def is_long_weekend(self, day: date) -> bool:
-        return self.days_until_next_open(day) > NORMAL_WEEKEND_DAYS
-
 
 def load_calendar(conn: Connection) -> MarketCalendar:
     rows = orm.Session(conn).scalars(select(MarketSession)).all()

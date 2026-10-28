@@ -1,4 +1,4 @@
-"""`watchdog` (every 15 minutes, 07:00-22:00 on weekdays; README §3, §5.13).
+"""`watchdog` (every 15 minutes, 07:00-22:00 on weekdays; README §3, §5.9).
 
     uv run python -m auratrade.jobs.watchdog --dry-run
 

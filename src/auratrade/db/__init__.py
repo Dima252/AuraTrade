@@ -1,1 +1,1 @@
-"""Database models, sessions and the single-writer lock (README §10)."""
+"""Database models, the engine, the system flags and the job-run store (README §10)."""

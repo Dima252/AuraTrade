@@ -99,7 +99,7 @@ def check_trading_mode(env: Env, http: httpx.Client, opts: Options) -> Result:
     if mode in ALLOWED_TRADING_MODES:
         return Result("trading_mode", Status.OK, mode)
     if mode == "live":
-        return Result("trading_mode", Status.FAIL, "live is not allowed before Phase 8")
+        return Result("trading_mode", Status.FAIL, "live is refused: the system trades paper only")
     return Result("trading_mode", Status.FAIL, f"unknown mode {mode!r}")
 
 
@@ -152,7 +152,7 @@ def make_anthropic_client(key: str) -> anthropic.Anthropic:
 
 def check_anthropic(env: Env, http: httpx.Client, opts: Options) -> Result:
     (key,) = require(env, "ANTHROPIC_API_KEY")
-    model_id = env.get("ANALYST_MODEL") or DEFAULT_MODEL
+    model_id = env.get("PM_MODEL") or DEFAULT_MODEL
     try:
         # Models API: free, no tokens. Confirms both the key and access to the model.
         model = make_anthropic_client(key).models.retrieve(model_id)

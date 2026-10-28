@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 
-from auratrade.indicators.series import Series, check_same_length, check_window, rolling_mean
+from auratrade.indicators.series import Series, check_window, rolling_mean
 
 
 def sma(values: Sequence[float], window: int) -> Series:
@@ -51,9 +51,3 @@ def falling(values: Sequence[float | None], lookback: int) -> list[bool]:
         prior = values[t - lookback] if t >= lookback else None
         out.append(value is not None and prior is not None and value < prior)
     return out
-
-
-def extension(closes: Sequence[float], averages: Sequence[float | None]) -> Series:
-    """How far the close sits above a moving average, as a fraction (0.25 = 25% above)."""
-    check_same_length(closes, averages)
-    return [None if a is None else c / a - 1 for c, a in zip(closes, averages, strict=True)]

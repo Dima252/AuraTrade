@@ -9,7 +9,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import Engine, insert, select, update
 
-from auratrade.db.flags import TRADING_ENABLED
+from auratrade.db.flags import SEED, TRADING_ENABLED
 from auratrade.db.models import JobRunRow, MarketSession, Mismatch, SystemFlag, Ticker
 from scripts import reset_trading_state as rts
 
@@ -98,7 +98,7 @@ def test_main_plans_then_clears(
         assert conn.execute(select(Mismatch)).first() is None
         flags = dict(conn.execute(select(SystemFlag.name, SystemFlag.value)).all())
         assert flags[TRADING_ENABLED] is False
-        assert len(flags) == 4
+        assert flags == SEED
         assert conn.execute(select(Ticker.symbol)).scalars().all() == ["NVDA"]
         assert conn.execute(select(MarketSession)).first() is not None
 

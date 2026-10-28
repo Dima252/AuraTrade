@@ -1,4 +1,4 @@
-"""The stop invariant (README §3 rule 5, §5.7.1), checked from broker state alone (pure).
+"""The stop invariant (README §3 rule 5, §5.6.1), checked from broker state alone (pure).
 
 Every stopped position's live GTC sell stops together cover its full quantity, each at or above
 the plan's hard-stop level, and a partly filled buy counts as unprotected (#115). The portfolio's

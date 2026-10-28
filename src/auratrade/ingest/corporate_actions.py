@@ -1,4 +1,4 @@
-"""The corporate-actions step (README §5.1, §5.7, #116).
+"""The corporate-actions step (README §5.1, §5.6.7, #116).
 
 Alpaca's feed filters on the **process date**, not the ex-date, and lists announced splits ahead
 (spike 0.3b): the request window is padded by sessions on both sides and every action is keyed

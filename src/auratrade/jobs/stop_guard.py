@@ -1,4 +1,4 @@
-"""`stop_guard` (every 5 minutes, 09:35-16:00; README §3, §5.7.1): the invariant between jobs.
+"""`stop_guard` (every 5 minutes, 09:35-16:00; README §3, §5.6.1): the invariant between jobs.
 
     uv run python -m auratrade.jobs.stop_guard --dry-run
 

@@ -1,4 +1,4 @@
-"""The broker interface the order layer is written against (README §5.7).
+"""The broker interface the order layer is written against (README §5.6).
 
 Two implementations: `execution.alpaca_broker.AlpacaBroker` (paper, through alpaca-py) and the
 in-memory `sim.fake_broker.FakeBroker`, which models what spike 0.3b found so the order code is
@@ -143,7 +143,7 @@ FILL = "FILL"
 class Activity:
     """One entry of the account's activity record: a fill (each partial fill its own), or a
     cash entry (a distribution, interest, a withholding, a fee, a deposit), for the tax lots
-    (README §5.7)."""
+    (README §5.6)."""
 
     id: str
     """The broker's id; ids sort in the order the activities happened."""
@@ -165,10 +165,11 @@ class Activity:
 
 @dataclass(frozen=True, slots=True)
 class OtoBuy:
-    """An entry: a GTC buy parent with one GTC sell stop leg (#113, #114).
+    """A buy with its stop: a GTC buy parent with one GTC sell stop leg (#113, #114); the
+    leveraged fund is bought this way (README §5.6.3).
 
-    `trigger` set: a buy stop-limit (trigger, limit). `trigger` None: a limit buy at `limit`,
-    for a price already past the trigger but within the limit (archived README §7.1)."""
+    `trigger` None: a limit buy at `limit` (the portfolio's). `trigger` set: a buy stop-limit,
+    the setup system's entry (archived README §7.1)."""
 
     symbol: str
     qty: int

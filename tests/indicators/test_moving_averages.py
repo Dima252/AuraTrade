@@ -1,6 +1,4 @@
-import pytest
-
-from auratrade.indicators.moving_averages import ema, extension, falling, rising, sma
+from auratrade.indicators.moving_averages import ema, falling, rising, sma
 
 
 def test_sma() -> None:
@@ -28,13 +26,3 @@ def test_rising_and_falling() -> None:
     # Flat is neither.
     assert rising([2, 2], 1) == [False, False]
     assert falling([2, 2], 1) == [False, False]
-
-
-def test_extension() -> None:
-    assert extension([110, 90, 80], [100, 100, None]) == [
-        pytest.approx(0.1),
-        pytest.approx(-0.1),
-        None,
-    ]
-    with pytest.raises(ValueError, match="lengths differ"):
-        extension([1.0], [])

@@ -54,11 +54,6 @@ def catch_up(conn: Connection, risk: RiskConfig, session: date) -> list[RegimeRe
     return results
 
 
-def run_session(conn: Connection, risk: RiskConfig, session: date) -> RegimeResult:
-    """`catch_up`'s result for ``session``."""
-    return catch_up(conn, risk, session)[-1]
-
-
 def replay(
     conn: Connection,
     risk: RiskConfig,

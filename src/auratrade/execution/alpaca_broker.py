@@ -1,5 +1,5 @@
-"""`Broker` and `PriceSource` on Alpaca (README §5.7): orders through alpaca-py's trading client,
-always on the paper endpoint until the Phase 8 live stack exists; prices from IEX (#120).
+"""`Broker` and `PriceSource` on Alpaca (README §5.6): orders through alpaca-py's trading client,
+always on the paper endpoint (CLAUDE.md §3.1); prices from IEX (#120).
 
 Errors are mapped to the order layer's: a 5xx or a lost connection is `BrokerUnavailableError`
 (the call may have been carried out), and the rejections spike 0.3b met each get their own
@@ -253,7 +253,7 @@ class AlpacaBroker:
 
     @classmethod
     def paper(cls, api_key: str, secret_key: str) -> AlpacaBroker:
-        # Live trading starts only in Phase 8, with its own stack and credentials.
+        # Paper only (CLAUDE.md §3.1): there is no live constructor.
         return cls(TradingClient(api_key, secret_key, paper=True))
 
     def account(self) -> Account:

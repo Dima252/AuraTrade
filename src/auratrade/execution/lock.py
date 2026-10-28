@@ -1,4 +1,4 @@
-"""The single-writer lock (README §5.7.7): one account-wide Postgres advisory lock around every
+"""The single-writer lock (README §5.6.5): one account-wide Postgres advisory lock around every
 section of code that changes orders.
 
 - Taken on its own direct (unpooled) connection: session-level advisory locks don't work through

@@ -11,8 +11,8 @@
   through the old level; each split opens a mismatch, resolved by hand, and until then the fund
   is neither sold at once nor bought.
 
-The setup system's reconciliation (`execution.reconcile`) ignores these symbols: they belong to
-the portfolio, whose holdings are the broker's positions (task 5.3 adds the tax lots).
+The funds' holdings are the broker's positions (`execution.reconcile`); their tax lots are
+`journal.tax_lots`' (task 5.3).
 """
 
 from __future__ import annotations

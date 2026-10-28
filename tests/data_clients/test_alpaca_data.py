@@ -9,7 +9,6 @@ from auratrade.data.alpaca_data import (
     Adjustment,
     AlpacaDataClient,
     CorporateActionKind,
-    Feed,
     alpaca_http,
 )
 from auratrade.data.http import VendorError
@@ -99,36 +98,6 @@ def test_recent_sip_refusal_is_a_clear_error() -> None:
     assert SECRET not in str(info.value)
 
 
-def test_iex_minute_bars_are_not_clipped() -> None:
-    server = Server(ok(fixture_json("alpaca/bars_minute_iex.json")))
-    start = datetime(2026, 10, 9, 13, 30, tzinfo=UTC)
-    end = datetime(2026, 10, 9, 13, 34, 59, tzinfo=UTC)
-    bars = client(server, now=start).minute_bars(["SPY"], start, end, feed=Feed.IEX)["SPY"]
-    assert [b.start.minute for b in bars] == [30, 31, 32, 33, 34]
-    assert bars[0].start.tzinfo is UTC
-    assert (bars[0].open, bars[0].high, bars[0].volume) == (776.23, 776.59, 7148)
-    params = server.params(0)
-    assert (params["feed"], params["timeframe"], params["adjustment"]) == ("iex", "1Min", "raw")
-    assert params["end"] == "2026-10-09T13:34:59Z"
-
-
-def test_sip_minute_bars_are_clipped() -> None:
-    server = Server(ok({"bars": {}, "next_page_token": None}))
-    now = datetime(2026, 10, 9, 13, 40, tzinfo=UTC)
-    start = datetime(2026, 10, 9, 13, 30, tzinfo=UTC)
-    assert client(server, now).minute_bars(["SPY"], start, now, feed=Feed.SIP) == {}
-    server = Server()
-    early = datetime(2026, 10, 9, 13, 35, tzinfo=UTC)
-    assert client(server, early).minute_bars(["SPY"], start, early, feed=Feed.SIP) == {}
-    assert server.requests == []
-
-
-def test_naive_datetimes_are_refused() -> None:
-    naive = datetime(2026, 10, 9, 13, 30)  # noqa: DTZ001 - the case under test
-    with pytest.raises(ValueError, match="timezone-aware"):
-        client(Server()).minute_bars(["SPY"], naive, naive, feed=Feed.IEX)
-
-
 def test_latest_trades_and_quotes() -> None:
     server = Server(
         ok(fixture_json("alpaca/latest_trades_iex.json")),
@@ -202,21 +171,7 @@ def test_corporate_actions_mergers_spin_offs_and_renames_across_pages() -> None:
     )
 
 
-def test_assets_come_from_the_paper_trading_api() -> None:
-    server = Server(ok(fixture_json("alpaca/assets.json")))
-    assets = {a.symbol: a for a in client(server).assets()}
-    assert {"SPY", "AAPL", "BRK.B"} <= set(assets)
-    assert assets["AAPL"].exchange == "NASDAQ"
-    assert assets["AAPL"].tradable
-    assert "has_options" in assets["SPY"].attributes
-    request = server.requests[0]
-    assert request.url.host == "paper-api.alpaca.markets"
-    assert server.params(0) == {"status": "active", "asset_class": "us_equity"}
-
-
 def test_unexpected_shapes_are_errors() -> None:
-    with pytest.raises(VendorError, match="unexpected response"):
-        client(Server(ok({"assets": []}))).assets()
     with pytest.raises(VendorError, match="unexpected response"):
         client(Server(ok([]))).daily_bars(["AAPL"], date(2026, 10, 6), date(2026, 10, 8))
 

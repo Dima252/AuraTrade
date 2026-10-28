@@ -1,5 +1,5 @@
 """Alpaca market data on the free plan: SIP and IEX bars, IEX latest trades and quotes,
-the corporate-actions feed, and the asset list (spike 0.3a, docs/spikes/alpaca-data.md).
+and the corporate-actions feed (spike 0.3a, docs/spikes/alpaca-data.md).
 
 - **Recent SIP is refused** (`403 subscription does not permit querying recent SIP data`)
   for anything newer than 15 minutes, and a date-only `end` for today counts as recent.
@@ -28,8 +28,6 @@ from auratrade.data.http import Params, RateLimiter, VendorError, VendorHttp
 
 NY = ZoneInfo("America/New_York")
 DATA_URL = "https://data.alpaca.markets"
-# Paper only until Phase 8 (CLAUDE.md §3.1); the asset list is the same on every account.
-TRADING_URL = "https://paper-api.alpaca.markets"
 # 200 requests a minute on the free plan, shared by every data endpoint (spike 0.3a).
 REQUESTS_PER_MINUTE = 190
 # Tested with 1,000 symbols a request; a page holds at most 10,000 bars.
@@ -89,17 +87,6 @@ class DailyBar:
 
 
 @dataclass(frozen=True)
-class MinuteBar:
-    symbol: str
-    start: datetime  # UTC, the minute's first instant
-    open: float
-    high: float
-    low: float
-    close: float
-    volume: int
-
-
-@dataclass(frozen=True)
 class Trade:
     symbol: str
     price: float
@@ -128,17 +115,6 @@ class CorporateAction:
     ratio: float | None
     source_id: str
     terms: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class Asset:
-    id: str
-    symbol: str
-    name: str
-    exchange: str
-    status: str
-    tradable: bool
-    attributes: tuple[str, ...]
 
 
 def alpaca_http(
@@ -221,34 +197,6 @@ class AlpacaDataClient:
             )
         return out
 
-    def minute_bars(
-        self,
-        symbols: Iterable[str],
-        start: datetime,
-        end: datetime,
-        *,
-        feed: Feed,
-        adjustment: Adjustment = Adjustment.RAW,
-    ) -> dict[str, list[MinuteBar]]:
-        """1-minute bars in [start, end], oldest first. IEX history starts 2020-07-27."""
-        last = self._sip_end(end) if feed is Feed.SIP else end
-        out: dict[str, list[MinuteBar]] = {}
-        if last < start:
-            return out
-        for symbol, raw in self._bars(symbols, "1Min", start, last, feed, adjustment):
-            out.setdefault(symbol, []).append(
-                MinuteBar(
-                    symbol,
-                    parse_timestamp(raw["t"]),
-                    float(raw["o"]),
-                    float(raw["h"]),
-                    float(raw["l"]),
-                    float(raw["c"]),
-                    int(raw["v"]),
-                )
-            )
-        return out
-
     def latest_trades(self, symbols: Iterable[str], *, feed: Feed = Feed.IEX) -> dict[str, Trade]:
         out = {}
         for chunk in _chunks(symbols):
@@ -304,26 +252,6 @@ class AlpacaDataClient:
                     if key in _BY_KEY:
                         out.extend(_corporate_action(key, item) for item in items)
         return out
-
-    def assets(self, *, status: str | None = "active") -> list[Asset]:
-        """US equities from the trading API's asset list (no ETF or type flag, #111)."""
-        body = self._http.get_json(
-            f"{TRADING_URL}/v2/assets", {"status": status, "asset_class": "us_equity"}
-        )
-        if not isinstance(body, list):
-            raise VendorError("alpaca", "/v2/assets: unexpected response", retryable=False)
-        return [
-            Asset(
-                str(a["id"]),
-                a["symbol"],
-                a.get("name") or "",
-                a["exchange"],
-                a["status"],
-                bool(a["tradable"]),
-                tuple(a.get("attributes") or ()),
-            )
-            for a in body
-        ]
 
     def _sip_end(self, end: datetime) -> datetime:
         return min(end, self._now() - SIP_DELAY)

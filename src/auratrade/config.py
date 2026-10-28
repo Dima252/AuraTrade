@@ -64,7 +64,7 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
     database_url: SecretStr | None = None
-    # The external dead-man's switch the watchdog pings (README §5.13). The URL is the
+    # The external dead-man's switch the watchdog pings (README §5.9). The URL is the
     # credential: anyone holding it can ping.
     healthchecks_ping_url: SecretStr | None = None
 
@@ -93,9 +93,9 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _check(self) -> Self:
         if self.trading_mode is TradingMode.LIVE:
-            # Live needs an explicit flag and separate credentials (README §14); both
-            # arrive with the Phase 8 live stack. Until then `live` is refused outright.
-            raise ValueError("TRADING_MODE=live is refused: live trading starts only in Phase 8")
+            # No live trading is planned (CLAUDE.md §3.1): it would need the user's explicit
+            # start, its own broker adapter, stack and credentials (task 7.1). Refused outright.
+            raise ValueError("TRADING_MODE=live is refused: the system trades paper only")
         if self.storage_backend == "s3" and not self.storage_s3_bucket:
             raise ValueError("STORAGE_S3_BUCKET is required when STORAGE_BACKEND=s3")
         return self
@@ -252,8 +252,6 @@ class BreadthConfig(_Strict):
     sma: PositiveInt
     up_min_above: Fraction
     down_max_above: Fraction
-    new_high_sessions: PositiveInt
-    net_new_highs_sessions: PositiveInt
 
 
 class VolatilityConfig(_Strict):
@@ -358,13 +356,13 @@ class DecisionPriceConfig(_Strict):
 
 
 class ExecutionConfig(_Strict):
-    """The order layer (README §5.7); see ``auratrade.execution``."""
+    """The order layer (README §5.6); see ``auratrade.execution``."""
 
     decision_price: DecisionPriceConfig
     # A marketable sell limit sits this far below the decision price.
     marketable_limit_slippage: Fraction
     # How long a sale may work before it is re-priced (then sent at market), and how long the
-    # market order gets before the run gives up and leaves it to the next one (README §5.7.2).
+    # market order gets before the run gives up and leaves it to the next one (README §5.6.2).
     sell_wait_seconds: PositiveInt
     market_order_wait_seconds: PositiveInt
     # A rebalance's buy works this long; what hasn't filled is cancelled (task 5.1).
@@ -373,7 +371,7 @@ class ExecutionConfig(_Strict):
     # Attempts per order call that failed without an answer (a 5xx, a dropped connection),
     # each with the same client_order_id.
     call_attempts: PositiveInt
-    # The single-writer lock (README §5.7.7): an order job alerts after waiting this long and
+    # The single-writer lock (README §5.6.5): an order job alerts after waiting this long and
     # gives up (fails, so Lambda retries it) after the maximum.
     lock_wait_alert_seconds: PositiveInt
     lock_wait_max_seconds: PositiveInt
@@ -398,10 +396,6 @@ class ChartsConfig(_Strict):
     daily_width: PositiveInt
     daily_height: PositiveInt
     daily_averages: dict[str, TrailSpec] = Field(min_length=1)
-    weekly_weeks: PositiveInt
-    weekly_width: PositiveInt
-    weekly_height: PositiveInt
-    weekly_averages: dict[str, TrailSpec] = Field(min_length=1)
     dpi: PositiveInt
 
 

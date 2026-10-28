@@ -305,17 +305,3 @@ def advance(
 
         case _:  # pragma: no cover - every regime is handled above
             assert_never(state.regime)
-
-
-def early_uptrend_stepped(
-    state: RegimeState, score: int, *, starter_sessions: int, min_score: int
-) -> bool:
-    """Archived README §6: after ``starter_sessions`` labels in ``EARLY_UPTREND``, the stepped
-    limits apply only on sessions with a score >= ``min_score``, and never after a ``no_ftd``
-    entry."""
-    return (
-        state.regime is Regime.EARLY_UPTREND
-        and not state.no_ftd
-        and state.seq - state.entered_seq >= starter_sessions
-        and score >= min_score
-    )
