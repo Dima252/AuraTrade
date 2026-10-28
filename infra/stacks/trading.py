@@ -158,6 +158,7 @@ class TradingStack(Stack):
                 function_name=function_name(env_name, spec.job),
                 code=lambda_.DockerImageCode.from_image_asset(
                     str(REPO_ROOT),
+                    target="jobs",  # not the `mcp` stage after it
                     cmd=[f"auratrade.jobs.{spec.job}.handler"],
                     platform=ecr_assets.Platform.LINUX_AMD64,
                     ignore_mode=IgnoreMode.DOCKER,  # the .dockerignore allow-list

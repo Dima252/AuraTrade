@@ -29,9 +29,9 @@ def _now() -> datetime:
     return datetime.now(NY)
 
 
-def public_deps(snapshot: str | None) -> ServerDeps:
+def public_deps(snapshot: str | None, *, max_age: float = 0.0) -> ServerDeps:
     redactor = configure_logging(stream=sys.stderr)
-    return ServerDeps(snapshot=Snapshot(snapshot), redact=redactor, now=_now)
+    return ServerDeps(snapshot=Snapshot(snapshot, max_age=max_age), redact=redactor, now=_now)
 
 
 def operator_deps(snapshot: str | None) -> ServerDeps:

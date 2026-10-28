@@ -1,9 +1,13 @@
-# An allow-list: the image needs only the lock file, the config and the package. Above all,
-# no .env file, var/ data or local virtualenv may reach the build context.
+# An allow-list: the image needs only the lock file, the config and the package (and the MCP
+# server's target the documents it serves). Above all, no .env file, var/ data or local
+# virtualenv may reach the build context.
 *
 !Dockerfile
 !pyproject.toml
 !uv.lock
 !config/
 !src/
+!README.md
+!docs/runbook.md
+!docs/backtests/portfolio.md
 src/**/__pycache__

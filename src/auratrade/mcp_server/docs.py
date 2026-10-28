@@ -3,15 +3,18 @@ log by entry, the runbook and the backtest's report. Pure over the files' text."
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from auratrade.config import REPO_ROOT
 
-README = REPO_ROOT / "README.md"
-RUNBOOK = REPO_ROOT / "docs" / "runbook.md"
-BACKTEST = REPO_ROOT / "docs" / "backtests" / "portfolio.md"
+# The remote server's image keeps the documents beside the package, not two levels above it.
+DOCS_ROOT = Path(os.environ.get("AURATRADE_DOCS_ROOT") or REPO_ROOT)
+README = DOCS_ROOT / "README.md"
+RUNBOOK = DOCS_ROOT / "docs" / "runbook.md"
+BACKTEST = DOCS_ROOT / "docs" / "backtests" / "portfolio.md"
 DECISION_LOG = "16"
 
 _HEADING = re.compile(r"^(#{2,3}) (\d+(?:\.\d+)?)\.? (.+)$")
