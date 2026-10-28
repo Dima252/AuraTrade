@@ -181,10 +181,15 @@
       days.forEach((d, i) => {
         if (i === 0 || d.slice(0, 7) !== days[i - 1].slice(0, 7)) starts.push(i);
       });
-      const every = Math.max(1, Math.ceil(starts.length / Math.max(2, Math.floor(w / 72))));
+      // A series starting at a month's last session (the trial starts on R) has the next
+      // month's first session beside it: that month is labelled, not the stub. Any other label
+      // that would crowd the one before it is left out.
+      if (starts.length > 1 && x(starts[1]) - x(starts[0]) < 64) starts.shift();
+      const every = Math.max(1, Math.ceil(starts.length / Math.max(2, Math.floor(w / 80))));
       let shownYear = null;
+      let shownX = -Infinity;
       starts.forEach((i, k) => {
-        if (k % every) return;
+        if (k % every || x(i) - shownX < 64) return;
         const { y: yr, m: mo } = parseDay(days[i]);
         chart.append(
           svg("text", {
@@ -192,10 +197,11 @@
             y: m.top + h + 18,
             class: "tick",
             "text-anchor": i === 0 ? "start" : "middle",
-            text: yr !== shownYear ? `${MONTHS[mo - 1]} ${String(yr).slice(2)}` : MONTHS[mo - 1],
+            text: yr !== shownYear ? `${MONTHS[mo - 1]} ${yr}` : MONTHS[mo - 1],
           }),
         );
         shownYear = yr;
+        shownX = x(i);
       });
 
       // The lines, broken where a series has no value.
@@ -213,6 +219,12 @@
           pen = true;
         });
         chart.append(svg("path", { d, class: `line ${line.cls}${line.dashed ? " dashed" : ""}` }));
+        // A value with no neighbour draws no line: mark it.
+        line.values.forEach((v, i) => {
+          if (isNum(v) && !isNum(line.values[i - 1]) && !isNum(line.values[i + 1])) {
+            chart.append(svg("circle", { cx: x(i), cy: y(v), r: 3, class: `pt ${line.cls}` }));
+          }
+        });
       }
 
       // Direct labels at the right end, pushed apart so they don't collide.

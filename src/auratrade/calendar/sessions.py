@@ -37,7 +37,7 @@ class Session:
 
     @property
     def calendar_agrees(self) -> bool:
-        """False on a disagreement, or before the cross-check ran: no new entries (§4)."""
+        """False on a disagreement, or before the cross-check ran: no increase of exposure (§4)."""
         return self.calendar_check == "AGREE"
 
 

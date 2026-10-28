@@ -338,7 +338,7 @@ class JobRunner:
         self._alert(
             bound,
             f"{spec.name} {session_date} BLOCKED: {before} has not succeeded "
-            f"({prior_status}) by {deadline:%H:%M} ET. No new entries next session.",
+            f"({prior_status}) by {deadline:%H:%M} ET. No increase of exposure next session.",
         )
         return JobStatus.BLOCKED_PREDECESSOR
 

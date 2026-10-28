@@ -3,8 +3,9 @@
     uv run python -m auratrade.jobs.regime --session 2026-10-09 --dry-run
     uv run python -m auratrade.jobs.regime --from 2025-10-01 --session 2026-10-08
 
-The first form is the evening step: it continues the state machine from the previous session's
-`market_regime` row and fails closed without one. The second seeds that history: a replay that
+The first form is the evening step: it continues the state machine from the last stored
+`market_regime` row, classifying any sessions a missed evening left out on the way (reported as
+`filled`), and fails closed when the table is empty. The second seeds that history: a replay that
 starts `regime.replay_warmup_sessions` before `--from` in `CORRECTION` and writes the rows from
 `--from` through `--session`. The replay doesn't go through the job runner (no heartbeat).
 
@@ -29,7 +30,7 @@ from auratrade.config import Settings, load_risk_config
 from auratrade.db.engine import engine_from_settings
 from auratrade.jobs.base import GuardPolicy, JobContext, JobOutput, JobSpec, lambda_handler, run_cli
 from auratrade.notify.alerts import Alerter
-from auratrade.regime.compute import replay, run_session
+from auratrade.regime.compute import catch_up, replay
 
 log = structlog.get_logger(__name__)
 
@@ -48,7 +49,8 @@ def make_job(
     def run(ctx: JobContext) -> JobOutput:
         engine = engine_factory(ctx.settings)
         with engine.begin() as conn:
-            result = run_session(conn, ctx.risk, ctx.session_date)
+            results = catch_up(conn, ctx.risk, ctx.session_date)
+        result = results[-1]
         if "macro_stale" in result.crisis.reasons:
             limit = ctx.risk.data.macro_stale_sessions
             alerter_factory(ctx.settings).alert(
@@ -63,6 +65,7 @@ def make_job(
             "crisis": list(result.crisis.reasons),
             "follow_through_day": result.follow_through is not None,
             "sessions_in_state": result.state.sessions_in_state,
+            "filled": [r.session.isoformat() for r in results[:-1]],
         }
         ctx.log.info("regime_computed", **details)
         return details

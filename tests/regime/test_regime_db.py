@@ -17,7 +17,7 @@ from auratrade.db.models import DailyBar, MacroObservation, MarketRegimeRow, Mar
 from auratrade.jobs import regime as regime_job
 from auratrade.jobs.base import JobContext
 from auratrade.notify.alerts import LogAlerter
-from auratrade.regime.compute import compute, replay, run_session
+from auratrade.regime.compute import catch_up, compute, replay, run_session
 from auratrade.regime.inputs import MissingDataError
 from auratrade.regime.store import load_data, write_results
 from auratrade.storage import LocalStore
@@ -156,11 +156,24 @@ class TestReplayAndStep:
         stepped = {r.session_date: (r.computed_regime, r.score, r.state) for r in _rows(pg_engine)}
         assert stepped == full
 
-    def test_the_step_needs_the_previous_row(
-        self, pg_engine: Engine, seeded: dict[str, int]
-    ) -> None:
+    def test_the_step_needs_a_seed(self, pg_engine: Engine, seeded: dict[str, int]) -> None:
         with pytest.raises(MissingDataError, match="seed it"), pg_engine.begin() as conn:
             run_session(conn, RISK, SESSIONS[30])
+
+    def test_the_step_fills_missed_evenings(
+        self, pg_engine: Engine, seeded: dict[str, int]
+    ) -> None:
+        _replay(pg_engine, SESSIONS[12], SESSIONS[30])
+        full = {r.session_date: (r.computed_regime, r.score, r.state) for r in _rows(pg_engine)}
+        with pg_engine.begin() as conn:
+            conn.execute(delete(MarketRegimeRow))
+        _replay(pg_engine, SESSIONS[12], SESSIONS[25])
+        # Five evenings missed: the sixth classifies them on its way, as the steps would have.
+        with pg_engine.begin() as conn:
+            results = catch_up(conn, RISK, SESSIONS[30])
+        assert [r.session for r in results] == list(SESSIONS[26:31])
+        stepped = {r.session_date: (r.computed_regime, r.score, r.state) for r in _rows(pg_engine)}
+        assert stepped == full
 
     def test_a_replay_needs_its_warm_up(self, pg_engine: Engine, seeded: dict[str, int]) -> None:
         with pytest.raises(MissingDataError, match="warm-up"):
