@@ -32,7 +32,14 @@ TradingStack(
     env=env,
 )
 
-# The remote MCP server's public tools, for the account's own credentials only (#175).
-McpStack(app, "AuraTradeMcp", site_bucket=site.bucket, env=env)
+# The remote MCP server's public tools (#175). Capped at one run unless `-c mcp_uncapped=true`,
+# which exists only for an account whose Lambda concurrency limit is still 10.
+McpStack(
+    app,
+    "AuraTradeMcp",
+    site_bucket=site.bucket,
+    capped=app.node.try_get_context("mcp_uncapped") not in ("true", True),
+    env=env,
+)
 
 app.synth()
