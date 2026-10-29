@@ -18,6 +18,12 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 
 ## Open items for the user
 
+- **The remote MCP server's cap (#175): keep it uncapped, or cap it.** Deployed 2026-10-29 **without** the cap (`-c mcp_uncapped=true`): the account's Lambda concurrency limit is 10, and AWS refuses to reserve any concurrency below that (it keeps 10 unreserved). The increase to 1,000 is a support case (request `a4d984ad803345238b813986cb565fd4ntaN4rpM`, opened 2026-10-29). Both ways the public tools work the same; what differs:
+  - **Uncapped (as now):** the bill stays bounded: the circuit breaker switches the server off at 1,000 calls in an hour (reserved concurrency 0: every request throttled, neither run nor billed) and alerts on Telegram, so a flood costs about an hour of calls at most (roughly 100 a second uncapped: under $1). **The risk is the trading jobs, not money:** until the alarm fires (its period is an hour, so up to an hour or two), a flood can hold all 10 of the account's concurrent Lambda runs and throttle a job; a late `execute_close` could miss its 15:40 decision price. It is safe while nobody but you has the URL (its ID is random, not guessable). If you keep it: shorten the alarm (e.g. 100 calls in 5 minutes) to narrow that window, make uncapped the default in `infra/app.py`, and update README §5.10 and #175, which describe the cap as the design.
+  - **Capped:** once AWS raises the limit, `cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade` (no flag): one run at a time, at most 10 requests a second, the trading jobs' concurrency never touched, the breaker still on top. Then the URL can be shared (the site, an interviewer). Nothing else changes.
+  - Re-arming after a trip, either way: `aws lambda put-function-concurrency --function-name auratrade-mcp --reserved-concurrent-executions 1 --profile auratrade` (uncapped: `delete-function-concurrency` instead, which removes the 0).
+- **MCP UI (planned, task 6.6):** a small dashboard rendered inside the AI client through MCP Apps (the SDK's `mcp.server.apps`): book vs twin vs SPY before and after tax, the exposure and satellite, the latest decision; for the showcase, after the first real snapshot and before 6.5's presentation.
+
 - **The order rehearsal on `dev`** wasn't run (`dev` not reset); it stays available (`scripts/rehearse_orders.py`).
 - **README §5.9** says LLM payloads go to S3; they are kept in `llm_decisions`. The user decides which is right.
 
