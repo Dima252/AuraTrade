@@ -224,7 +224,7 @@ def test_pages_fit_the_content_security_policy(page: str) -> None:
     # script-src and style-src are 'self' only: files, never inline code.
     for script in re.findall(r"<script[^>]*>(.*?)</script>", html, flags=re.S):
         assert not script.strip()
-    assert set(re.findall(r'<script src="([^"]*)"', html)) <= {"dashboard.js"}
+    assert set(re.findall(r'<script src="([^"]*)"', html)) <= {"chart.js", "dashboard.js"}
     assert html.count("<script") == len(re.findall(r'<script src="', html))
     assert "<style" not in html
     assert not re.search(r"\sstyle=", html)
@@ -241,8 +241,9 @@ def test_pages_carry_the_disclaimer(page: str) -> None:
     assert "paper" in html.lower()
 
 
-def test_the_dashboard_script_builds_no_markup() -> None:
-    js = (WEB_DIR / "dashboard.js").read_text(encoding="utf-8")
+@pytest.mark.parametrize("script", ["dashboard.js", "chart.js"])
+def test_the_dashboard_script_builds_no_markup(script: str) -> None:
+    js = (WEB_DIR / script).read_text(encoding="utf-8")
     # Snapshot text reaches the page as text: no HTML parsing, no eval, nothing remote.
     for banned in (
         "innerHTML",
@@ -253,5 +254,7 @@ def test_the_dashboard_script_builds_no_markup() -> None:
         "new Function",
     ):
         assert banned not in js, banned
-    assert re.findall(r'fetch\("([^"]*)"', js) == ["data/snapshot.json"]
+    assert re.findall(r'fetch\("([^"]*)"', js) == (
+        ["data/snapshot.json"] if script == "dashboard.js" else []
+    )
     assert "http" not in js.replace("http://www.w3.org/2000/svg", "")

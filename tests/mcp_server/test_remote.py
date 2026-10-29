@@ -80,6 +80,10 @@ async def test_the_public_tools_alone() -> None:
 
     assert {tool["name"] for tool in result["tools"]} == PUBLIC_TOOLS
     assert all(tool["annotations"]["readOnlyHint"] for tool in result["tools"])
+    # Released protocol versions carry no `extensions` capability: hosts find the page through
+    # the tool's own `_meta`.
+    (dashboard,) = (tool for tool in result["tools"] if tool["name"] == "dashboard")
+    assert dashboard["_meta"] == {"ui": {"resourceUri": "ui://auratrade/dashboard.html"}}
 
 
 @pytest.mark.anyio
@@ -98,6 +102,17 @@ async def test_a_resource() -> None:
     result = await _answer(_event(_call("resources/read", {"uri": "auratrade://decision/174"})))
 
     assert "Read-only." in result["contents"][0]["text"]
+
+
+@pytest.mark.anyio
+async def test_the_dashboard_and_its_page() -> None:
+    call = await _answer(_event(_call("tools/call", {"name": "dashboard", "arguments": {}})))
+    page = await _answer(_event(_call("resources/read", {"uri": "ui://auratrade/dashboard.html"})))
+
+    assert not call["isError"]
+    assert call["structuredContent"]["series"]
+    assert "AuraTrade through 2026-12-04" in call["content"][0]["text"]
+    assert page["contents"][0]["mimeType"] == "text/html;profile=mcp-app"
 
 
 @pytest.mark.anyio

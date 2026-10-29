@@ -7,16 +7,19 @@ from typing import Any
 import httpx
 import pytest
 from mcp import Client
+from mcp.server.apps import APP_MIME_TYPE, EXTENSION_ID
+from mcp.types import TextContent, TextResourceContents
 from sqlalchemy import Engine
 
 from auratrade.config import load_risk_config
 from auratrade.log import Redactor
+from auratrade.mcp_server import app
 from auratrade.mcp_server.server import Operator, ServerDeps, build_server
 from auratrade.mcp_server.sources import LogReader, Snapshot, SourceError, read_only_engine
 from tests.mcp_server.snapshots import snapshot
 from tests.mcp_server.test_operator import Reader
 
-PUBLIC_TOOLS = {"performance", "decisions", "exposure", "scorecard"}
+PUBLIC_TOOLS = {"performance", "decisions", "exposure", "scorecard", "dashboard"}
 OPERATOR_TOOLS = {"status", "jobs", "logs", "portfolio", "trend", "tax", "decision"}
 NOW = datetime(2026, 10, 28, 17, 0, tzinfo=UTC)
 README = (
@@ -107,15 +110,48 @@ async def test_performance_through_the_protocol() -> None:
 
 
 @pytest.mark.anyio
-async def test_before_the_first_snapshot_the_tool_says_so() -> None:
+@pytest.mark.parametrize("tool", ["decisions", "dashboard"])
+async def test_before_the_first_snapshot_the_tool_says_so(tool: str) -> None:
     deps = _public()
     assert isinstance(deps.snapshot, _Snapshot)
     deps.snapshot.doc = None
     async with Client(build_server(deps)) as client:
-        result = await client.call_tool("decisions", {})
+        result = await client.call_tool(tool, {})
 
     assert result.is_error
     assert "no snapshot published yet" in result.content[0].text  # type: ignore[union-attr]
+
+
+@pytest.mark.anyio
+async def test_the_dashboard_tool_points_at_its_page() -> None:
+    async with Client(build_server(_public())) as client:
+        tools = {t.name: t for t in (await client.list_tools()).tools}
+        page = await client.read_resource(app.URI)
+        capabilities = client.server_capabilities
+
+    assert tools["dashboard"].meta == {"ui": {"resourceUri": app.URI}}
+    assert capabilities.extensions is not None
+    assert EXTENSION_ID in capabilities.extensions
+    (content,) = page.contents
+    assert content.mime_type == APP_MIME_TYPE
+    assert isinstance(content, TextResourceContents)
+    assert "window.AuraChart" in content.text  # the site's drawing, inlined
+    assert "ui/initialize" in content.text
+
+
+@pytest.mark.anyio
+async def test_the_dashboard_answers_in_text_and_data() -> None:
+    async with Client(build_server(_public())) as client:
+        result = await client.call_tool("dashboard", {})
+
+    assert not result.is_error
+    (text,) = result.content
+    assert isinstance(text, TextContent)
+    # Clients without MCP Apps, and the model, read the text; the page draws the data.
+    assert "Paper account: $103,000, +3.00% since 2026-11-03" in text.text
+    assert result.structured_content is not None
+    assert len(result.structured_content["series"]) == 3
+    assert result.structured_content["decisions_total"] == 2
 
 
 @pytest.mark.anyio
