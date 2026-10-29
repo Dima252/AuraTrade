@@ -15,15 +15,16 @@ from typing import Any
 
 import httpx
 from botocore.exceptions import BotoCoreError, ClientError
+from mcp.server.apps import Apps
 from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ResourceNotFoundError, ToolError
-from mcp.types import ToolAnnotations
+from mcp.types import CallToolResult, TextContent, ToolAnnotations
 from sqlalchemy import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from auratrade.config import RiskConfig
 from auratrade.execution.broker import BrokerError
-from auratrade.mcp_server import docs, operator, public
+from auratrade.mcp_server import app, docs, operator, public
 from auratrade.mcp_server.sources import BrokerReader, LogReader, Snapshot, SourceError
 
 INSTRUCTIONS = """\
@@ -34,7 +35,8 @@ inside limits enforced by code. A rules-only twin runs beside it as the LLM's be
 results are judged after the estimated Israeli tax (25%).
 
 This server is read-only: it can't trade, change a flag or write anything. Start with \
-`performance` or `status`; the README and the decision log are resources (auratrade://readme, \
+`performance` or `status`; `dashboard` draws the book as a page where the client supports MCP \
+Apps. The README and the decision log are resources (auratrade://readme, \
 auratrade://decisions) for why the system works as it does."""
 
 READ = ToolAnnotations(
@@ -77,13 +79,44 @@ def _answer[T](deps: ServerDeps, call: Callable[[], T]) -> T:
 
 
 def build_server(deps: ServerDeps) -> MCPServer:
-    server = MCPServer(name="auratrade", title="AuraTrade", instructions=INSTRUCTIONS)
+    server = MCPServer(
+        name="auratrade", title="AuraTrade", instructions=INSTRUCTIONS, extensions=[_apps(deps)]
+    )
     _public_tools(server, deps)
     if deps.operator is not None:
         _operator_tools(server, deps, deps.operator)
     _resources(server, deps)
     _prompts(server, deps)
     return server
+
+
+def _apps(deps: ServerDeps) -> Apps:
+    """The `dashboard` tool and its page (task 6.6, #176): the page draws `structuredContent`,
+    which hosts keep out of the model's context; the text is what the model reads and what a
+    client without MCP Apps shows."""
+    apps = Apps()
+
+    @apps.tool(resource_uri=app.URI, title="AuraTrade dashboard", annotations=READ)
+    def dashboard() -> CallToolResult:
+        """The book at a glance, drawn as a dashboard where the client supports MCP Apps: the
+        paper account's balance, its gain and the estimated tax, the book against the twin and
+        SPY before and after tax, the exposure, the satellite and the latest decision. Clients
+        without MCP Apps get the same as a short text."""
+        doc = _answer(deps, deps.snapshot.read)
+        return CallToolResult(
+            content=[TextContent(type="text", text=public.dashboard_text(doc))],
+            structured_content=public.dashboard(doc),
+        )
+
+    apps.add_html_resource(
+        app.URI,
+        app.html(),
+        name="dashboard",
+        title="AuraTrade dashboard",
+        description="The `dashboard` tool's page: the book, the tax, the exposure, the decision.",
+        prefers_border=False,
+    )
+    return apps
 
 
 def _public_tools(server: MCPServer, deps: ServerDeps) -> None:

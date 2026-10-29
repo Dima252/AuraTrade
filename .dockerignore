@@ -1,6 +1,6 @@
 # An allow-list: the image needs only the lock file, the config and the package (and the MCP
-# server's target the documents it serves). Above all, no .env file, var/ data or local
-# virtualenv may reach the build context.
+# server's target the documents it serves and the dashboard's drawing). Above all, no .env
+# file, var/ data or local virtualenv may reach the build context.
 *
 !Dockerfile
 !pyproject.toml
@@ -10,4 +10,6 @@
 !README.md
 !docs/runbook.md
 !docs/backtests/portfolio.md
+!web/chart.js
+!web/chart.css
 src/**/__pycache__

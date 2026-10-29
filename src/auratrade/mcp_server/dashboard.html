@@ -1,0 +1,522 @@
+<!doctype html>
+<!-- The `dashboard` tool's MCP App (README §5.10, task 6.6): the host renders this page in a
+     sandboxed frame and hands it the tool's result. `app.py` inlines web/chart.css and
+     web/chart.js at the markers: the frame loads nothing and fetches nothing. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>AuraTrade</title>
+<style>
+:root {
+  --bg: #f7f8f6;
+  --surface: #ffffff;
+  --sunk: #eef1ee;
+  --text: #16201d;
+  --muted: #5b6662;
+  --line: #d9dfdb;
+  --accent: #0f766e;
+  --accent-soft: #d6efec;
+  --llm: #6d4bd1;
+  --llm-soft: #ebe5fb;
+  --up: #15803d;
+  --press: #b45309;
+  --corr: #b91c1c;
+  --s1: #2a78d6;
+  --s2: #eb6834;
+  --s3: #1baf7a;
+  --s4: #eda100;
+  --radius: 12px;
+  --mono: var(--font-mono, ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1211; --surface: #171f1d; --sunk: #121917; --text: #e6ece9; --muted: #97a39f;
+    --line: #26312e; --accent: #2dd4bf; --accent-soft: #123430; --llm: #a78bfa; --llm-soft: #251d3d;
+    --up: #4ade80; --press: #fbbf24; --corr: #f87171;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1211; --surface: #171f1d; --sunk: #121917; --text: #e6ece9; --muted: #97a39f;
+  --line: #26312e; --accent: #2dd4bf; --accent-soft: #123430; --llm: #a78bfa; --llm-soft: #251d3d;
+  --up: #4ade80; --press: #fbbf24; --corr: #f87171;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--font-sans, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);
+  -webkit-font-smoothing: antialiased;
+}
+h2, h3, p { margin: 0; }
+.app { max-width: 980px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
+.stack { display: grid; gap: 12px; min-width: 0; }
+.empty { padding: 20px; color: var(--muted); background: var(--surface); border: 1px dashed var(--line); border-radius: var(--radius); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; min-width: 0; }
+.card > h3 { font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: 0.02em; text-transform: uppercase; margin-bottom: 10px; }
+.muted { color: var(--muted); }
+.pos { color: var(--up); }
+.neg { color: var(--corr); }
+.num { font-variant-numeric: tabular-nums; }
+
+/* The header */
+.head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand svg { flex: none; }
+.brand strong { display: block; font-size: 16px; letter-spacing: -0.01em; }
+.brand span { display: block; font-size: 12px; color: var(--muted); }
+.toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); }
+.toggle button { font: inherit; font-size: 12px; border: 0; border-radius: 999px; padding: 3px 12px; background: transparent; color: var(--muted); cursor: pointer; }
+.toggle button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+button:focus-visible, .hit:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The balance */
+.hero { display: grid; grid-template-columns: 1.3fr 1fr; gap: 18px; align-items: center; }
+.hero .label { font-size: 13px; color: var(--muted); }
+.hero .balance { font-size: 40px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.1; margin: 2px 0 8px; font-variant-numeric: tabular-nums; }
+.deltas { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
+.deltas strong { font-variant-numeric: tabular-nums; }
+.taxes { margin: 0; display: grid; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.taxes div { background: var(--sunk); padding: 9px 14px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.taxes dt { font-size: 13px; }
+.taxes dt span { display: block; font-size: 11px; color: var(--muted); }
+.taxes dd { margin: 0; font-size: 15px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The returns */
+.tiles { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.tiles li { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tiles .name { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
+.tiles strong { font-size: 22px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tiles .sub { font-size: 12px; color: var(--muted); }
+.tiles .edge { background: var(--llm-soft); border-color: transparent; }
+.tiles .edge strong { color: var(--llm); }
+.chart-card h3 { margin-bottom: 6px; }
+.chart-card .chart { border: 0; border-radius: 0; padding: 4px 0 0; }
+
+/* The exposure and the satellite */
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.level { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.level strong { font-size: 30px; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.level span { font-size: 13px; color: var(--muted); }
+.pills { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.pill { font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 999px; border: 1px solid currentcolor; white-space: nowrap; }
+.pill-up { color: var(--up); } .pill-press { color: var(--press); } .pill-corr { color: var(--corr); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 12px; padding: 1px 9px; border-radius: 999px; background: var(--sunk); color: var(--muted); white-space: nowrap; }
+.gauge { position: relative; padding-bottom: 18px; }
+.gauge .track { position: relative; height: 10px; border-radius: 999px; background: var(--sunk); border: 1px solid var(--line); }
+.gauge .fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; background: var(--s1); }
+.gauge .mark { position: absolute; top: -5px; bottom: -5px; width: 0; border-left: 2px dashed var(--s2); }
+.gauge .scale span { position: absolute; top: 16px; transform: translateX(-50%); font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.gauge .scale span:first-child { transform: none; }
+.gauge .scale span:last-child { transform: translateX(-100%); }
+.gauge-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.gauge-key span { display: inline-flex; align-items: center; gap: 6px; }
+.gauge-key .key.s1 { border-top-width: 6px; border-radius: 2px; width: 12px; }
+.satellite .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+.bars { max-width: none; }
+
+/* The latest decision */
+.decision header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-bottom: 8px; }
+.decision header h3 { font-size: 15px; font-weight: 650; color: var(--text); margin: 0; text-transform: none; letter-spacing: 0; }
+.decision .summary { font-size: 14px; }
+.expect { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; }
+.expect li { display: grid; grid-template-columns: 52px 48px 1fr; gap: 10px; font-size: 13px; align-items: baseline; }
+.expect .sym { font-family: var(--mono); font-size: 12px; }
+.expect .w { text-align: right; font-variant-numeric: tabular-nums; }
+.expect .why { color: var(--muted); }
+.decision details { margin-top: 10px; font-size: 13px; }
+.decision summary { cursor: pointer; color: var(--accent); }
+.decision details p { margin-top: 6px; color: var(--muted); }
+.limits { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.limits li { padding-left: 10px; border-left: 3px solid var(--press); font-size: 13px; color: var(--muted); }
+.result { margin-top: 10px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.foot { font-size: 12px; color: var(--muted); padding: 0 2px; }
+
+@media (max-width: 640px) {
+  .hero, .pair { grid-template-columns: 1fr; }
+  .tiles { grid-template-columns: repeat(2, 1fr); }
+  .hero .balance { font-size: 34px; }
+}
+</style>
+<style>/*@chart.css*/</style>
+</head>
+<body>
+<main id="app" class="app" aria-live="polite">
+  <p class="empty">Loading the latest snapshot…</p>
+</main>
+<script>/*@chart.js*/</script>
+<script>
+// The host's side of MCP Apps (ui/initialize, then the tool's result as a notification) by hand,
+// as JSON-RPC over postMessage with the parent frame; then the snapshot drawn with chart.js.
+(() => {
+  "use strict";
+
+  const C = window.AuraChart;
+  const { el, svg, isNum, fmtDay, fmtMonth, fmtPct, fmtPts, fmtLevel, fmtUsd } = C;
+  const root = document.getElementById("app");
+  const html = document.documentElement;
+
+  // --- the host ---------------------------------------------------------------------------
+
+  let nextId = 1;
+  const pending = new Map();
+
+  function send(message) {
+    window.parent.postMessage({ jsonrpc: "2.0", ...message }, "*");
+  }
+
+  function request(method, params) {
+    const id = nextId++;
+    send({ id, method, params });
+    return new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
+  }
+
+  function context(ctx) {
+    if (!ctx) return;
+    if (ctx.theme === "light" || ctx.theme === "dark") html.dataset.theme = ctx.theme;
+    // The host's fonts and the like (--font-sans, --font-mono); its colours are left alone, as
+    // the series' palette is validated against this page's own.
+    const vars = (ctx.styles && ctx.styles.variables) || {};
+    for (const [k, v] of Object.entries(vars)) {
+      if (k.startsWith("--font-") && typeof v === "string") html.style.setProperty(k, v);
+    }
+  }
+
+  window.addEventListener("message", (ev) => {
+    const msg = ev.data;
+    if (ev.source !== window.parent || !msg || msg.jsonrpc !== "2.0") return;
+    if (!msg.method) {
+      const call = pending.get(msg.id);
+      if (!call) return;
+      pending.delete(msg.id);
+      if (msg.error) call.reject(msg.error);
+      else call.resolve(msg.result);
+      return;
+    }
+    if (msg.method === "ui/notifications/tool-result") show(msg.params);
+    else if (msg.method === "ui/notifications/host-context-changed") context(msg.params);
+    else if (msg.method === "ui/resource-teardown" || msg.method === "ping") send({ id: msg.id, result: {} });
+    else if (msg.id !== undefined) send({ id: msg.id, error: { code: -32601, message: "Method not found" } });
+  });
+
+  let height = 0;
+  new ResizeObserver(() => {
+    const h = Math.ceil(html.getBoundingClientRect().height);
+    if (h !== height) {
+      height = h;
+      send({ method: "ui/notifications/size-changed", params: { height } });
+    }
+  }).observe(html);
+
+  request("ui/initialize", {
+    protocolVersion: "2026-01-26",
+    appInfo: { name: "auratrade-dashboard", version: "1" },
+    appCapabilities: {},
+  })
+    .then((result) => context(result && result.hostContext))
+    .catch(() => {})
+    .finally(() => send({ method: "ui/notifications/initialized", params: {} }));
+
+  // --- the data ---------------------------------------------------------------------------
+
+  function show(result) {
+    const doc = result && result.structuredContent;
+    if (!result || result.isError || !doc || !Array.isArray(doc.series) || !doc.series.length) {
+      const text = ((result && result.content) || [])
+        .filter((c) => c.type === "text")
+        .map((c) => c.text)
+        .join("\n");
+      root.replaceChildren(el("p", { class: "empty", text: text || "No snapshot to show yet." }));
+      return;
+    }
+    doc.exposure = Array.isArray(doc.exposure) ? doc.exposure : [];
+    doc.journal = Array.isArray(doc.journal) ? doc.journal : [];
+    render(doc);
+  }
+
+  function rowsWith(rows, key) {
+    return rows.filter((r) => isNum(r[key]));
+  }
+
+  const signed = (x) => (isNum(x) && x < 0 ? "neg" : isNum(x) && x > 0 ? "pos" : "");
+
+  // --- the sections -----------------------------------------------------------------------
+
+  function logo() {
+    const mark = svg("svg", { width: 30, height: 30, viewBox: "0 0 32 32", "aria-hidden": "true" });
+    const stroke = { fill: "none", stroke: "#fff", "stroke-width": 3, "stroke-linecap": "round", "stroke-linejoin": "round" };
+    mark.append(
+      svg("rect", { width: 32, height: 32, rx: 7, fill: "#0f766e" }),
+      svg("path", { d: "M6 22l6-6 4 4 9-10", ...stroke }),
+      svg("path", { d: "M19 10h6v6", ...stroke }),
+    );
+    return mark;
+  }
+
+  function header(doc, toggle) {
+    const where = doc.mode === "paper" ? "Alpaca paper account" : "simulated (dry run)";
+    return el(
+      "header",
+      { class: "head" },
+      el("div", { class: "brand" }, logo(), el("div", {}, el("strong", { text: "AuraTrade" }), el("span", { text: `Through ${fmtDay(doc.through)} · ${where}` }))),
+      toggle,
+    );
+  }
+
+  // The balance: the paper account's own equity, or the book's where there's no account (dry
+  // run); its gain since the trial began and over the last session, and the tax picture.
+  function hero(doc) {
+    const live = rowsWith(doc.series, "account").length > 0;
+    const key = live ? "account" : "book";
+    const rows = rowsWith(doc.series, key);
+    const first = rows[0];
+    const now = rows[rows.length - 1];
+    const prev = rows.length > 1 ? rows[rows.length - 2] : null;
+    const equity = now[key];
+    const after = now[`${key}_after_tax`];
+    const gain = equity - first[key];
+    const day = prev ? equity - prev[key] : null;
+    const card = doc.scorecard || {};
+
+    const deltas = el(
+      "div",
+      { class: "deltas" },
+      el("span", {}, el("strong", { class: signed(gain), text: `${fmtUsd(gain, true)} (${fmtPct(first[key] > 0 ? gain / first[key] : null, 2)})` }), ` since ${fmtDay(first.session)}`),
+      prev ? el("span", {}, el("strong", { class: signed(day), text: `${fmtUsd(day, true)} (${fmtPct(day / prev[key], 2)})` }), " last session") : null,
+    );
+    const taxRow = (label, value, note) => el("div", {}, el("dt", {}, label, note ? el("span", { text: note }) : null), el("dd", { text: value }));
+    const taxes = el(
+      "dl",
+      { class: "taxes", "aria-label": "Tax" },
+      taxRow("After the estimated tax", fmtUsd(after), "if everything were sold today"),
+      taxRow("Tax owed on a sale", fmtUsd(isNum(after) ? equity - after : null), "25% of the open gains"),
+      taxRow("Tax realized so far", fmtUsd(card.tax_realized), isNum(card.twin_tax_realized) ? `the twin: ${fmtUsd(card.twin_tax_realized)}` : null),
+    );
+    return el(
+      "section",
+      { class: "card hero" },
+      el(
+        "div",
+        {},
+        el("p", { class: "label", text: live ? "Paper account balance" : "The book's equity (simulated)" }),
+        el("p", { class: "balance", text: fmtUsd(equity) }),
+        deltas,
+      ),
+      taxes,
+    );
+  }
+
+  function tiles(rows, afterTax) {
+    const series = C.present(rows).filter((s) => s.key !== "account");
+    const total = Object.fromEntries(series.map((s) => [s.key, C.last(C.returns(rows, s.key, afterTax))]));
+    const subs = { book: "Claude's decisions", twin: "the rules alone", spy: "bought and held" };
+    const items = series.map((s) =>
+      el(
+        "li",
+        {},
+        el("span", { class: "name" }, el("span", { class: `key ${s.cls}` }), s.label),
+        el("strong", { class: signed(total[s.key]), text: fmtPct(total[s.key], 2) }),
+        el("span", { class: "sub", text: subs[s.key] }),
+      ),
+    );
+    const edge = isNum(total.book) && isNum(total.twin) ? total.book - total.twin : null;
+    const market = isNum(total.book) && isNum(total.spy) ? total.book - total.spy : null;
+    items.push(
+      el(
+        "li",
+        { class: "edge" },
+        el("span", { class: "name", text: "Claude's edge" }),
+        el("strong", { text: fmtPts(edge, 2) }),
+        el("span", { class: "sub", text: `the book less the twin; ${fmtPts(market, 2)} on the S&P 500` }),
+      ),
+    );
+    return el("ul", { class: "tiles", "aria-label": `Returns since the trial began, ${afterTax ? "after" : "before"} tax` }, ...items);
+  }
+
+  function chart(rows, afterTax) {
+    const days = rows.map((r) => r.session);
+    const series = C.present(rows);
+    const lines = series.map((s) => ({ ...s, values: C.returns(rows, s.key, afterTax) }));
+    const host = el("div");
+    const card = el(
+      "section",
+      { class: "card chart-card" },
+      el("h3", { text: `Return since ${fmtDay(days[0])}, ${afterTax ? "after" : "before"} tax` }),
+      C.legend(series),
+      host,
+    );
+    return [
+      card,
+      () =>
+        C.lineChart(host, {
+          days,
+          lines,
+          format: (v) => fmtPct(v),
+          axisFormat: (v) => fmtPct(v, Math.abs(v) < 0.1 && v !== 0 ? 1 : 0),
+          label: `Return since the trial began, ${afterTax ? "after" : "before"} tax`,
+          zero: true,
+        }),
+    ];
+  }
+
+  function gauge(level, rule) {
+    const max = 1.5;
+    const at = (x) => `${Math.max(0, Math.min(1, x / max)) * 100}%`;
+    const scale = el("div", { class: "scale", "aria-hidden": "true" });
+    for (const t of [0, 0.5, 1, 1.5]) scale.append(el("span", { style: `left: ${at(t)}`, text: fmtLevel(t) }));
+    return el(
+      "div",
+      { class: "gauge", role: "img", "aria-label": `Exposure ${fmtLevel(level)} of the S&P 500; the rule level ${fmtLevel(rule)}` },
+      el("div", { class: "track" }, el("div", { class: "fill", style: `width: ${at(level)}` }), el("div", { class: "mark", style: `left: ${at(rule)}` })),
+      scale,
+    );
+  }
+
+  function exposure(e) {
+    const level = isNum(e.level) ? e.level : e.rule_level;
+    const pills = el(
+      "div",
+      { class: "pills" },
+      el("span", { class: `pill ${e.trend === "UP" ? "pill-up" : "pill-corr"}`, text: e.trend === "UP" ? "Up-trend" : "Down-trend" }),
+      e.capped ? el("span", { class: "pill pill-press", text: "Volatility cap" }) : null,
+      e.halted ? el("span", { class: "pill pill-corr", text: "Drawdown halt" }) : null,
+      e.fell_back ? el("span", { class: "chip", text: "No valid decision: held" }) : null,
+    );
+    return el(
+      "section",
+      { class: "card" },
+      el("h3", { text: "S&P 500 exposure" }),
+      el(
+        "div",
+        { class: "level" },
+        el("strong", { text: fmtLevel(level) }),
+        el("span", { text: `rules ${fmtLevel(e.rule_level)}, Claude's shift ${isNum(e.shift) ? `${e.shift >= 0 ? "+" : "−"}${fmtLevel(Math.abs(e.shift))}` : "–"}` }),
+      ),
+      pills,
+      gauge(level, e.rule_level),
+      el(
+        "div",
+        { class: "gauge-key" },
+        el("span", {}, el("span", { class: "key s1" }), "The book"),
+        el("span", {}, el("span", { class: "key s2 dashed" }), "The rule level (the twin)"),
+        el("span", { text: `since ${fmtDay(e.session)}` }),
+      ),
+    );
+  }
+
+  function satellite(e) {
+    const total = Object.values(e.satellite || {}).reduce((sum, w) => sum + w, 0);
+    return el(
+      "section",
+      { class: "card satellite" },
+      el("h3", { text: `The satellite · ${fmtPct(total, 0, false)} of the account` }),
+      C.bars(e.satellite),
+      el("p", { class: "note", text: `Claude's weights among the approved ETFs; all in SPY is neutral.${e.held_satellite ? " Last month's weights, held." : ""}` }),
+    );
+  }
+
+  function decision(j, e, total) {
+    const chips = el("div", { class: "chips" });
+    if (e) {
+      chips.append(el("span", { class: "chip", text: `Rules ${fmtLevel(e.rule_level)} → book ${fmtLevel(isNum(e.level) ? e.level : e.rule_level)}` }));
+      if (e.kind === "EVENT") chips.append(el("span", { class: "chip", text: "Event" }));
+    }
+    const body = [el("p", { class: "summary", text: j.summary || "No summary: the rules' allocation held." })];
+    const d = j.decision;
+    if (d && Array.isArray(d.satellite) && d.satellite.length) {
+      body.push(
+        el(
+          "ul",
+          { class: "expect", "aria-label": "Weights and expectations" },
+          ...d.satellite.map((w) =>
+            el(
+              "li",
+              {},
+              el("span", { class: "sym", text: w.symbol }),
+              el("span", { class: "w", text: fmtPct(w.weight, 1, false) }),
+              el("span", { class: "why", text: [w.expectation, isNum(w.expected_vs_market) ? `(${fmtPts(w.expected_vs_market, 1)} vs the market)` : null].filter(Boolean).join(" ") }),
+            ),
+          ),
+        ),
+      );
+    }
+    if (d && (d.core_reasoning || d.tax_note)) {
+      body.push(
+        el(
+          "details",
+          {},
+          el("summary", { text: "Claude's reasoning" }),
+          d.core_reasoning ? el("p", { text: d.core_reasoning }) : null,
+          d.tax_note ? el("p", { text: `Tax: ${d.tax_note}` }) : null,
+        ),
+      );
+    }
+    if (j.limits && j.limits.length) {
+      body.push(el("ul", { class: "limits", "aria-label": "Limits code enforced" }, ...j.limits.map((c) => el("li", { text: c.message || `${c.rule}: ${c.outcome}` }))));
+    }
+    const r = j.results;
+    if (r && r.after_tax) {
+      const a = r.after_tax;
+      body.push(
+        el("p", {
+          class: "result",
+          text: `To ${fmtDay(r.end)}${r.complete ? "" : " (so far)"}, after tax: the book ${fmtPct(a.book)}, the twin ${fmtPct(a.twin)}, the S&P 500 ${fmtPct(a.spy)}. Edge ${fmtPts(a.excess, 2)}.`,
+        }),
+      );
+    }
+    return el(
+      "section",
+      { class: "card decision" },
+      el("h3", { text: total > 1 ? `The latest decision · ${total} in the journal` : "The latest decision" }),
+      el("header", {}, el("h3", {}, el("time", { datetime: j.session, text: fmtMonth(j.session) })), chips),
+      ...body,
+    );
+  }
+
+  function render(doc) {
+    let afterTax = true;
+    const returnsHost = el("div", { class: "stack" });
+    const toggle = el("div", { class: "toggle", role: "group", "aria-label": "Tax" });
+    const buttons = [true, false].map((value) => {
+      const b = el("button", { type: "button", "aria-pressed": String(value === afterTax), text: value ? "After tax" : "Before tax" });
+      b.addEventListener("click", () => {
+        afterTax = value;
+        buttons.forEach((x, k) => x.setAttribute("aria-pressed", String([true, false][k] === afterTax)));
+        returns();
+      });
+      return b;
+    });
+    toggle.append(...buttons);
+
+    function returns() {
+      const [card, draw] = chart(doc.series, afterTax);
+      returnsHost.replaceChildren(tiles(doc.series, afterTax), card);
+      draw();
+    }
+
+    const latest = doc.exposure[doc.exposure.length - 1];
+    const byDay = Object.fromEntries(doc.exposure.map((e) => [e.session, e]));
+    const entry = doc.journal[doc.journal.length - 1];
+    root.replaceChildren(
+      header(doc, toggle),
+      hero(doc),
+      returnsHost,
+      latest ? el("div", { class: "pair" }, exposure(latest), satellite(latest)) : null,
+      entry ? decision(entry, byDay[entry.session], doc.decisions_total || doc.journal.length) : null,
+      el("p", { class: "foot", text: doc.note || "" }),
+    );
+    returns();
+  }
+})();
+</script>
+</body>
+</html>
