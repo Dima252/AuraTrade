@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AuraTrade</title>
-  <meta name="description" content="An autonomous portfolio manager aiming to beat the S&amp;P 500 over 10 years after tax: a trend rule sets how much of the market to own, Claude allocates a satellite, and code enforces limits it cannot override. Paper trading.">
+  <meta name="description" content="An investment agent managing a $100,000 paper account to beat the S&amp;P 500 over 10 years after tax: a trend rule sets how much of the market to own, Claude makes the judgement calls, and code enforces limits it cannot override.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -21,47 +21,54 @@
       </a>
       <nav aria-label="Sections">
         <a href="#results">Results</a>
+        <a href="#decides">Who decides</a>
         <a href="#how">How it works</a>
-        <a href="#limits">Risk limits</a>
+        <a href="#stack">Tech stack</a>
         <a href="#validation">Validation</a>
-        <a href="#status">Status</a>
       </nav>
+      <a class="gh" href="https://github.com/Dima252/AuraTrade" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
     </div>
   </header>
 
   <main>
     <section class="hero">
       <div class="wrap">
-        <p class="badge"><span class="dot" aria-hidden="true"></span>Paper trading only · trial running since November 2026</p>
-        <h1>An LLM portfolio manager<br>on a short leash.</h1>
+        <p class="badge"><span class="dot" aria-hidden="true"></span>Paper trading only</p>
+        <h1>An LLM portfolio manager</h1>
         <p class="lede">
-          AuraTrade manages a whole account with one goal: beat the S&amp;P 500 over
-          10 years, after tax. It doesn't pick stocks. A trend rule decides how much
-          of the market to own: a little more than all of it while the trend is up, half
-          while it is down. Claude allocates a fifth of the account among approved ETFs
-          and may nudge the rest, with a written reason every month. Code computes
-          every target and price and enforces limits the model cannot override.
+          AuraTrade is an investment agent whose current goal is to manage a $100,000 account
+          and beat the S&amp;P&nbsp;500 over 10 years, after tax.
         </p>
-        <ul class="facts" aria-label="Key facts">
-          <li><strong>1.3x / 0.5x</strong><span>S&amp;P 500 exposure in an up-trend / a down-trend</span></li>
-          <li><strong>10</strong><span>months: the moving average the trend is read from, once a month</span></li>
-          <li><strong>20%</strong><span>of the account allocated by Claude among approved ETFs</span></li>
-          <li><strong>&lt;$150</strong><span>monthly running cost, serverless on AWS</span></li>
-        </ul>
+        <p class="lede-more">
+          Once a month, code reads the market's trend and sets how much of the S&amp;P&nbsp;500 to
+          own: 1.3x while the trend is up, 0.5x while it is down. Claude makes the judgement calls
+          the rules can't: how to spread a fifth of the account across approved ETFs, and whether
+          to lean the rest slightly more or less. It reads the account, the market data, the news
+          and its own track record, and writes down every reason. Code checks every decision
+          against hard limits before an order goes in, and a rules-only twin runs beside it, so
+          Claude's value is measured, not assumed.
+        </p>
+        <p class="actions">
+          <a class="button primary" href="#results">See the results</a>
+          <a class="button" href="https://github.com/Dima252/AuraTrade" rel="noopener">Read the code</a>
+        </p>
       </div>
     </section>
 
     <section id="results" class="band">
       <div class="wrap">
-        <h2>The book so far</h2>
-        <p class="section-lede">The account against its rules-only twin and the S&amp;P 500, before and after the estimated tax, with every month's decision and its reasons. Updated each evening.</p>
+        <h2>Results</h2>
+        <p class="section-lede">The paper account against its rules-only twin and the S&amp;P 500, before and after the estimated tax, with Claude's latest decision and its reasons. Updated every trading evening.</p>
         <div id="dash" class="dash" aria-live="polite">
-          <p class="dash-empty">The first results appear after the trial's first rebalance on 2 November 2026. From then on, this section shows the book against the twin and the S&amp;P 500, the exposure history, the scorecard and the decision journal, updated every trading evening.</p>
+          <p class="dash-empty">The results appear here every trading evening.</p>
         </div>
       </div>
     </section>
 
-    <section id="how" class="band alt">
+    <section id="decides" class="band alt">
       <div class="wrap">
         <h2>Who decides what</h2>
         <p class="section-lede">The split is the core of the design: judgement goes to the model, arithmetic and safety stay in code.</p>
@@ -99,6 +106,166 @@
       </div>
     </section>
 
+    <section id="how" class="band">
+      <div class="wrap">
+        <h2>How it works</h2>
+        <p class="section-lede">The pipeline, step by step. Each step is a small job on AWS that runs on the New York clock, checks the market calendar first, and reports to a Telegram channel when something needs attention.</p>
+        <div class="flow">
+          <div class="lane">
+            <h3 class="lane-title">Every evening</h3>
+            <ol class="steps">
+              <li class="step">
+                <time>16:20</time>
+                <strong>Check the account</strong>
+                <p>Compares the system's records with the broker's, rebuilds the tax records from the day's trades, saves the balance and checks how far it is below its peak.</p>
+                <p class="tg"><span>Telegram</span>The daily report; the drawdown halt turning on</p>
+              </li>
+              <li class="step">
+                <time>17:00</time>
+                <strong>Collect the data</strong>
+                <p>The day's prices for every fund on the list, the VIX and interest rates.</p>
+                <p class="tg"><span>Telegram</span>Missing or late data</p>
+              </li>
+              <li class="step">
+                <time>17:15</time>
+                <strong>Play the twin</strong>
+                <p>Runs the rules-only twin and the S&amp;P&nbsp;500 beside the book, scores Claude's past decisions and publishes the data this page shows.</p>
+                <p class="tg"><span>Telegram</span>A step that failed</p>
+              </li>
+              <li class="step">
+                <time>17:25</time>
+                <strong>Read the market's mood</strong>
+                <p>Labels the market (uptrend, under pressure, correction) from the indexes, volatility and selling days: background for Claude, never a rule.</p>
+                <p class="tg"><span>Telegram</span>Stale market data</p>
+              </li>
+              <li class="step">
+                <time>17:35, month end</time>
+                <strong>Read the trend</strong>
+                <p>Is the S&amp;P&nbsp;500 above or below its 10-month average? That sets the rule level for the month, and gathers the facts Claude reads the next morning.</p>
+              </li>
+            </ol>
+          </div>
+          <div class="lane">
+            <h3 class="lane-title">The trading day</h3>
+            <ol class="steps">
+              <li class="step llm">
+                <time>08:45, first day of the month</time>
+                <strong>Claude decides</strong>
+                <p>Reads the facts, can look up news, charts and its own record, and answers with weights, a shift of the level and a reason for each change.</p>
+                <p class="tg"><span>Telegram</span>A failure: the book then holds last month's choices</p>
+              </li>
+              <li class="step code">
+                <time>Right after</time>
+                <strong>The guardrails</strong>
+                <p>Code checks the answer against every limit; anything outside them is clipped or rejected before it becomes a target.</p>
+                <p class="tg"><span>Telegram</span>Each clip</p>
+              </li>
+              <li class="step">
+                <time>15:40</time>
+                <strong>Trade</strong>
+                <p>Sells first, then buys, as limit orders at the 15:40 price. The 2x fund is bought with its protective stop attached at the broker.</p>
+                <p class="tg"><span>Telegram</span>Trades left unfinished; a stop that filled</p>
+              </li>
+            </ol>
+          </div>
+          <div class="lane">
+            <h3 class="lane-title">Always on</h3>
+            <ol class="steps apart">
+              <li class="step">
+                <time>Every 5 minutes, market hours</time>
+                <strong>Stop guard</strong>
+                <p>Checks that the 2x fund's stop at the broker covers every share, and repairs it at once if not.</p>
+                <p class="tg"><span>Telegram</span>A repair</p>
+              </li>
+              <li class="step">
+                <time>Every 15 minutes</time>
+                <strong>Watchdog</strong>
+                <p>Checks that every job ran when it should. An outside service watches the watchdog itself.</p>
+                <p class="tg"><span>Telegram</span>A missed or stuck job</p>
+              </li>
+            </ol>
+          </div>
+        </div>
+
+        <h2 class="sub">The MCP server: ask Claude about the book</h2>
+        <p class="section-lede">Any MCP client can connect to AuraTrade and ask how the book is doing, what Claude decided and why. The server is strictly read-only: it can't place an order or change anything.</p>
+        <div class="mcp">
+          <div class="mcp-node">
+            <strong>Your AI assistant</strong>
+            <p>claude.ai, Claude Desktop, Claude Code or Gemini, with AuraTrade added as a connector.</p>
+          </div>
+          <div class="mcp-link"><span>HTTPS · MCP over Streamable HTTP</span></div>
+          <div class="mcp-node main">
+            <strong>The MCP server on AWS Lambda</strong>
+            <p>Read-only tools (performance, decisions, exposure, scorecard) and a dashboard drawn inside the chat as an MCP App.</p>
+          </div>
+          <div class="mcp-link"><span>reads, once a minute</span></div>
+          <div class="mcp-node">
+            <strong>Tonight's snapshot</strong>
+            <p>The same file this page reads, on S3: it can show nothing the site doesn't.</p>
+          </div>
+        </div>
+        <div class="card ui-card">
+          <h3>A dashboard inside the chat: MCP Apps</h3>
+          <p>The <code>dashboard</code> tool uses MCP Apps, the protocol's UI extension (<code>io.modelcontextprotocol/ui</code>, the standard that grew out of MCP-UI). Instead of only text, the tool's result points to a <code>ui://</code> page that the host, claude.ai or Claude Desktop, draws in a sandboxed frame beside the answer.</p>
+          <ol class="ui-steps">
+            <li><strong>The handshake.</strong> The page and the host talk JSON-RPC over <code>postMessage</code>: the page initializes, the host sends the tool's result and its light or dark theme, and the page reports its height.</li>
+            <li><strong>Data for the page, text for the model.</strong> The numbers ride in the result's <code>structuredContent</code>, which the host keeps out of the model's context; the model reads a short summary, the same answer clients without MCP Apps show.</li>
+            <li><strong>Self-contained.</strong> The page carries this site's own chart code inline, so inside the sandbox it loads nothing and fetches nothing.</li>
+          </ol>
+        </div>
+        <ul class="principles">
+          <li><strong>A circuit breaker.</strong> A flood of calls switches the server off within the hour and sends a Telegram alert, so a stranger can't run up a bill or slow the trading jobs.</li>
+          <li><strong>On the owner's machine,</strong> the same server runs over stdio with read-only tools on the database, the broker and the logs: the system's status, its jobs, the tax lots, one decision whole.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="stack" class="band alt">
+      <div class="wrap">
+        <h2>Tech stack</h2>
+        <p class="section-lede">What each part is, and how it is used.</p>
+        <div class="grid stack-grid">
+          <article class="card">
+            <h3>The brain</h3>
+            <p>Claude Opus 5.5 through Anthropic's SDK: structured answers, tools for news, charts and its own record, prompt caching, and a hard 12:00 deadline.</p>
+          </article>
+          <article class="card">
+            <h3>The jobs</h3>
+            <p>Python 3.13 in one container image, one AWS Lambda function per job, scheduled by EventBridge on New York time; the evening jobs run as a chain.</p>
+          </article>
+          <article class="card">
+            <h3>Broker and data</h3>
+            <p>Alpaca for paper trading and market data (delayed consolidated bars, real-time IEX quotes); CBOE for the VIX, FRED for interest rates.</p>
+          </article>
+          <article class="card">
+            <h3>The memory</h3>
+            <p>Neon Postgres for the account, the decisions and the journal; older prices archived as Parquet on S3, and a nightly backup.</p>
+          </article>
+          <article class="card">
+            <h3>Safety</h3>
+            <p>Guardrails as pure functions in code, a single-writer lock on every order change, the stop resting at the broker, and a kill switch that blocks new risk but never an exit.</p>
+          </article>
+          <article class="card">
+            <h3>The MCP server</h3>
+            <p>The official MCP Python SDK on AWS Lambda behind a function URL, speaking Streamable HTTP. Its dashboard uses MCP Apps, the MCP UI extension: an interactive page drawn inside claude.ai.</p>
+          </article>
+          <article class="card">
+            <h3>This site</h3>
+            <p>Static pages on S3 behind CloudFront, served over HTTPS at auratrade.dev; its data is one file published each evening.</p>
+          </article>
+          <article class="card">
+            <h3>Infrastructure and CI</h3>
+            <p>Every AWS resource defined in code with the AWS CDK; GitHub Actions lints, type-checks and tests every change before it merges.</p>
+          </article>
+          <article class="card">
+            <h3>Alerts</h3>
+            <p>A Telegram bot for everything that needs a human, and healthchecks.io as the dead-man's switch if the watchdog itself goes quiet.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <section class="band">
       <div class="wrap">
         <h2>The trend dial</h2>
@@ -130,7 +297,7 @@
           <div class="limit"><strong>10%</strong><span>of the account at most in any satellite ETF</span></div>
           <div class="limit"><strong>0</strong><span>margin: leverage only through the 2x fund</span></div>
           <div class="limit"><strong>−30%</strong><span>stop at the broker on the 2x fund, raised monthly</span></div>
-          <div class="limit"><strong>−25%</strong><span>drawdown halt: no leverage until the trend turns up again</span></div>
+          <div class="limit"><strong>−25%</strong><span>drawdown halt: no leverage until the trend turns up again or the account is back at its peak</span></div>
         </div>
         <ul class="principles">
           <li><strong>Prices come from code.</strong> The model chooses weights; it never names a price.</li>
@@ -161,24 +328,13 @@
         <p class="note">The test was written down before any data was read, and run once.</p>
       </div>
     </section>
-
-    <section id="status" class="band alt">
-      <div class="wrap">
-        <h2>Status</h2>
-        <div class="grid">
-          <div class="limit"><strong>Built</strong><span>and running on AWS since 28 October 2026</span></div>
-          <div class="limit"><strong>2 Nov 2026</strong><span>the first monthly rebalance</span></div>
-          <div class="limit"><strong>12 months</strong><span>of paper trading on a $100,000 Alpaca paper account</span></div>
-        </div>
-        <p class="note">Its results are <a href="#results">at the top of this page</a>, updated every trading evening.</p>
-      </div>
-    </section>
   </main>
 
   <footer class="foot">
     <div class="wrap">
       <p><strong>Not financial advice.</strong> AuraTrade is an experimental personal project. It trades an Alpaca paper account; nothing on this page is a recommendation to buy or sell any security, and its tax figures are estimates, not tax advice.</p>
       <p class="muted">Method sources: Faber (2007) for the 10-month average; Gayed &amp; Bilello (2016) for leverage with a trend filter; Hurst, Ooi &amp; Pedersen (2017) on a century of trend-following; Moreira &amp; Muir (2017) on volatility.</p>
+      <p class="muted"><a href="https://github.com/Dima252/AuraTrade" rel="noopener">The code on GitHub</a></p>
     </div>
   </footer>
 </body>

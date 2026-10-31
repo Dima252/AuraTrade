@@ -229,9 +229,13 @@ def test_pages_fit_the_content_security_policy(page: str) -> None:
     assert "<style" not in html
     assert not re.search(r"\sstyle=", html)
     assert not re.search(r"\son[a-z]+=", html)
-    # No third-party assets: every src/href is relative, root-relative or an in-page anchor.
-    for url in re.findall(r'(?:src|href)="([^"]*)"', html):
+    # No third-party assets: everything the page loads (src, <link href>) is its own. Plain
+    # links may leave the site, over HTTPS only.
+    loaded = re.findall(r'\ssrc="([^"]*)"', html) + re.findall(r'<link[^>]*\shref="([^"]*)"', html)
+    for url in loaded:
         assert not re.match(r"[a-z]+:|//", url), url
+    for url in re.findall(r'<a[^>]*\shref="([^"]*)"', html):
+        assert not re.match(r"[a-z]+:|//", url) or url.startswith("https://"), url
 
 
 @pytest.mark.parametrize("page", ["index.html", "404.html"])
