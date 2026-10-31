@@ -1,4 +1,4 @@
-"""Prices the order layer acts on: the decision price (#120) and order-price rounding (pure)."""
+"""Prices the order layer acts on: the decision price (#23) and order-price rounding (pure)."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def decision_price(
     trade: Trade | None, quote: Quote | None, now: datetime, cfg: DecisionPriceConfig
 ) -> float | None:
     """The last IEX trade if fresh, else the IEX quote midpoint if fresh with a sane spread,
-    else None: no price (README glossary, #120). A fund without one isn't traded that run, and
+    else None: no price (README glossary, #23). A fund without one isn't traded that run, and
     the leveraged fund's stop keeps resting at the broker."""
     if trade is not None and (now - trade.at).total_seconds() <= cfg.trade_max_age_seconds:
         return trade.price

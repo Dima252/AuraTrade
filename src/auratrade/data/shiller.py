@@ -2,7 +2,7 @@
 `docs/backtests/portfolio-preregistration.md` §4.2). Free, no key.
 
 Read from the Open Knowledge "s-and-p-500" dataset, which republishes Shiller's `ie_data.xls`
-as CSV (its values match the Yale file's; checked 2026-10-27, #157). `Dividend` is the trailing
+as CSV (its values match the Yale file's; checked 2026-10-27, #9). `Dividend` is the trailing
 12-month dividend in index points; Shiller's dividends lag the prices by a few months, and the
 CSV writes the missing ones as 0.0, read here as unknown.
 """

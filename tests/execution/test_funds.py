@@ -1,4 +1,4 @@
-"""The portfolio's funds in the order layer (`execution.funds`, task 5.1): which carry a stop,
+"""The portfolio's funds in the order layer (`execution.funds`): which carry a stop,
 the leveraged fund's tighten-only level, and splits."""
 
 from __future__ import annotations

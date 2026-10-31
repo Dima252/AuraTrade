@@ -62,7 +62,7 @@ def test_before_the_open_a_stop_through_the_price_waits_then_sells_at_the_check_
     fake.set_price("SSO", 65.0)  # under the level of 70
     out = world.run(execute_open.make_job, session=NEXT)
     assert out["repaired"] == ["SSO"]
-    assert fake.position("SSO") == 298  # nothing sold before the open (#124)
+    assert fake.position("SSO") == 298  # nothing sold before the open (#21)
 
     world.clock.now = fake.now = ny(NEXT, 9, 31)
     fake.open_market()

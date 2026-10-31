@@ -1,11 +1,11 @@
-"""The Portfolio Manager's system prompt (README §5.4, §9; #163; task 4.2).
+"""The Portfolio Manager's system prompt (README §5.4, §9; #4).
 
 Versioned: ``VERSION`` changes with the wording, and the id stored with each decision is the
 version plus a hash of the rendered text, so a change to the limits it quotes (filled from
 `risk.yaml`) is a different prompt too. The text is the same for every decision of one
 version and config, so it is the cached prefix.
 
-**Holding is the default** (#163, the user's instruction): trading a gain realizes tax that
+**Holding is the default** (#4, the user's instruction): trading a gain realizes tax that
 holding defers, so the prompt makes "hold" the usual answer and asks every change to say why it
 beats its tax.
 """

@@ -1,10 +1,10 @@
-"""The portfolio's trades (README §5.6.3, §7; task 5.1), on an order section
+"""The portfolio's trades (README §5.6.3, §7), on an order section
 (`execution.runtime`), so under the single-writer lock and after the stop invariant.
 
 **The rebalance** (on E at 15:40, and on its retry while E's run didn't finish):
 1. Clear what an earlier run left working in the funds (unfilled buys, sales): each run decides
    afresh from the broker. The leveraged fund is then protected at its level, which keeps the
-   filled part of a partly filled buy covered (#115).
+   filled part of a partly filled buy covered (#18).
 2. Plan from the broker's holdings and equity and the decision prices (`execution.rebalance`);
    buys that may not go in (the kill switch, the halt, a mismatch, ...) are held back.
 3. The leveraged fund's stop level for this E is recorded before any of its orders.

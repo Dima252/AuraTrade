@@ -83,7 +83,7 @@ class TestOutliers:
         assert find_outliers([bar(D1, 50, 90, 10, 50)], CFG) == []
 
     def test_a_real_gap_and_run_is_kept(self) -> None:
-        # An episodic pivot: gap up 30%, a high well above the prior bar but near its own body.
+        # A real gap: up 30%, a high well above the prior bar but near its own body.
         bars = [bar(D1, 50, 51, 49, 50), bar(D2, 65, 72, 64, 70), bar(D3, 70, 74, 69, 73)]
         assert find_outliers(bars, CFG) == []
 

@@ -79,7 +79,7 @@ def _created() -> Mapped[datetime]:
 
 
 class Ticker(Base):
-    """A security. Tickers get reused, so the symbol alone isn't a key (#111)."""
+    """A security. Tickers get reused, so the symbol alone isn't a key (#25)."""
 
     __tablename__ = "tickers"
     __table_args__ = (
@@ -141,7 +141,7 @@ class DailyBar(Base):
 
     ticker_id: Mapped[int] = mapped_column(Integer, ForeignKey("tickers.id"), primary_key=True)
     session_date: Mapped[date] = mapped_column(Date, primary_key=True)
-    # Zero-volume bars are dropped at ingest (#111); volume can exceed int4 after split
+    # Zero-volume bars are dropped at ingest (#25); volume can exceed int4 after split
     # adjustment.
     volume: Mapped[int] = mapped_column(BigInteger)
     open: Mapped[float] = mapped_column(REAL)
@@ -155,7 +155,7 @@ BAR_FIELDS = ("HIGH", "LOW")
 
 
 class BarCorrection(Base):
-    """A bad high or low caught by ingest's outlier filter (README §5.1, #126). `daily_bars`
+    """A bad high or low caught by ingest's outlier filter (README §5.1, #25). `daily_bars`
     holds the corrected value; the vendor's is kept here."""
 
     __tablename__ = "bar_corrections"
@@ -263,7 +263,7 @@ REGIMES = ("CORRECTION", "EARLY_UPTREND", "UNDER_PRESSURE", "CONFIRMED_UPTREND")
 
 
 class MarketRegimeRow(Base):
-    """One row per session (README §5.2, task 2.3), written at the close; it governs the next
+    """One row per session (README §5.2), written at the close; it governs the next
     session. `state` carries the state machine to the next evening. Kept forever (small)."""
 
     __tablename__ = "market_regime"
@@ -348,14 +348,14 @@ class AccountSnapshot(Base):
     open_positions: Mapped[int] = mapped_column(SmallInteger)
     details: Mapped[dict[str, Any]] = mapped_column(server_default=text("'{}'"))
     holdings: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'"))
-    """{symbol: {"units": .., "value": ..}} at the close, the funds only (task 5.3)."""
+    """{symbol: {"units": .., "value": ..}} at the close, the funds only."""
     tax_owed: Mapped[float | None] = mapped_column(Double)
     """The estimated tax if everything were sold at the close, from the live lots: equity less
     it is "after tax". None when the lots couldn't be rebuilt that evening."""
     created_at: Mapped[datetime] = _created()
 
 
-# --- The portfolio manager (task 4.3, README §5.4-§5.7, §10) ---------------------------------
+# --- The portfolio manager (README §5.4-§5.7, §10) ---------------------------------
 
 TARGET_KINDS = ("REBALANCE", "EVENT")
 TARGET_STATUSES = ("ALLOCATED", "DECIDED")
@@ -439,19 +439,19 @@ class PortfolioTarget(Base):
     held_satellite: Mapped[bool | None] = mapped_column(Boolean)
     fell_back: Mapped[bool | None] = mapped_column(Boolean)
     satellite_tax: Mapped[float | None] = mapped_column(Double)
-    """The tax the satellite's sales were estimated to realize (#163's budget counts it)."""
+    """The tax the satellite's sales were estimated to realize (#4's budget counts it)."""
     risk_hash: Mapped[str] = mapped_column(String(64))
     created_at: Mapped[datetime] = _created()
     decided_at: Mapped[datetime | None]
     executions: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
-    """`execute_close`'s runs on a rebalance's targets (task 5.1): one entry per run."""
+    """`execute_close`'s runs on a rebalance's targets : one entry per run."""
     executed_at: Mapped[datetime | None]
     """When a run finished every trade; until then the retry tries again (README §3)."""
 
 
 class TaxLot(Base):
     """The live account's tax lots and income (README §5.7), rebuilt whole each evening from
-    the broker's activities (`tax.live`, task 5.3): open lots, closed pieces, income."""
+    the broker's activities (`tax.live`): open lots, closed pieces, income."""
 
     __tablename__ = "tax_lots"
     __table_args__ = (CheckConstraint(_in("kind", LOT_KINDS), name="kind"),)
@@ -471,9 +471,9 @@ class TaxLot(Base):
 
 
 class FundStop(Base):
-    """The leveraged fund's stop level (README §7.2; task 5.1), one row per change: the latest
+    """The leveraged fund's stop level (README §7.2), one row per change: the latest
     is in force. Set when the fund is bought from flat, raised on each later E, never lowered;
-    a split scales it (#116)."""
+    a split scales it (#22)."""
 
     __tablename__ = "fund_stops"
     __table_args__ = (
@@ -494,8 +494,8 @@ class FundStop(Base):
 
 class BookMark(Base):
     """The twin's simulated account each session (README §5.5), in `dry_run` the book's own
-    decisions replayed (SIM, #166), and SPY bought and held (the scorecard's third line, task
-    4.4): rewritten whole each evening from the trial's start."""
+    decisions replayed (SIM, #31), and SPY bought and held (the scorecard's third line):
+    rewritten whole each evening from the trial's start."""
 
     __tablename__ = "twin_book"
     __table_args__ = (CheckConstraint(_in("book", BOOKS), name="book"),)
@@ -516,7 +516,7 @@ class BookMark(Base):
 
 class PortfolioJournal(Base):
     """One row per month (README §5.7): the decision and its reasons, the clips, the trades,
-    and the month's results (task 4.4)."""
+    and the month's results."""
 
     __tablename__ = "portfolio_journal"
 

@@ -1,4 +1,4 @@
-"""The live account's tax book from the broker's activity record (README §5.7; task 5.3, #170).
+"""The live account's tax book from the broker's activity record (README §5.7, #35).
 
 Pure: no I/O. `post_market` replays the whole record each evening (as `twin_book` is rewritten
 whole), so the lots are never out of step with the broker:

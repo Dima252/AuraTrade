@@ -5,7 +5,7 @@
 Both runs reconcile and enforce the stop invariant under the order lock; a split with an ex-date
 today has its stop re-placed at the scaled level (`execution.funds`). Before the open (09:20)
 nothing is sold: a stop that can't be placed because the price is already through it waits.
-Once the market is open (the 09:31 run) the invariant sells those shares at once (#124: no OPG
+Once the market is open (the 09:31 run) the invariant sells those shares at once (#21: no OPG
 orders). Which run this is follows from the broker's clock, so a late 09:20 run behaves as the
 check run.
 """

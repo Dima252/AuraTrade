@@ -468,11 +468,11 @@ def test_cancel_entries_cancels_only_unfilled_parents() -> None:
     assert desk(fake).cancel_entries(["SSO"], why="kill") == 0
 
 
-# --- the portfolio's sale and buy (task 5.1) -----------------------------------------------
+# --- the portfolio's sale and buy  -----------------------------------------------
 
 
 def holding(fake: FakeBroker, symbol: str = "SPY", qty: int = 10, price: float = 500.0) -> None:
-    """A fund bought earlier, with no stop (#155)."""
+    """A fund bought earlier, with no stop (#5)."""
     fake.set_price(symbol, price)
     order = fake.submit(LimitBuy(symbol, qty, price, ids.buy_id(SESSION, symbol)))
     fake.fill(order.id, price=price)

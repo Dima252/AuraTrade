@@ -1,4 +1,4 @@
-// The public dashboard (README §5.8, task 6.2): reads data/snapshot.json, which `simulate`
+// The public dashboard (README §5.8): reads data/snapshot.json, which `simulate`
 // publishes each evening, and draws it into #dash with chart.js. Without the file (before the
 // paper trial) or without JavaScript, the static text in #dash stays. Every value reaches the
 // page through textContent or an SVG attribute, never as markup.

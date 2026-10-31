@@ -1,11 +1,11 @@
 # Spike 0.3c: market calendar
 
-**Run:** 2026-10-08, `uv run --group spikes python -m spikes.calendar` (Alpaca `GET /v2/calendar`, paper endpoint; `pandas_market_calendars` 5.5.0, calendar `NYSE`).
-**Decision: GO.** README §4 stands as written; three implementation notes for task 1.4 below.
+**Run:** 2026-10-08 (Alpaca `GET /v2/calendar`, paper endpoint; `pandas_market_calendars` 5.5.0, calendar `NYSE`).
+**Result:** the two sources agree exactly over 12 years; README §4 (Alpaca primary, `pandas_market_calendars` the cross-check) stands, with the three notes below.
 
 ## What the README assumes
 
-§4: Alpaca's calendar is primary and `pandas_market_calendars` is the cross-check. A disagreement blocks new entries for the day. `market_sessions` stores open/close and `is_early_close`, and early closes are at 13:00.
+§4: Alpaca's calendar is primary and `pandas_market_calendars` is the cross-check. A disagreement blocks increases of exposure for the day. `market_sessions` stores open/close and `is_early_close`, and early closes are at 13:00.
 
 ## Results, 2016-01-01 to 2027-12-31
 
@@ -31,15 +31,15 @@
 ```
 
 - `open` / `close` are **ET wall-clock strings with no time zone**. An early close appears only as `close: "13:00"`. There is no flag.
-- `session_open` / `session_close` are the extended-hours bounds (04:00–20:00). They aren't needed: IEX pre-market quotes are read from 08:00 (§3).
+- `session_open` / `session_close` are the extended-hours bounds (04:00–20:00). Nothing reads them.
 - `settlement_date` moves from T+2 to T+1 on 2024-05-28, as the SEC rule did.
 
 **`pandas_market_calendars`** returns tz-aware UTC timestamps (`market_open`, `market_close`). Its `early_closes()` lists the same 24 dates.
 
-## Notes for task 1.4 (calendar module)
+## Notes for the calendar module
 
 1. Localize Alpaca's `open`/`close` to `America/New_York` for each date, then store UTC (CLAUDE.md §6). Treat them as ET wall-clock times, never as UTC.
-2. Derive `is_early_close` as `close < 16:00`. Session minutes come from open/close: 390 normally, 210 on early closes. They feed the half-day volume normalization (§4).
+2. Derive `is_early_close` as `close < 16:00`. Session minutes come from open/close: 390 normally, 210 on early closes. They feed the half-day volume normalization of the regime's indexes.
 3. Exact agreement over 12 years means the disagreement rule will fire only on a genuine late change, such as an unscheduled closure that one source hasn't picked up yet. That is the case it exists for. Compare open and close times too, not just the date sets.
 
 ## Not covered

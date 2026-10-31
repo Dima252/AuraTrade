@@ -1,12 +1,10 @@
-"""Historical backfill for the portfolio's backtest (task 3.18, README §5.1): free vendor calls
+"""Historical backfill for the portfolio's backtest (README §5.1): free vendor calls
 only (Kenneth French's library, Robert Shiller's dividends, Alpaca market data); no orders.
 
     uv run python scripts/backfill.py longhistory         # the long history and SPY/SSO/BIL
 
 The history goes to the configured object store (STORAGE_BACKEND; locally var/storage). The
-calendar must be synced first (`python -m auratrade.calendar.sync`). The stock universe's
-history since 2016 (the setup system's and the momentum book's stages) went in task 5.2 (#161);
-the Parquet files it wrote stay in storage.
+calendar must be synced first (`python -m auratrade.calendar.sync`).
 """
 
 from __future__ import annotations

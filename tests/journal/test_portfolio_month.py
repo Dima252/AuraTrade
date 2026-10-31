@@ -1,4 +1,4 @@
-"""A month replayed end to end in `dry_run` (task 4.3's acceptance): `allocate` on R, the
+"""A month replayed end to end in `dry_run` : `allocate` on R, the
 Portfolio Manager on E, `simulate` each evening, the next R and E, on the test Postgres with
 deterministic fund bars and Claude's responses in the API's wire format (no request leaves
 the machine)."""
@@ -593,7 +593,7 @@ def test_in_dry_run_r_uses_the_simulated_books_halt(world: Engine) -> None:
         assert read_flags(conn).halt_drawdown is True  # the account's flag is left alone
 
 
-# --- the paper account's month and the dashboard (task 5.3) ----------------------------------
+# --- the paper account's month and the dashboard  ----------------------------------
 
 
 class BrokenStore:

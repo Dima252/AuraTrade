@@ -1,12 +1,12 @@
-"""The Portfolio Manager (README §5.4, §9; #163, #164; task 4.2): one decision, from the facts
+"""The Portfolio Manager (README §5.4, §9; #4, #6): one decision, from the facts
 to enforced targets.
 
 - **The answer** (`PmAnswer`) is the README §9 schema: the core shift, the satellite (or null
   to hold it), the reasons, the expectations, the tax note. No field is a price.
-- **Tools** read through `PmSources`, which the jobs implement (task 4.3): the ETF facts, a
+- **Tools** read through `PmSources`, which the jobs implement : the ETF facts, a
   chart, news (as untrusted data), the decision history. Only funds on the ETF list are served.
 - **Every outcome goes through `guardrails/portfolio.py`**, the failure's too. On a failure
-  (error, timeout, refusal, invalid output, the deadline) the book **holds** (#164): no shift,
+  (error, timeout, refusal, invalid output, the deadline) the book **holds** (#6): no shift,
   last month's satellite (the neutral before the first decision), exactly the answer
   ``{"core_shift": 0, "satellite": null}``. It realizes no satellite tax and adds no risk; the
   core follows the rule level, as the twin's does.
@@ -84,7 +84,7 @@ class PmAnswer(pydantic.BaseModel):
 
 
 class PmSources(Protocol):
-    """What the tools read (the jobs implement it in task 4.3). Each call may raise: the
+    """What the tools read (the jobs implement it). Each call may raise: the
     client reports a failed tool to the model, which decides without it."""
 
     def etf_facts(self, symbol: str) -> EtfFacts: ...
@@ -174,7 +174,7 @@ def tools(sources: PmSources, risk: RiskConfig) -> list[Tool[Any]]:
 
 
 def hold(ctx: PortfolioContext, risk: RiskConfig) -> PortfolioDecision:
-    """No shift and last month's satellite, or the neutral before the first decision (#164)."""
+    """No shift and last month's satellite, or the neutral before the first decision (#6)."""
     p = risk.portfolio
     satellite = dict(ctx.previous_satellite) or {p.market: p.satellite_share}
     return PortfolioDecision(0.0, satellite)
@@ -213,7 +213,7 @@ def decide(
     increases_allowed: bool,
     deadline: datetime | None,
 ) -> PmResult:
-    """One decision. Never raises for the LLM: a failure holds (#164)."""
+    """One decision. Never raises for the LLM: a failure holds (#6)."""
     prompt = system_prompt(risk.portfolio)
     ctx = context(facts, increases_allowed=increases_allowed)
     outcome = client.decide(

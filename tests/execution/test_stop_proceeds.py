@@ -1,5 +1,5 @@
 """After the leveraged fund's stop fills, its proceeds go into the cash fund at the next 15:40
-until the next E (task 5.2, README §7.2), through `execute_close` on the fake broker."""
+until the next E (README §7.2), through `execute_close` on the fake broker."""
 
 from __future__ import annotations
 

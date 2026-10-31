@@ -136,7 +136,7 @@ def test_the_rules_block_carries_the_level_the_band_and_the_twin() -> None:
     assert rules["rule_level"] == P.up_level
     assert rules["core_shift_allowed"] == [-P.max_shift, pytest.approx(P.max_level - P.up_level)]
     assert rules["twin_targets"] == {"SPY": 0.7, "SSO": 0.3}
-    # #163: the neutral book is the twin.
+    # #4: the neutral book is the twin.
     assert rules["neutral_book_targets"] == rules["twin_targets"]
     assert rules["distance_to_down_edge"] == round(600 / (560 * 0.98) - 1, 4)
     assert rules["approved_list"] == list(P.satellite_list)

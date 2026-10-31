@@ -1,4 +1,4 @@
-"""The `dashboard` tool's page, an MCP App (README §5.10, task 6.6, #176).
+"""The `dashboard` tool's page, an MCP App (README §5.10, #39).
 
 `dashboard.html` with the site's drawing inlined (`web/chart.css`, `web/chart.js`): the host
 renders it in a sandboxed frame whose default policy loads and fetches nothing, so the page is

@@ -100,7 +100,7 @@ class OrderDesk:
     sleep: Callable[[float], None]
     alert: Callable[[str], None]
     blocked_sales: set[str] = field(default_factory=set)
-    """Symbols whose price can't be trusted (a split not yet applied, #116): no sale at once."""
+    """Symbols whose price can't be trusted (a split not yet applied, #22): no sale at once."""
     log: FilteringBoundLogger = field(default_factory=lambda: log)
     actions: list[dict[str, Any]] = field(default_factory=list)
 
@@ -200,7 +200,7 @@ class OrderDesk:
 
     def protect(self, symbol: str, level: float) -> ProtectResult:
         """Make the position's live GTC stops cover its full quantity at `level` or above
-        (README §5.6.1, #115): cancel the unfilled rest of a partly filled buy and any stray
+        (README §5.6.1, #18): cancel the unfilled rest of a partly filled buy and any stray
         sale, fix or cancel stops that are below the level or not GTC, then place a standalone
         GTC stop for whatever is uncovered. If the price is already through the level, the
         uncovered shares are sold at once instead (step 2)."""
@@ -290,7 +290,7 @@ class OrderDesk:
 
     def sell(self, symbol: str, qty: int, reason: str, level: float) -> SaleResult:
         """The sell sequence (README §5.6.2): reduce the stop (swapping legs for one standalone
-        stop, #113), sell with a marketable limit, and restore the stop at once if the sale is
+        stop, #18), sell with a marketable limit, and restore the stop at once if the sale is
         rejected or doesn't fill. A full exit cancels the stops instead of reducing them."""
         if not self.market_open or symbol in self.blocked_sales:
             return SaleResult(symbol, qty, 0, SaleStatus.DEFERRED)
@@ -342,7 +342,7 @@ class OrderDesk:
             self.cancel_once(stop)
         self._record("cancel_stops", symbol, count=len(stops), keep=keep)
         if keep > 0:
-            # The legs' quantity is fixed: swap them for one standalone stop (#113).
+            # The legs' quantity is fixed: swap them for one standalone stop (#18).
             request = StopSell(symbol, keep, level, ids.stop_id(self.session, symbol))
             placed = self.submit_once(request)
             self._record("place_stop", symbol, order_id=placed.id, qty=keep, stop=level)
@@ -350,7 +350,7 @@ class OrderDesk:
     def sell_now(self, symbol: str, qty: int, reason: str) -> SaleResult:
         """Sell shares that have no stop at once, escalating within the run: a marketable
         limit, one re-price, then a market order (README §5.6.2). Before the open or after the
-        close nothing is sold: the 09:31 check run sells (#124)."""
+        close nothing is sold: the 09:31 check run sells (#21)."""
         if qty <= 0:
             return SaleResult(symbol, 0, 0, SaleStatus.NOTHING)
         if not self.market_open or symbol in self.blocked_sales:
@@ -393,7 +393,7 @@ class OrderDesk:
         return result
 
     def sell_plain(self, symbol: str, qty: int, reason: str) -> SaleResult:
-        """The sale of a fund that carries no stop (README §5.6.2, #155): a marketable limit;
+        """The sale of a fund that carries no stop (README §5.6.2, #5): a marketable limit;
         what hasn't filled after the wait is cancelled and owed."""
         if not self.market_open or symbol in self.blocked_sales:
             return SaleResult(symbol, qty, 0, SaleStatus.DEFERRED)
@@ -420,9 +420,9 @@ class OrderDesk:
     def buy(self, symbol: str, qty: int, limit: float, *, stop: float | None) -> BuyResult:
         """A marketable limit buy (README §5.6.3); never a market buy. With `stop` it is an OTO
         whose GTC stop leg rests at that level (the leveraged fund: Alpaca refuses a plain buy
-        while a sell stop rests, #114). What hasn't filled after the wait is cancelled, and a
+        while a sell stop rests, #18). What hasn't filled after the wait is cancelled, and a
         stopped fund is then protected at `stop` for what did fill (a partly filled OTO's leg
-        stays held, #115)."""
+        stays held, #18)."""
         if not self.market_open:
             return BuyResult(symbol, qty, 0, failed="market closed")
         client_order_id = ids.buy_id(self.session, symbol)

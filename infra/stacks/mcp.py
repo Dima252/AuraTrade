@@ -1,4 +1,4 @@
-"""The remote MCP server (README §5.10, task 6.4 step 2, #175): the public tools on one Lambda
+"""The remote MCP server (README §5.10, #38): the public tools on one Lambda
 function with a public URL, for any MCP client (claude.ai's connectors, Claude Desktop, Gemini).
 
 It serves only what the site already shows, so it takes no auth; three things bound what a
@@ -83,7 +83,7 @@ class McpStack(Stack):
             environment={"MCP_SNAPSHOT": f"s3://{site_bucket.bucket_name}/{SNAPSHOT_KEY}"},
             log_group=log_group("Logs", FUNCTION_NAME),
         )
-        # The snapshot alone, not even a listing: the server can show no more than the site (#174).
+        # The snapshot alone, not even a listing: the server can show no more than the site (#37).
         server.add_to_role_policy(
             iam.PolicyStatement(
                 actions=["s3:GetObject"], resources=[site_bucket.arn_for_objects(SNAPSHOT_KEY)]

@@ -18,7 +18,7 @@ def with_changes(section: str | None, **changes: Any) -> dict[str, Any]:
 def test_the_shipped_values_match_the_readme() -> None:
     cfg = RegimeConfig.model_validate(RAW)
     assert cfg.indexes == ("SPY", "QQQ")
-    # The provisional 4-pillar thresholds from the 2.4 backtest (#135).
+    # The provisional 4-pillar thresholds from the 2.4 backtest (#27).
     t = cfg.transitions
     assert (t.confirmed_min_score, t.debounce_score, t.correction_max_score) == (2, 1, -2)
     assert (t.no_ftd_min_score, t.early_uptrend_max_distribution) == (2, 6)

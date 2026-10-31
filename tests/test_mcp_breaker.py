@@ -1,4 +1,4 @@
-"""The remote MCP server's circuit breaker (#175)."""
+"""The remote MCP server's circuit breaker (#38)."""
 
 from typing import Any
 

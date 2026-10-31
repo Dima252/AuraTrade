@@ -1,5 +1,5 @@
 """The `ingest` job end to end on Postgres, every vendor faked: the ETF list's bars, its
-corporate actions, macro and retention (task 5.2)."""
+corporate actions, macro and retention."""
 
 from __future__ import annotations
 

@@ -133,7 +133,7 @@ class TestEveningUpdates:
     ) -> None:
         vendor, ids = world
         run(pg_engine, vendor, calendar, THU)
-        # Thursday's volume grew after the evening it was fetched (#118).
+        # Thursday's volume grew after the evening it was fetched (#25).
         vendor.set_bar("SPY", THU, volume=180_000)
         vendor.calls.clear()
         report = run(pg_engine, vendor, calendar, FRI)

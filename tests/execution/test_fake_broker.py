@@ -1,4 +1,4 @@
-"""The fake broker reproduces what spike 0.3b found on Alpaca paper (README #113-116, #124)."""
+"""The fake broker reproduces what spike 0.3b found on Alpaca paper (README #18-116, #21)."""
 
 from __future__ import annotations
 

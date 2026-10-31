@@ -87,7 +87,7 @@ Daily excess over the benchmark before tax, mean x 252: +1.4%; 90% block-bootstr
 
 ## Reading
 
-_Written 2026-10-27, after the report above was committed as produced (af2e621). Decision #160._
+_Written 2026-10-27, after the report above was committed as produced (af2e621). Decision #8 (decision numbers follow the log as renumbered on 2026-10-31)._
 
 **The gate passes on all three conditions** (§5.2): after Israeli tax the rules earned +9.2% a year against +8.7% for the market bought and held, with a shallower worst drawdown (68% against 85%), and finished ahead in 69% of the 1,065 ten-year windows (60% needed). By §9 the plan continues as written: Phase 4, the LLM layer. Nothing is adopted from the comparisons (§6).
 

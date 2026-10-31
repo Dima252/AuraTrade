@@ -1,5 +1,5 @@
 """Macro series: CBOE VIX/VIX3M (delayed quotes and history files) and FRED (spike 0.3d,
-docs/spikes/macro.md; source order in README §5.1, #117).
+docs/spikes/macro.md; source order in README §5.1, #26).
 
 - **Delayed-quote JSON** (`_VIX.json`): 15 minutes delayed. `last_trade_time` is New York
   wall-clock time with no zone; the final close shows `last_trade_time` 16:15:01 (the
@@ -43,7 +43,7 @@ class CboeIndex(StrEnum):
 class FredSeries(StrEnum):
     VIX = "VIXCLS"
     VIX3M = "VXVCLS"  # FRED still names VIX3M by its old ticker, VXV
-    CREDIT_SPREAD = "BAMLH0A0HYM2"  # ICE BofA US high-yield OAS; LLM context only (#117)
+    CREDIT_SPREAD = "BAMLH0A0HYM2"  # ICE BofA US high-yield OAS; LLM context only (#26)
 
 
 @dataclass(frozen=True)

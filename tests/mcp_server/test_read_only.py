@@ -1,4 +1,4 @@
-"""The server's source names no write (README §5.10, #174): a guard on top of the read-only
+"""The server's source names no write (README §5.10, #37): a guard on top of the read-only
 database session and the reader-typed broker, for writes those can't see."""
 
 import ast

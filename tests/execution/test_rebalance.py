@@ -1,4 +1,4 @@
-"""The rebalance's orders, pure (`execution.rebalance`, task 5.1): hand-built holdings with
+"""The rebalance's orders, pure (`execution.rebalance`): hand-built holdings with
 known answers."""
 
 from __future__ import annotations

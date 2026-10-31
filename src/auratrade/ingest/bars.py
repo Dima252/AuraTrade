@@ -2,12 +2,12 @@
 
 - **Sanity:** positive prices, a high and low that contain the open and close, volume > 0.
   Zero-volume bars are dropped: Alpaca repeats the last close with volume 0 for months after a
-  delisting (#111). A dropped bar is a missing bar, never forward-filled.
+  delisting (#25). A dropped bar is a missing bar, never forward-filled.
 - **Outliers:** SIP daily bars carry bad ticks that pass the sanity check (NVDA's high of 195.95
   on 2024-06-10, true about 122). A high (low) beyond both the bar's open-close body and its
   neighbours' highs (lows) by more than the configured floor, or a multiple of the stock's
   average daily range if that is larger, is replaced by the body's edge; the vendor's value
-  goes to `bar_corrections` (#126). The newest bar has only one neighbour; it is checked again
+  goes to `bar_corrections` (#25). The newest bar has only one neighbour; it is checked again
   the next evening, when session T-1 is re-fetched.
 - **Splits:** each evening re-fetches the last stored bar. If its split-adjusted close moved,
   the vendor re-adjusted the history (a split or reverse split), and the whole window is

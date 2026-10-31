@@ -93,7 +93,7 @@ def scorecard(doc: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
-# --- the dashboard (task 6.6, #176) ---------------------------------------------------------
+# --- the dashboard (#39) ---------------------------------------------------------
 
 DASHBOARD_POINTS = 600
 DASHBOARD_DECISIONS = 3

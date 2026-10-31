@@ -1,4 +1,4 @@
-"""The fill model's prices (README §13, #63), pure: what a buy or a sale gets after slippage.
+"""The fill model's prices (README §13, #11), pure: what a buy or a sale gets after slippage.
 
 Slippage is a fraction of the price, given by the caller (the portfolio's in
 ``portfolio.backtest``). The portfolio backtest trades its synthetic funds, index levels rather

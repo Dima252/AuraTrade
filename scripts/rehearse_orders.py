@@ -1,4 +1,4 @@
-"""Rehearse the portfolio's orders on the `dev` paper account (task 6.1's pre-deploy check).
+"""Rehearse the portfolio's orders on the `dev` paper account.
 
     uv run python scripts/rehearse_orders.py plan --level 1.3 --satellite SPY=0.15,GLD=0.05
     TRADING_MODE=paper uv run python -m auratrade.jobs.execute_close --session <today>

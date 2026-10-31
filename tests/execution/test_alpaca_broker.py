@@ -334,7 +334,7 @@ def test_prices_follow_the_decision_price_rule() -> None:
     assert prices.prices([]) == {}
 
 
-# --- the account's activities (task 5.3) -----------------------------------------------------
+# --- the account's activities  -----------------------------------------------------
 
 ACTIVITIES = Path(__file__).parents[1] / "fixtures" / "alpaca" / "account_activities.json"
 # Alpaca's documented shape for a cash dividend (paper recorded none yet).

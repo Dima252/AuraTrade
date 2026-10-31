@@ -1,4 +1,4 @@
-"""The Portfolio Manager's chart (`get_chart`, README §5.4, §9; task 3.4): one daily PNG per
+"""The Portfolio Manager's chart (`get_chart`, README §5.4, §9): one daily PNG per
 fund it asks about.
 
 - The last ``daily_sessions`` (1 year): candles with the configured averages (10-day SMA,

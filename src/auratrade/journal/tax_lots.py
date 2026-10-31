@@ -1,4 +1,4 @@
-"""The live tax lots on the database (README §5.7, §10; task 5.3, #170).
+"""The live tax lots on the database (README §5.7, §10, #35).
 
 `post_market` rebuilds `tax_lots` whole each evening from the broker's activities
 (`tax.live.replay`); `allocate` on R and an event read the open lots and the realized gains back

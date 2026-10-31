@@ -1,18 +1,18 @@
-"""The portfolio's guardrails (README §8; #155, #163; task 3.19), pure.
+"""The portfolio's guardrails (README §8; #5, #4), pure.
 
 They run on every Portfolio Manager decision before its targets reach `portfolio_targets`:
 - **The level:** the rule level from code (`strategies/core_allocation.py`) plus the LLM's
   shift, clipped into the band: ± ``max_shift`` within [``min_level``, ``max_level``], and only
   downward while the trend is DOWN, the volatility cap or the drawdown halt is on. A shift that
   isn't a finite number is rejected (no shift). The core is sized from it so that the book, with
-  the satellite at its neutral (the market fund), is at that level (#163).
+  the satellite at its neutral (the market fund), is at that level (#4).
 - **The satellite:** only funds on the approved list (so never a leveraged or inverse one); each
   weight a finite fraction no larger than ``max_etf_weight`` (the market fund, the neutral, up
   to the whole ``satellite_share``; clipped); together no more than ``satellite_share`` (scaled
   down). What is left of the satellite goes to cash.
-- **Hold by default** (#163): a weight within ``satellite_min_change`` of last month's target
+- **Hold by default** (#4): a weight within ``satellite_min_change`` of last month's target
   keeps that target, and a new holding smaller than that isn't opened. A full exit is honoured.
-- **The tax budget** (#163): the tax the satellite's sales would realize (FIFO, at the decision's
+- **The tax budget** (#4): the tax the satellite's sales would realize (FIFO, at the decision's
   prices) and the year's earlier satellite tax may not exceed ``satellite_tax_budget`` of
   equity; a decision over it is moved back toward last month's targets until it fits. Not
   applied while the shift may only go down: reducing risk is never held back by tax.
@@ -78,7 +78,7 @@ class EnforcedTargets:
     level: float
     """The book's level: the rule level plus the enforced shift."""
     core_level: float
-    """The core's own level, sized from ``level`` (#163)."""
+    """The core's own level, sized from ``level`` (#4)."""
     satellite: dict[str, float]
     targets: dict[str, float]
     """Fractions of equity per fund, summing to 1."""
@@ -212,7 +212,7 @@ def satellite_tax(
 ) -> float:
     """The tax (USD) the satellite's sales from last month's targets to ``satellite`` would
     realize: 25% of their net FIFO gains at the decision prices; a fund without a price counts
-    its whole sale as gain (#163)."""
+    its whole sale as gain (#4)."""
     previous = ctx.previous_satellite
     gain = 0.0
     for symbol in sorted(set(satellite) | set(previous)):

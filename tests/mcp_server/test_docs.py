@@ -72,8 +72,8 @@ def test_the_real_readme_parses() -> None:
     readme = docs.read(docs.README)
 
     assert "MCP server" in docs.sections(readme)["5.10"].title
-    assert docs.decisions(readme)[174][0] == "The MCP server (6.4)"
-    assert len(docs.decisions(readme)) >= 174
+    assert docs.decisions(readme)[37][0] == "The MCP server: strictly read-only"
+    assert len(docs.decisions(readme)) >= 39
 
 
 def test_a_missing_file(tmp_path: Path) -> None:

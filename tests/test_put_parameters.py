@@ -44,10 +44,10 @@ def write_env(path: Path, values: dict[str, str]) -> Path:
 
 
 def test_the_plan_takes_every_required_key_and_leaves_the_rest_out() -> None:
-    plan = pp.make_plan({**VALUES, "TRADING_MODE": "paper", "ANALYST_MODEL": "x"}, DEV)
+    plan = pp.make_plan({**VALUES, "TRADING_MODE": "paper", "RETIRED_SETTING": "x"}, DEV)
     assert plan.values == {k: VALUES[k] for k in pp.REQUIRED}
     assert plan.shared_from_dev == []
-    assert plan.left_out == ["ANALYST_MODEL", "TRADING_MODE"]
+    assert plan.left_out == ["RETIRED_SETTING", "TRADING_MODE"]
 
 
 def test_empty_shared_keys_fall_back_to_dev() -> None:

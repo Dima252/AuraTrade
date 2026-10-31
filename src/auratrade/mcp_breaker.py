@@ -1,11 +1,11 @@
-"""The remote MCP server's circuit breaker (README §5.10, #175).
+"""The remote MCP server's circuit breaker (README §5.10, #38).
 
 The server's URL is public, capped at one concurrent run (10 requests a second at most). An
 alarm on its invocations calls this when they look like a flood rather than a conversation: it
 sets the server's reserved concurrency to 0, so every further request is throttled (Lambda
 neither runs nor bills it), then alerts the operator. It stays off until re-armed by hand.
 
-Outside `mcp_server/` on purpose: that package names no write (#174), and this is one.
+Outside `mcp_server/` on purpose: that package names no write (#37), and this is one.
 """
 
 from __future__ import annotations

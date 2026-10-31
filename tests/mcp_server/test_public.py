@@ -74,7 +74,7 @@ def test_exposure_and_scorecard() -> None:
     assert public.scorecard({})["scorecard"] == {}
 
 
-# --- the dashboard (task 6.6) ----------------------------------------------------------------
+# --- the dashboard  ----------------------------------------------------------------
 
 
 def _rows(n: int) -> list[dict[str, Any]]:

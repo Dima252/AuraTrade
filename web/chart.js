@@ -1,6 +1,6 @@
 // The dashboard's drawing (README §5.8): the DOM and SVG helpers, the formats, the series' math
 // and the charts, shared by the site's dashboard (dashboard.js) and the MCP server's (README
-// §5.10, task 6.6), which inlines this file. Every value reaches the page through textContent or
+// §5.10), which inlines this file. Every value reaches the page through textContent or
 // an SVG attribute, never as markup.
 window.AuraChart = (() => {
   "use strict";

@@ -1,5 +1,5 @@
 """Synthesizes the remote MCP server's stack offline (no AWS calls) and checks what bounds it
-(README §5.10, #175)."""
+(README §5.10, #38)."""
 
 from __future__ import annotations
 

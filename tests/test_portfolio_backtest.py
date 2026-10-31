@@ -1,4 +1,4 @@
-"""The portfolio backtest's harness and report (task 3.21), on hand-built numbers and end to end
+"""The portfolio backtest's harness and report , on hand-built numbers and end to end
 on a synthetic history: no real data is read."""
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ def weekdays(first: date, last: date) -> list[date]:
 
 def synthetic() -> LongHistory:
     """1926-07 to 1933-12: slow waves, a crash in late 1929, and dividends that stop in
-    1933-10 (carried forward, #157)."""
+    1933-10 (carried forward, #9)."""
     days = weekdays(date(1926, 7, 1), date(1933, 12, 29))
     market = []
     for t, day in enumerate(days):

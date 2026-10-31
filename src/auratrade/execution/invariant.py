@@ -1,9 +1,9 @@
-"""The stop invariant (README §3 rule 5, §5.6.1), checked from broker state alone (pure).
+"""The stop invariant (CLAUDE.md §3.5, README §5.6), checked from broker state alone (pure).
 
 Every stopped position's live GTC sell stops together cover its full quantity, each at or above
-the plan's hard-stop level, and a partly filled buy counts as unprotected (#115). The portfolio's
-unleveraged funds carry no stop (#155): they are passed as `unstopped` and not checked.
-`stop_guard` checks it without plan levels (existence, quantity, GTC); the order jobs check it
+the fund's level (`fund_stops`), and a partly filled buy counts as unprotected (#18). The
+portfolio's unleveraged funds carry no stop (#5): they are passed as `unstopped` and not checked.
+`stop_guard` checks it without the levels (existence, quantity, GTC); the order jobs check it
 with them.
 
 What counts as a live stop:
@@ -97,7 +97,7 @@ def check(
     unstopped: Collection[str] = (),
 ) -> dict[str, Protection]:
     """One `Protection` per symbol with a position or a live sell stop, except the symbols in
-    `unstopped`, which carry no stop (#155).
+    `unstopped`, which carry no stop (#5).
 
     `levels` maps a symbol to its plan's hard stop; without it (`stop_guard`) a stop's level
     isn't checked, and a symbol missing from it isn't either."""

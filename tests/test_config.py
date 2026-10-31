@@ -118,7 +118,6 @@ class TestRiskConfig:
         assert risk.charts.daily_averages["21-day EMA"].kind is AverageKind.EMA
 
     def test_only_the_portfolios_sections_remain(self) -> None:
-        # The setup system's sections went with its code in task 5.2 (#161).
         assert set(risk_dict()) == {
             "data",
             "ingest",

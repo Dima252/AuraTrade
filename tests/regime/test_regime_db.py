@@ -111,7 +111,7 @@ class TestLoad:
     ) -> None:
         with pg_engine.connect() as conn:
             data = load_data(conn, load_calendar(conn), SESSIONS[30], SESSIONS[39], RISK.regime)
-        assert set(data.indexes) == {"SPY", "QQQ"}  # no stock universe since task 5.2
+        assert set(data.indexes) == {"SPY", "QQQ"}
         assert data.sessions[0] == SESSIONS[23]  # 7 sessions: the long SMA and its slope
 
 

@@ -1,4 +1,4 @@
-"""The live book on the simulator (task 4.3, #166): the Portfolio Manager's targets per E, a
+"""The live book on the simulator (#31): the Portfolio Manager's targets per E, a
 run that stops at T, and the market built from the real funds' bars."""
 
 from __future__ import annotations

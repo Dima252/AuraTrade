@@ -1,6 +1,6 @@
 """The account snapshot and the Telegram daily report written by `post_market` (README §5.7).
 
-The snapshot carries the funds' holdings and, from the live tax lots (task 5.3), the tax a sale
+The snapshot carries the funds' holdings and, from the live tax lots , the tax a sale
 of everything at the close would owe: equity less it is the account "after the estimated tax".
 """
 

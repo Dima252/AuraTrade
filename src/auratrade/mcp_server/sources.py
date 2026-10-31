@@ -1,4 +1,4 @@
-"""What the MCP server reads, each read-only below the code (README §5.10, #174).
+"""What the MCP server reads, each read-only below the code (README §5.10, #37).
 
 - **The database:** every connection is made read-only before first use, so Postgres itself
   refuses a write, whatever a query says.

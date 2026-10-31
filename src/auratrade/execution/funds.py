@@ -1,18 +1,18 @@
-"""The portfolio's funds in the order layer (README §5.6, §7.2; #155; task 5.1).
+"""The portfolio's funds in the order layer (README §5.6, §7.2; #5).
 
 - **Which funds carry a stop:** only the leveraged fund. The others (the market fund, cash and
   the satellite's list) have none; the trend rule and the halt are their exits, so the stop
   invariant and `stop_guard` leave them alone.
 - **The leveraged fund's stop level** (`fund_stops`): set when it is bought from flat, raised on
   each later E, never lowered; the latest row is in force.
-- **Splits** on a held fund (#116): on the ex-date Alpaca rejects resting stops and paper never
+- **Splits** on a held fund (#22): on the ex-date Alpaca rejects resting stops and paper never
   adjusts the position. The leveraged fund's level is scaled by the ratio (new shares per old),
   so the invariant re-places its stop there rather than reading the halved price as a fall
   through the old level; each split opens a mismatch, resolved by hand, and until then the fund
   is neither sold at once nor bought.
 
 The funds' holdings are the broker's positions (`execution.reconcile`); their tax lots are
-`journal.tax_lots`' (task 5.3).
+`journal.tax_lots`'.
 """
 
 from __future__ import annotations
@@ -39,7 +39,7 @@ def funds(cfg: PortfolioConfig) -> frozenset[str]:
 
 
 def unstopped(cfg: PortfolioConfig) -> frozenset[str]:
-    """The funds that carry no stop (#155)."""
+    """The funds that carry no stop (#5)."""
     return funds(cfg) - {cfg.leveraged}
 
 
@@ -162,7 +162,7 @@ def apply_splits(
         )
         alerts.append(
             f"{text}; the broker shows {broker_qty} shares, {int(broker_qty * action.ratio)} "
-            "expected. Paper doesn't apply splits (#116): no buys or sales at once in it until "
+            "expected. Paper doesn't apply splits (#22): no buys or sales at once in it until "
             "resolved by hand (auratrade resolve)."
         )
     return alerts

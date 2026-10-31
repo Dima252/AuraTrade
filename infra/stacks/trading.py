@@ -1,4 +1,4 @@
-"""The trading stack for one environment (README §12, task 1.8): the portfolio's jobs as Lambda
+"""The trading stack for one environment (README §12): the portfolio's jobs as Lambda
 functions on one container image, started by EventBridge Scheduler on `jobs.schedule`.
 
 - **Image:** the repo's `Dockerfile`, built and pushed to the CDK asset repository by
@@ -14,7 +14,7 @@ functions on one container image, started by EventBridge Scheduler on `jobs.sche
   covers them.
 - **Storage:** one private bucket for the nightly backup, the bar retention archive and the
   dashboard's snapshot; `simulate` also writes that snapshot, and only it, to the public site's
-  bucket (README §5.8, task 6.2).
+  bucket (README §5.8).
 """
 
 from __future__ import annotations

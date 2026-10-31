@@ -1,4 +1,4 @@
-"""Shared setup for the portfolio's order tests (task 5.1): fund prices, decided targets, a
+"""Shared setup for the portfolio's order tests : fund prices, decided targets, a
 broker that fills marketable orders at once, and the checks every scenario ends with."""
 
 from __future__ import annotations
@@ -103,7 +103,7 @@ class Market:
 def protected(world: World, symbols: Iterable[str] = ("SSO",)) -> bool:
     """The leveraged fund's live GTC stops cover it exactly at or above its level, nothing is
     partly filled or working, and no other fund carries a stop. Positions outside the funds
-    (the setup system's) aren't the portfolio's."""
+    aren't the portfolio's."""
     fake = world.fake
     with world.engine.connect() as conn:
         found = {s: funds.stop_level(conn, s) for s in symbols}

@@ -1,4 +1,4 @@
-"""The live tax book from the broker's activities (task 5.3): known answers by hand."""
+"""The live tax book from the broker's activities : known answers by hand."""
 
 from __future__ import annotations
 

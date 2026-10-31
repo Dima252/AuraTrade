@@ -170,7 +170,7 @@ class TestConstraints:
             {"close": 106.0},  # close above the high
             {"open": 0.0, "low": 0.0},
             {"raw_close": -1.0},
-            {"volume": 0},  # zero-volume bars are dropped at ingest (#111)
+            {"volume": 0},  # zero-volume bars are dropped at ingest (#25)
         ],
     )
     def test_bad_bars_are_rejected(

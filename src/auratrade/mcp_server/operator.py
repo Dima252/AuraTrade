@@ -326,7 +326,7 @@ def tax(conn: Connection, risk: RiskConfig, year: int) -> dict[str, Any]:
                 "budget": budget,
                 "used": float(used or 0.0),
                 "left": None if budget is None else budget - float(used or 0.0),
-                "applies": "not while DOWN, capped or halted (#163)",
+                "applies": "not while DOWN, capped or halted (#4)",
             },
         }
     )

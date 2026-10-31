@@ -5,7 +5,7 @@
 1. Under the order lock: reconcile, enforce the stop invariant (the market is closed: a missing
    stop is placed to rest for the morning, nothing is sold), and cancel any buy still resting:
    no buy order rests overnight (README §4).
-2. **The tax lots** (README §5.7, task 5.3): `tax_lots` rebuilt whole from the broker's
+2. **The tax lots** (README §5.7): `tax_lots` rebuilt whole from the broker's
    activities (`tax.live`); what doesn't add up (a sale beyond the lots, lots that differ from
    the positions, an entry the lots don't apply) goes in the daily report. If the activities
    can't be read, the lots stay as they were and the snapshot's tax is unknown.
@@ -17,7 +17,7 @@
 
 On success it starts `ingest` (the chain). Steps 2-4 run in dry_run too: they change no order,
 and the drawdown check is reported but not written (in dry_run the account is the simulated
-book, whose halt is simulated, #166).
+book, whose halt is simulated, #31).
 """
 
 from __future__ import annotations

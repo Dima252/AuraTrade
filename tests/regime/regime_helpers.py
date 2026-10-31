@@ -50,7 +50,7 @@ def history(
 
 
 def ibd_regime(cfg: RegimeConfig) -> RegimeConfig:
-    """``cfg`` at IBD's published thresholds (README §5.2 before #135): a CORRECTION score
+    """``cfg`` at IBD's published thresholds (README §5.2 before #27): a CORRECTION score
     <= -1, CONFIRMED_UPTREND from +3, distribution -1 from 6 days. The state machine's tests
     use these, so they test the mechanism rather than the values the backtest tunes."""
     return cfg.model_copy(

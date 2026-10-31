@@ -5,7 +5,7 @@ Portfolio Manager's facts for E.
 
 On a session that isn't an R it does nothing. On R it runs the twin and the book through R's
 close (ranked at R), and writes an ALLOCATED `portfolio_targets` row for E; a row already
-DECIDED is left alone. The first R it ever runs on starts the trial (#166). Nothing is written
+DECIDED is left alone. The first R it ever runs on starts the trial (#31). Nothing is written
 when R's data isn't COMPLETE (fail closed: no decision on E, which then holds). On `paper` the
 drawdown halt is the account's: R turns it off on a DOWN -> UP flip or a new peak (README §7.3)
 before the rule level is read; in dry_run the simulated book's halt is used and the flag is left

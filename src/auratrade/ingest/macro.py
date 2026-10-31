@@ -1,4 +1,4 @@
-"""The macro step (README §5.1, #117; spike 0.3d).
+"""The macro step (README §5.1, #26; spike 0.3d).
 
 - **Evening VIX/VIX3M for session T:** CBOE's delayed-quote JSON, accepted only when its
   `last_trade_time` is on T and at least `quote_settle_minutes` after the session's close (16:15

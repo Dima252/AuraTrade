@@ -1,9 +1,9 @@
-"""The corporate-actions step (README §5.1, §5.6.7, #116).
+"""The corporate-actions step (README §5.1, §5.6.7, #22).
 
 Alpaca's feed filters on the **process date**, not the ex-date, and lists announced splits ahead
 (spike 0.3b): the request window is padded by sessions on both sides and every action is keyed
 on its ex-date (`effective_date`). Splits, reverse splits, mergers, spin-offs and symbol changes
-of the ETF list (`symbols`, task 5.2) are stored; cash dividends need nothing (#116). A re-run,
+of the ETF list (`symbols`) are stored; cash dividends need nothing (#22). A re-run,
 or an action seen again on later evenings, updates its row only if the vendor changed it;
 `handled` is left alone.
 """

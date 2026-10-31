@@ -1,10 +1,10 @@
 # The portfolio manager: pre-registration (tasks 3.18-3.23)
 
-**Written 2026-10-26, before any portfolio code exists or has read data.** **Status: approved by the user 2026-10-27** (decision #156). The commit that holds the approved text is quoted at the top of `docs/backtests/portfolio.md`. From that commit:
+**Written 2026-10-26, before any portfolio code exists or has read data.** **Status: approved by the user 2026-10-27** (decision #7). The commit that holds the approved text is quoted at the top of `docs/backtests/portfolio.md`. From that commit:
 - a change after the blind mechanics check (§2 step 3) needs the user's approval and is listed in the report with its reason;
 - a change after the scored run (step 4) makes it a new trial, which this page doesn't allow (§9).
 
-Sources: `docs/strategy-change-portfolio.md` (the decisions of §4, all accepted by the user 2026-10-26) and `docs/portfolio-plan.md` (the readings that fix what §4 left open, §3 there). The values below go into `config/risk.yaml` `portfolio:` in task 3.17, committed with the approved text.
+Sources: `docs/strategy-change-portfolio.md` (the decisions of §4, all accepted by the user 2026-10-26) and `docs/portfolio-plan.md` (the readings that fix what §4 left open, §3 there). *(2026-10-31: those two documents were later removed, and the decision numbers here follow the renumbered log in README §16; the approved text, with both documents, is at commit `939292f`.)* The values below go into `config/risk.yaml` `portfolio:` in task 3.17, committed with the approved text.
 
 ## 1. What is being tested
 

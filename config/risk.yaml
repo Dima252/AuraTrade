@@ -11,7 +11,7 @@ data:  # README §4
 ingest:  # README §5.1, §10; see auratrade.ingest
   bar_history_sessions: 504          # 2 years of the ETF list in Postgres; older bars in Parquet
   split_close_tolerance: 0.02        # re-fetched overlap bar moved > 2%: re-fetch the window
-  outliers:                          # NVDA high 195.95 on 2024-06-10 (true ~122), #126
+  outliers:                          # NVDA high 195.95 on 2024-06-10 (true ~122), #25
     min_beyond_body: 0.15            # floors; a volatile fund's limit is its range x multiple
     min_beyond_neighbours: 0.15
     adr_multiple: 3.0
@@ -37,7 +37,7 @@ jobs:  # README §2
   stale_running_minutes: 20
   watchdog_grace_minutes: 15
 
-regime:  # README §5.2; a fact for the LLM, no rule reads it (#135)
+regime:  # README §5.2; a fact for the LLM, no rule reads it (#27)
   indexes: [SPY, QQQ]                # both for +1, either for -1; distribution counted per index
   index_trend:
     short_sma: 50
@@ -52,14 +52,14 @@ regime:  # README §5.2; a fact for the LLM, no rule reads it (#135)
     min_decline: 0.002               # down >= 0.2% on volume above the prior session's
     window_sessions: 25
     up_max_days: 3                   # +1: <= 3 (higher index count)
-    down_min_days: 8                 # -1: >= 8 (IBD uses 6; ETF volume overcounts, #135)
+    down_min_days: 8                 # -1: >= 8 (IBD uses 6; ETF volume overcounts, #27)
     exclude_expiration_sessions: false   # expiration sessions are flagged either way
   follow_through:
     min_gain: 0.0125
     first_day: 4
     last_strong_day: 7               # later FTDs are flagged weaker
   transitions:
-    confirmed_min_score: 2           # >= +2 CONFIRMED_UPTREND (#135)
+    confirmed_min_score: 2           # >= +2 CONFIRMED_UPTREND (#27)
     correction_max_score: -2         # <= -2 CORRECTION from CU / UP ...
     correction_sessions: 1           # ... after this many sessions in a row (1: immediate);
                                      # the index-trend pillar at -1 is always immediate
@@ -69,7 +69,7 @@ regime:  # README §5.2; a fact for the LLM, no rule reads it (#135)
     early_uptrend_min_sessions: 10   # labels in EARLY_UPTREND before CONFIRMED_UPTREND
     no_ftd_sessions: 10              # CORRECTION -> EARLY_UPTREND (no_ftd) after 10 sessions >= +2
     no_ftd_min_score: 2
-    early_uptrend_max_distribution: 6    # since entering EARLY_UPTREND, higher index count (kept at 6, #135)
+    early_uptrend_max_distribution: 6    # since entering EARLY_UPTREND, higher index count (kept at 6, #27)
   crisis:  # the crisis override in the regime the Portfolio Manager sees (README §5.2)
     vix_ratio_above: 1.0             # VIX/VIX3M > 1.0 ...
     vix_ratio_sessions: 2            # ... for >= 2 sessions
@@ -78,7 +78,7 @@ regime:  # README §5.2; a fact for the LLM, no rule reads it (#135)
   replay_warmup_sessions: 252        # a replay starts this many sessions before its first label
 
 execution:  # README §5.6; see auratrade.execution
-  decision_price:                    # #120
+  decision_price:                    # #23
     trade_max_age_seconds: 120       # the last IEX trade if <= 2 minutes old ...
     quote_max_age_seconds: 60        # ... else the quote midpoint if <= 1 minute old ...
     max_spread: 0.02                 # ... with a spread <= 2% of the midpoint (provisional)
@@ -119,9 +119,9 @@ portfolio:  # README §5.4, §6-§8; the backtest's rules: docs/backtests/portfo
   drawdown_halt: 0.25                # equity <= 75% of its peak: no leverage, at once
   stop_fraction: 0.30                # the leveraged fund's GTC stop 30% below its last rebalance price; raised only
   drift_band: 0.05                   # trade a holding only if its target changed or it is 5 points off it
-  max_etf_weight: 0.10               # each satellite ETF, of equity; the market fund (the satellite's neutral, #163) may fill it
-  satellite_min_change: 0.02         # a satellite weight within 2 points of last month's target keeps it (#163)
-  satellite_tax_budget: 0.002        # the satellite's sales may realize this much tax a year, of equity; not while DOWN, capped or halted (#163)
+  max_etf_weight: 0.10               # each satellite ETF, of equity; the market fund (the satellite's neutral, #4) may fill it
+  satellite_min_change: 0.02         # a satellite weight within 2 points of last month's target keeps it (#4)
+  satellite_tax_budget: 0.002        # the satellite's sales may realize this much tax a year, of equity; not while DOWN, capped or halted (#4)
   retry_sessions: 1                  # a rebalance blocked on E is tried once more
   market: SPY                        # the core's funds
   leveraged: SSO
@@ -180,8 +180,8 @@ portfolio_manager:  # README §5.4: the facts the Portfolio Manager sees and its
   news_items: 10                     # one get_news call
   history_months: 24                 # get_decision_history's most
   history_sessions: 300              # the funds' bars before the trial's start: SMA10's months, the ETFs' 12-month facts
-  dry_run_equity: 100000             # the simulated book's and the twin's start (#166); the paper account's too
-  deadline: "12:00"                  # ET on E: no valid decision by then holds (#164)
+  dry_run_equity: 100000             # the simulated book's and the twin's start (#31); the paper account's too
+  deadline: "12:00"                  # ET on E: no valid decision by then holds (#6)
   headline_sessions: 5               # the headlines in the facts: from this many sessions back
   scorecard:                         # README §5.5: each decision scored against the twin
     flat_band: 0.01                  # an expectation within ±1 point says "level with SPY"; right if the outcome is too

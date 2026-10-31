@@ -5,7 +5,7 @@ in-memory `sim.fake_broker.FakeBroker`, which models what spike 0.3b found so th
 tested against the same behaviour before it runs unattended.
 
 Orders are flat: an OTO entry is a buy parent plus one sell stop leg, each its own
-`BrokerOrder`, the leg pointing at its parent. Quantities are whole shares (#122).
+`BrokerOrder`, the leg pointing at its parent. Quantities are whole shares (#3).
 """
 
 from __future__ import annotations
@@ -165,7 +165,7 @@ class Activity:
 
 @dataclass(frozen=True, slots=True)
 class OtoBuy:
-    """A buy with its stop: a GTC buy parent with one GTC sell stop leg (#113, #114); the
+    """A buy with its stop: a GTC buy parent with one GTC sell stop leg (#18); the
     leveraged fund is bought this way (README §5.6.3): a limit buy at `limit_price`."""
 
     symbol: str
@@ -203,7 +203,7 @@ class MarketSell:
 @dataclass(frozen=True, slots=True)
 class LimitBuy:
     """A plain (simple) buy. The order layer never sends one: while a sell stop rests, Alpaca
-    rejects it as a potential wash trade (#114). It exists so the fake broker can show that."""
+    rejects it as a potential wash trade (#18). It exists so the fake broker can show that."""
 
     symbol: str
     qty: int
@@ -242,7 +242,7 @@ class InsufficientQtyError(BrokerError):
 
 
 class WashTradeError(BrokerError):
-    """A plain buy while a sell stop rests in the symbol (only OTOs are accepted, #114)."""
+    """A plain buy while a sell stop rests in the symbol (only OTOs are accepted, #18)."""
 
 
 class ChainPendingError(BrokerError):
@@ -302,5 +302,5 @@ class Broker(Protocol):
 
 class PriceSource(Protocol):
     def prices(self, symbols: Iterable[str]) -> dict[str, float | None]:
-        """The current decision price per symbol (#120), None when there is no usable price."""
+        """The current decision price per symbol (#23), None when there is no usable price."""
         ...

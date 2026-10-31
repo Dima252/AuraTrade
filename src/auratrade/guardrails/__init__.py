@@ -4,7 +4,5 @@ No I/O and no clock: the caller builds the context and logs the findings. Every 
 from ``config/risk.yaml`` (``portfolio:``).
 
 - ``model``: outcomes (approve / clip / reject) and findings
-- ``portfolio``: the portfolio manager's limits (#155): the core band, the satellite, no increase
-
-The setup system's rules went in task 5.2 (#161).
+- ``portfolio``: the portfolio manager's limits (#5): the core band, the satellite, no increase
 """

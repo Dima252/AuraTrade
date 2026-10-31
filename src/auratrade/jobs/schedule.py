@@ -1,6 +1,6 @@
 """The job schedule (README §2, §3), all America/New_York, weekdays.
 
-The single source for the runner (the evening chain), the scheduler stack (task 1.8), the
+The single source for the runner (the evening chain), the scheduler stack , the
 `watchdog`'s expected heartbeats and the local stand-in `scripts/local_session.py`.
 """
 

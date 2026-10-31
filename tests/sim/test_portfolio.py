@@ -1,4 +1,4 @@
-"""Known-answer portfolios for `sim/portfolio.py` (pre-registration §3; task 3.20).
+"""Known-answer portfolios for `sim/portfolio.py` (pre-registration §3).
 
 Costs are zeroed (no fees, spreads or slippage) so every number can be checked by hand; the
 synthesis has its own tests with the costs on. Sessions are weekdays; R is the last session of a

@@ -1,4 +1,4 @@
-"""The rebalance's orders (README §5.6.3, §7.1; task 5.1), pure: targets → whole-share orders.
+"""The rebalance's orders (README §5.6.3, §7.1), pure: targets → whole-share orders.
 
 From the enforced targets (fractions of equity), the broker's holdings and the decision prices:
 - **The drift band.** A holding is traded only if its target changed from last month's or its

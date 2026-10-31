@@ -1,6 +1,6 @@
-"""The in-memory broker: the order layer's `Broker` and `PriceSource`, for tests (task 1.7).
+"""The in-memory broker: the order layer's `Broker` and `PriceSource`, for tests.
 
-It models what spike 0.3b found on Alpaca paper (README #113-116, #124):
+It models what spike 0.3b found on Alpaca paper (README #18-116, #21):
 - an OTO's stop leg takes the parent's time-in-force and quantity; neither can change later,
   only the stop price (`422 qty cannot be changed for advanced orders`)
 - the leg stays `held` while the parent is partly filled, and goes live when it fills
@@ -15,7 +15,7 @@ It models what spike 0.3b found on Alpaca paper (README #113-116, #124):
 - client_order_ids are unique for the account's lifetime, even after a cancel
 - on a split's ex-date resting sell stops are rejected, and the position isn't adjusted
 
-What cancelling a partly filled parent does to its leg is untested on Alpaca (#115), so it is a
+What cancelling a partly filled parent does to its leg is untested on Alpaca (#18), so it is a
 setting: the leg is cancelled, or goes live for the filled shares.
 
 Fault injection: a call can fail before it is carried out (a 500), be carried out and then lose
@@ -25,7 +25,7 @@ deleted behind the order layer's back.
 
 Orders fill by hand with `fill` (a test's market decides what fills, and at what price). Each
 fill is also an entry in the account's activities, as Alpaca records it; `distribute` adds a cash
-entry (task 5.3).
+entry.
 """
 
 from __future__ import annotations
