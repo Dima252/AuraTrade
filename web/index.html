@@ -208,11 +208,6 @@
         <div class="card ui-card">
           <h3>A dashboard inside the chat: MCP Apps</h3>
           <p>The <code>dashboard</code> tool uses MCP Apps, the protocol's UI extension (<code>io.modelcontextprotocol/ui</code>, the standard that grew out of MCP-UI). Instead of only text, the tool's result points to a <code>ui://</code> page that the host, claude.ai or Claude Desktop, draws in a sandboxed frame beside the answer.</p>
-          <ol class="ui-steps">
-            <li><strong>The handshake.</strong> The page and the host talk JSON-RPC over <code>postMessage</code>: the page initializes, the host sends the tool's result and its light or dark theme, and the page reports its height.</li>
-            <li><strong>Data for the page, text for the model.</strong> The numbers ride in the result's <code>structuredContent</code>, which the host keeps out of the model's context; the model reads a short summary, the same answer clients without MCP Apps show.</li>
-            <li><strong>Self-contained.</strong> The page carries this site's own chart code inline, so inside the sandbox it loads nothing and fetches nothing.</li>
-          </ol>
         </div>
         <ul class="principles">
           <li><strong>A circuit breaker.</strong> A flood of calls switches the server off within the hour and sends a Telegram alert, so a stranger can't run up a bill or slow the trading jobs.</li>
