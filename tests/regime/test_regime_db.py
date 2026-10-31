@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 import structlog
 import yaml
-from sqlalchemy import Engine, delete, insert, orm, select, update
+from sqlalchemy import Engine, delete, insert, orm, select
 
 from auratrade.calendar.sessions import load_calendar
 from auratrade.config import Regime, RiskConfig, Settings, TradingMode
@@ -28,12 +28,10 @@ RISK = small_risk()
 SESSIONS = weekdays(date(2026, 6, 1), 40)
 
 
-def _ticker(conn: Any, symbol: str, security_type: str, **kwargs: Any) -> int:
+def _ticker(conn: Any, symbol: str, **kwargs: Any) -> int:
     return int(
         conn.execute(
-            insert(Ticker)
-            .values(symbol=symbol, security_type=security_type, **kwargs)
-            .returning(Ticker.id)
+            insert(Ticker).values(symbol=symbol, **kwargs).returning(Ticker.id)
         ).scalar_one()
     )
 
@@ -87,18 +85,12 @@ def seeded(pg_engine: Engine) -> dict[str, int]:
             ],
         )
         ids = {
-            "SPY": _ticker(conn, "SPY", "ETF"),
-            "QQQ": _ticker(conn, "QQQ", "ETF"),
-            "AAA": _ticker(conn, "AAA", "COMMON"),
-            "BBB": _ticker(conn, "BBB", "COMMON", delisted_at=SESSIONS[25], active=False),
-            "CCC": _ticker(conn, "CCC", "ETF"),
-            "DDD": _ticker(conn, "DDD", "ADR", listed_at=SESSIONS[20]),
+            "SPY": _ticker(conn, "SPY"),
+            "QQQ": _ticker(conn, "QQQ"),
         }
         rising = {d: 100.0 * 1.01**k for k, d in enumerate(SESSIONS)}
         _bars(conn, ids["SPY"], rising)
         _bars(conn, ids["QQQ"], rising)
-        for symbol in ("AAA", "BBB", "CCC", "DDD"):
-            _bars(conn, ids[symbol], {d: 50.0 + k for k, d in enumerate(SESSIONS)})
         _macro(conn, SESSIONS)
     return ids
 
@@ -130,12 +122,9 @@ class TestReplayAndStep:
         _replay(pg_engine, SESSIONS[12], SESSIONS[30])
         rows = _rows(pg_engine)
         assert [r.session_date for r in rows] == SESSIONS[12:31]
-        assert all(r.effective_regime == r.computed_regime for r in rows)
-        assert all(r.llm_regime is None for r in rows)
         assert {r.risk_hash for r in rows} == {RISK.config_hash}
-        # Rising indexes, calm VIX and no distribution: +3 every session (breadth and leadership
-        # score 0 since task 5.2), no FTD (1% days), so the no_ftd fallback, then
-        # CONFIRMED_UPTREND after 10 labels.
+        # Rising indexes, calm VIX and no distribution: +3 every session, no FTD (1% days), so
+        # the no_ftd fallback, then CONFIRMED_UPTREND after 10 labels.
         assert {r.score for r in rows if r.session_date >= SESSIONS[20]} == {3}
         regimes = [r.computed_regime for r in rows]
         assert Regime.EARLY_UPTREND.value in regimes
@@ -193,21 +182,6 @@ class TestReplayAndStep:
             )
         with pytest.raises(MissingDataError, match="QQQ"), pg_engine.begin() as conn:
             catch_up(conn, RISK, SESSIONS[31])[-1]
-
-    def test_a_recompute_keeps_the_portfolio_managers_view(
-        self, pg_engine: Engine, seeded: dict[str, int]
-    ) -> None:
-        _replay(pg_engine, SESSIONS[12], SESSIONS[30])
-        with pg_engine.begin() as conn:
-            conn.execute(
-                update(MarketRegimeRow)
-                .where(MarketRegimeRow.session_date == SESSIONS[30])
-                .values(llm_regime="UNDER_PRESSURE", effective_regime="UNDER_PRESSURE")
-            )
-        _replay(pg_engine, SESSIONS[12], SESSIONS[30])
-        last = _rows(pg_engine)[-1]
-        assert (last.llm_regime, last.effective_regime) == ("UNDER_PRESSURE", "UNDER_PRESSURE")
-        assert last.computed_regime == Regime.CONFIRMED_UPTREND.value
 
 
 class TestMacro:
@@ -346,7 +320,7 @@ class TestEdges:
         self, pg_engine: Engine, seeded: dict[str, int]
     ) -> None:
         with pg_engine.begin() as conn:
-            other = _ticker(conn, "SPY", "ETF", active=False)
+            other = _ticker(conn, "SPY", active=False)
             _bars(conn, other, {SESSIONS[30]: 99.0})
         with pytest.raises(MissingDataError, match="several securities"):
             _replay(pg_engine, SESSIONS[12], SESSIONS[30])

@@ -44,7 +44,7 @@ def world(pg_engine: Engine, calendar: MarketCalendar) -> tuple[FakeBars, dict[s
     ids = {}
     with pg_engine.begin() as conn:
         for symbol in FUNDS:
-            ids[symbol] = add_ticker(conn, symbol, "ETF", "ARCA")
+            ids[symbol] = add_ticker(conn, symbol)
         ids["AAA"] = add_ticker(conn, "AAA")  # a stock: not on the list
     for symbol in (*FUNDS, "AAA"):
         vendor.add(symbol, days, price=50.0, step=0.1)
@@ -122,7 +122,7 @@ class TestFirstRun:
         with pg_engine.begin() as conn:
             for symbol in FUNDS:
                 if symbol != "SSO":
-                    add_ticker(conn, symbol, "ETF", "ARCA")
+                    add_ticker(conn, symbol)
         with pytest.raises(MissingTickerError, match="SSO"):
             run(pg_engine, FakeBars(), calendar, THU)
 

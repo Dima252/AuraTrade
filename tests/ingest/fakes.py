@@ -39,18 +39,10 @@ def sync_calendar(engine: Engine) -> MarketCalendar:
         return load_calendar(conn)
 
 
-def add_ticker(
-    conn: Connection,
-    symbol: str,
-    security_type: str = "COMMON",
-    exchange: str = "NASDAQ",
-    **values: Any,
-) -> int:
+def add_ticker(conn: Connection, symbol: str, **values: Any) -> int:
     return int(
         conn.execute(
-            insert(Ticker)
-            .values(symbol=symbol, security_type=security_type, exchange=exchange, **values)
-            .returning(Ticker.id)
+            insert(Ticker).values(symbol=symbol, **values).returning(Ticker.id)
         ).scalar_one()
     )
 

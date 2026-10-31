@@ -1,4 +1,4 @@
-"""Shared setup for the order-layer tests: a fake broker with filled entries, and a desk."""
+"""Shared setup for the order-layer tests: a fake broker with filled OTO buys, and a desk."""
 
 from __future__ import annotations
 
@@ -15,18 +15,17 @@ SESSION = date(2026, 10, 22)
 CFG: ExecutionConfig = load_risk_config().execution
 
 
-def entry(
+def oto_buy(
     fake: FakeBroker,
-    symbol: str = "NVDA",
+    symbol: str = "SSO",
     qty: int = 10,
     *,
     limit: float = 101.0,
     stop: float = 95.0,
     fill: bool = True,
     price: float | None = None,
-    tranche: int = 1,
 ) -> BrokerOrder:
-    """An OTO entry (GTC parent and leg), filled in full at the limit unless `fill` is False."""
+    """An OTO buy (GTC parent and leg), filled in full at the limit unless `fill` is False."""
     if fake.prices([symbol])[symbol] is None:
         fake.set_price(symbol, price or limit)
     parent = fake.submit(
@@ -35,8 +34,7 @@ def entry(
             qty,
             limit_price=limit,
             stop_loss=stop,
-            client_order_id=ids.entry_id(SESSION, symbol, tranche=tranche),
-            trigger=limit - 1,
+            client_order_id=ids.buy_id(SESSION, symbol),
         )
     )
     if fill:
@@ -72,9 +70,9 @@ def desk(
 
 
 def protected(fake: FakeBroker, levels: dict[str, float] | None = None) -> bool:
-    """Every position's live GTC stops cover it exactly (no partial entry, no stray sale)."""
+    """Every position's live GTC stops cover it exactly (no partial buy, no stray sale)."""
     return all(p.ok for p in check(fake.positions(), fake.open_orders(), levels).values())
 
 
-def open_entries(fake: FakeBroker, symbol: str) -> list[BrokerOrder]:
+def open_buys(fake: FakeBroker, symbol: str) -> list[BrokerOrder]:
     return [o for o in fake.open_orders() if o.symbol == symbol and o.side.value == "buy"]

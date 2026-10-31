@@ -87,22 +87,6 @@ class TestCounting:
         with pytest.raises(ValueError, match=">= 0"):
             cal.n_sessions_back(WED, -1)
 
-    @pytest.mark.parametrize(
-        ("day", "days", "long_weekend"),
-        [
-            (WED, 1, False),
-            (date(2026, 10, 9), 3, False),  # Fri -> Mon
-            (date(2026, 9, 4), 4, True),  # Fri before Labor Day -> Tue
-            (date(2026, 4, 2), 4, True),  # Thu before Good Friday -> Mon
-            (date(2026, 11, 25), 2, False),  # Wed before Thanksgiving -> Fri
-            (SAT, 2, False),
-        ],
-    )
-    def test_gap_to_next_open(
-        self, cal: MarketCalendar, day: date, days: int, long_weekend: bool
-    ) -> None:
-        assert cal.days_until_next_open(day) == days
-
 
 class TestCoverage:
     @pytest.mark.parametrize("day", [date(2025, 11, 28), date(2027, 2, 1)])

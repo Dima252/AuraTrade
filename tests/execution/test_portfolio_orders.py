@@ -276,8 +276,8 @@ def test_the_halts_sale_moves_the_leveraged_fund_into_the_market_fund(
 
 
 def unknown_position(world: World) -> None:
-    world.fake.set_price("NVDA", 99.0)
-    world.fake._book("NVDA", Side.BUY, 1, 99.0)
+    world.fake.set_price("AAPL", 99.0)
+    world.fake._book("AAPL", Side.BUY, 1, 99.0)  # bought by hand: not one of the funds
 
 
 def account_mismatch(world: World) -> None:

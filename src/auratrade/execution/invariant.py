@@ -35,7 +35,7 @@ LEVEL_TOLERANCE = 1e-6
 
 
 class Problem(StrEnum):
-    PARTIAL_ENTRY = "PARTIAL_ENTRY"
+    PARTIAL_BUY = "PARTIAL_BUY"
     """A buy is partly filled: its leg stays held, so the filled shares have no live stop."""
     UNCOVERED = "UNCOVERED"
     """The valid stops cover fewer shares than the position."""
@@ -118,7 +118,7 @@ def check(
             out[symbol] = Protection(symbol, qty, tuple(stops), 0, frozenset({Problem.ORPHAN_STOP}))
             continue
         if any(o.side is Side.BUY and o.is_open and o.filled_qty > 0 for o in symbol_orders):
-            problems.add(Problem.PARTIAL_ENTRY)
+            problems.add(Problem.PARTIAL_BUY)
         if any(o.side is Side.SELL and o.is_open and not o.is_sell_stop for o in symbol_orders):
             problems.add(Problem.STRAY_SELL)
         if any(o.time_in_force is not TimeInForce.GTC for o in stops):

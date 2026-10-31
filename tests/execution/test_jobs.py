@@ -47,7 +47,7 @@ def test_orders_are_mirrored(world: World) -> None:
     world.run(execute_open.make_job, session=NEXT)
     with world.engine.connect() as conn:
         rows = {(r.symbol, r.purpose) for r in entities(conn, select(OrderRow))}
-    assert {("SPY", "ENTRY"), ("SSO", "ENTRY"), ("SSO", "STOP_LEG")} <= rows
+    assert {("SPY", "BUY"), ("SSO", "BUY"), ("SSO", "STOP_LEG")} <= rows
 
 
 def test_before_the_open_a_stop_through_the_price_waits_then_sells_at_the_check_run(

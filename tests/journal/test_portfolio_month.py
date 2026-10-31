@@ -632,7 +632,7 @@ def a_paper_month(world: Engine, bars: Bars) -> None:
                 broker_id="b-1",
                 client_order_id="at-1",
                 symbol="GLD",
-                purpose="ENTRY",
+                purpose="BUY",
                 side="buy",
                 order_type="limit",
                 order_class="simple",
@@ -663,7 +663,7 @@ def test_on_paper_the_journal_carries_the_accounts_month(world: Engine, tmp_path
     assert paper["before_tax"] == pytest.approx(101_500.0 / 99_900.0 - 1)
     assert paper["after_tax"] == pytest.approx((101_500.0 - 300.0) / 99_900.0 - 1)
     assert paper["trades"] == [
-        {"symbol": "GLD", "side": "buy", "units": 70, "price": 142.0, "purpose": "ENTRY"}
+        {"symbol": "GLD", "side": "buy", "units": 70, "price": 142.0, "purpose": "BUY"}
     ]
     # December's month opens and ends at E_DEC's close so far.
     assert by_e[E_DEC]["paper"]["before_tax"] == 0.0
@@ -762,7 +762,7 @@ def test_a_paper_month_without_its_snapshots_is_left_out(world: Engine, tmp_path
                 broker_id="b-2",
                 client_order_id="at-2",
                 symbol="SPY",
-                purpose="ENTRY",
+                purpose="BUY",
                 side="buy",
                 order_type="limit",
                 order_class="simple",

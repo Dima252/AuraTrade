@@ -3,9 +3,8 @@
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import date
-from typing import Any
 
-from sqlalchemy import Connection, and_, case, select
+from sqlalchemy import Connection, and_, select
 from sqlalchemy.dialects.postgresql import insert
 
 from auratrade.calendar.sessions import MarketCalendar
@@ -132,22 +131,17 @@ def latest_state(conn: Connection, before: date) -> tuple[date, RegimeState] | N
 
 
 def write_results(conn: Connection, results: Sequence[RegimeResult], risk_hash: str) -> None:
-    """Upsert one row per result. The effective regime is the computed one until the
-    Portfolio Manager adds its view (Phase 4)."""
+    """Upsert one row per result."""
     if not results:
         return
     rows = [
         {
             "session_date": r.session,
             "index_trend": r.pillars.index_trend,
-            "breadth": r.pillars.breadth,
             "volatility": r.pillars.volatility,
             "distribution": r.pillars.distribution,
-            "leadership": r.pillars.leadership,
             "score": r.score,
             "computed_regime": r.regime.value,
-            "llm_regime": None,
-            "effective_regime": r.regime.value,
             "crisis": r.crisis.active,
             "follow_through_day": r.follow_through is not None,
             "no_ftd": r.state.no_ftd,
@@ -161,12 +155,5 @@ def write_results(conn: Connection, results: Sequence[RegimeResult], risk_hash: 
     ]
     for i in range(0, len(rows), WRITE_CHUNK):
         stmt = insert(MarketRegimeRow).values(rows[i : i + WRITE_CHUNK])
-        keep = {"session_date", "llm_regime", "effective_regime"}
-        updated: dict[str, Any] = {c: stmt.excluded[c] for c in rows[0] if c not in keep}
-        # A recompute never erases the Portfolio Manager's view; once there is one, the
-        # effective regime is the Phase 4 code's to maintain.
-        updated["effective_regime"] = case(
-            (MarketRegimeRow.llm_regime.is_(None), stmt.excluded.effective_regime),
-            else_=MarketRegimeRow.effective_regime,
-        )
+        updated = {c: stmt.excluded[c] for c in rows[0] if c != "session_date"}
         conn.execute(stmt.on_conflict_do_update(index_elements=["session_date"], set_=updated))

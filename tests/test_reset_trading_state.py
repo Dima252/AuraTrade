@@ -20,7 +20,6 @@ DEV = "postgresql+psycopg://u:p@ep-dev.neon.tech/neondb"
 def test_every_trading_table_exists_and_children_come_first() -> None:
     names = [t.name for t in rts.trading_tables()]
     assert set(names) == rts.TRADING_TABLES
-    assert names.index("position_events") < names.index("positions")
 
 
 @pytest.mark.parametrize(
@@ -45,7 +44,7 @@ def test_other_targets_pass() -> None:
 def fill(engine: Engine) -> None:
     now = datetime(2026, 10, 22, 14, tzinfo=UTC)
     with engine.begin() as conn:
-        conn.execute(insert(Ticker).values(symbol="NVDA", security_type="COMMON", exchange="X"))
+        conn.execute(insert(Ticker).values(symbol="SPY"))
         conn.execute(
             insert(MarketSession).values(
                 session_date=date(2026, 10, 22),
@@ -99,7 +98,7 @@ def test_main_plans_then_clears(
         flags = dict(conn.execute(select(SystemFlag.name, SystemFlag.value)).all())
         assert flags[TRADING_ENABLED] is False
         assert flags == SEED
-        assert conn.execute(select(Ticker.symbol)).scalars().all() == ["NVDA"]
+        assert conn.execute(select(Ticker.symbol)).scalars().all() == ["SPY"]
         assert conn.execute(select(MarketSession)).first() is not None
 
 

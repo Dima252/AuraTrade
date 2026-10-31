@@ -441,12 +441,11 @@ class FakeBroker:
                 parent = self._new_order(
                     **common,
                     side=Side.BUY,
-                    type=OrderType.LIMIT if request.trigger is None else OrderType.STOP_LIMIT,
+                    type=OrderType.LIMIT,
                     time_in_force=TimeInForce.GTC,
                     order_class=OrderClass.OTO,
                     qty=request.qty,
                     limit_price=request.limit_price,
-                    stop_price=request.trigger,
                 )
                 leg = self._new_order(
                     client_order_id=str(uuid.uuid4()),

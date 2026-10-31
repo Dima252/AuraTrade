@@ -1,4 +1,4 @@
-"""The five regime pillars, the crisis override and the expiration-session flag (README §5.2).
+"""The three regime pillars, the crisis override and the expiration-session flag (README §5.2).
 
 Pure functions on precomputed values. Each pillar scores +1, 0 or -1. A missing input scores 0
 (neutral), the same rule README §4 sets for stale macro data. The job decides separately whether
@@ -10,13 +10,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Literal
 
-from auratrade.config import (
-    BreadthConfig,
-    CrisisConfig,
-    DistributionConfig,
-    LeadershipConfig,
-    VolatilityConfig,
-)
+from auratrade.config import CrisisConfig, DistributionConfig, VolatilityConfig
 
 type PillarScore = Literal[-1, 0, 1]
 
@@ -56,20 +50,6 @@ def index_trend_pillar(indexes: Mapping[str, IndexTrend]) -> PillarScore:
     return 0
 
 
-def breadth_pillar(
-    fraction_above: float | None, net_new_highs: float | None, cfg: BreadthConfig
-) -> PillarScore:
-    """``fraction_above``: share of the universe above its 50 SMA. ``net_new_highs``: the
-    10-session average of new highs minus new lows."""
-    if fraction_above is None or net_new_highs is None:
-        return 0
-    if fraction_above < cfg.down_max_above or net_new_highs < 0:
-        return -1
-    if fraction_above > cfg.up_min_above and net_new_highs > 0:
-        return 1
-    return 0
-
-
 def volatility_pillar(
     vix: float | None, vix3m: float | None, *, stale: bool, cfg: VolatilityConfig
 ) -> PillarScore:
@@ -91,42 +71,6 @@ def distribution_pillar(day_count: int, cfg: DistributionConfig) -> PillarScore:
     if day_count <= cfg.up_max_days:
         return 1
     return 0
-
-
-@dataclass(frozen=True, slots=True)
-class TrackedBreakout:
-    """A breakout-tracker entry (task 3.7): every scan trigger, ungated."""
-
-    sessions_ago: int
-    """0 = triggered at this session."""
-    above_trigger: bool | None
-    """Above its trigger ``result_sessions`` later; ``None`` while the result is incomplete."""
-
-
-@dataclass(frozen=True, slots=True)
-class Leadership:
-    score: PillarScore
-    breakouts: int
-    share_above: float | None
-
-
-def leadership_pillar(breakouts: Sequence[TrackedBreakout], cfg: LeadershipConfig) -> Leadership:
-    """Breakouts from T-24 to T-5 only: their 5-session result is complete (decision #82).
-    Fewer than ``min_breakouts`` scores 0."""
-    first = cfg.result_sessions
-    last = cfg.result_sessions + cfg.window_sessions - 1
-    results = [b.above_trigger for b in breakouts if first <= b.sessions_ago <= last]
-    if any(r is None for r in results):
-        raise ValueError("a breakout in the leadership window has no complete result")
-    n = len(results)
-    if n < cfg.min_breakouts:
-        return Leadership(0, n, None)
-    share = sum(1 for r in results if r) / n
-    if share >= cfg.up_min_share:
-        return Leadership(1, n, share)
-    if share <= cfg.down_max_share:
-        return Leadership(-1, n, share)
-    return Leadership(0, n, share)
 
 
 @dataclass(frozen=True, slots=True)

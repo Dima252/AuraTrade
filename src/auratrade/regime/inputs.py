@@ -1,8 +1,7 @@
 """Build ``SessionInputs`` from loaded histories (pure; the store loads them).
 
 Missing index data fails closed: ``MissingDataError`` stops the regime job, so no regime is
-written and the evening chain stops before `allocate`. Breadth and leadership health have no
-inputs since task 5.2 (the stock universe and the breakout tracker are retired): they score 0.
+written and the evening chain stops before `allocate`.
 """
 
 import bisect
@@ -135,12 +134,9 @@ def build_inputs(
                 session=day,
                 index_bars=index_bars,
                 index_trend={name: s.trend[day] for name, s in series.items()},
-                fraction_above=None,
-                net_new_highs=None,
                 vix=vix,
                 vix3m=vix3m,
                 macro_stale_sessions=stale,
-                breakouts=(),
                 expiration_session=day in expirations,
                 prior_vix_ratios=tuple(prior_ratios),
             )

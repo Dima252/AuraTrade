@@ -46,8 +46,6 @@ class TestBuildInputs:
         assert (x.vix, x.vix3m, x.macro_stale_sessions) == (18.0, 20.0, 0)
         assert x.prior_vix_ratios == (pytest.approx(21 / 20),)  # latest on or before the 19th
         assert x.expiration_session
-        # Breadth and leadership have no inputs since task 5.2: they score 0.
-        assert (x.fraction_above, x.net_new_highs, x.breakouts) == (None, None, ())
 
     def test_macro_staleness_counts_sessions(self) -> None:
         macro = {VIX: MacroSeries([SESSIONS[-4]], [18.0]), VIX3M: MacroSeries([LAST], [20.0])}

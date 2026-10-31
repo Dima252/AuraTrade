@@ -207,7 +207,7 @@ def test_marketable_buy_limit_rounds_up_to_the_tick() -> None:
 # --- ids ------------------------------------------------------------------------------------
 
 
-def test_a_buy_id_parses_and_mirrors_as_an_entry() -> None:
+def test_a_buy_id_parses_and_mirrors_as_a_buy() -> None:
     session = date(2026, 11, 2)
     cid = ids.buy_id(session, "SSO")
     parsed = ids.parse(cid)
@@ -230,4 +230,4 @@ def test_a_buy_id_parses_and_mirrors_as_an_entry() -> None:
         filled_qty=0,
         status=OrderStatus.NEW,
     )
-    assert order_purpose(order) == "ENTRY"
+    assert order_purpose(order) == "BUY"

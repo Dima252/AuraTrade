@@ -43,9 +43,7 @@ dev = [
     "ruff>=0.16.10",
     "types-pyyaml>=6.0.12.20260906",
 ]
-# Research-only dependencies for backtest/ (filled in by Phases 2-3).
-backtest = []
-# The read-only MCP server (README §5.10), local only for now: kept out of the jobs' image.
+# The read-only MCP server (README §5.10): kept out of the jobs' image.
 mcp = [
     # 2.x: FastMCP became MCPServer.
     "mcp>=2.3.0",
@@ -53,13 +51,6 @@ mcp = [
 infra = [
     "aws-cdk-lib>=2.272.0",
     "constructs>=10.8.1",
-]
-spikes = [
-    # Imported directly by the Phase 0 spikes (otherwise only a transitive pandas dependency).
-    "numpy>=2.5.3",
-    "pandas>=3.0.6",
-    # pandas-market-calendars is a main dependency (calendar cross-check).
-    "pyarrow>=25.0.1",
 ]
 
 [tool.uv]
@@ -103,7 +94,6 @@ known-third-party = ["alembic"]
 [tool.ruff.lint.per-file-ignores]
 # Fake tokens in tests are fixtures, not credentials.
 "tests/**" = ["S101", "S105", "S106"]
-"spikes/**" = ["T20", "S101"]
 "scripts/**" = ["T20"]
 "backtest/**" = ["T20"]
 
@@ -126,7 +116,7 @@ module = ["pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-# No type information shipped; used only to draw the Analyst's charts (auratrade.charts).
+# No type information shipped; used only to draw the Portfolio Manager's charts (auratrade.charts).
 module = ["mplfinance", "pandas"]
 ignore_missing_imports = true
 

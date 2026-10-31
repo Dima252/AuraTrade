@@ -159,7 +159,7 @@ def test_killed_while_the_oto_was_partly_filled_stop_guard_protects_it(world: Wo
     partly = [o for o in world.fake.open_orders() if o.symbol == "SSO" and o.side is Side.BUY]
     assert [o.filled_qty for o in partly] == [100]
     out = world.run(stop_guard.make_job)
-    assert "PARTIAL_ENTRY" in out["problems"]["SSO"]
+    assert "PARTIAL_BUY" in out["problems"]["SSO"]
     assert world.fake.position("SSO") == 100
     assert protected(world)
     assert no_duplicates(world.fake)

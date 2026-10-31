@@ -539,10 +539,8 @@ def regime_fact(conn: Connection, upto: date) -> dict[str, Any] | None:
         "score": row.score,
         "pillars": {
             "index_trend": row.index_trend,
-            "breadth": row.breadth,
             "volatility": row.volatility,
             "distribution": row.distribution,
-            "leadership": row.leadership,
         },
         "sessions_in_state": row.sessions_in_state,
         "note": "a descriptive classifier; no rule reads it",

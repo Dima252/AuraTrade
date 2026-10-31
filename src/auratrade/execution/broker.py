@@ -166,17 +166,13 @@ class Activity:
 @dataclass(frozen=True, slots=True)
 class OtoBuy:
     """A buy with its stop: a GTC buy parent with one GTC sell stop leg (#113, #114); the
-    leveraged fund is bought this way (README §5.6.3).
-
-    `trigger` None: a limit buy at `limit` (the portfolio's). `trigger` set: a buy stop-limit,
-    the setup system's entry (archived README §7.1)."""
+    leveraged fund is bought this way (README §5.6.3): a limit buy at `limit_price`."""
 
     symbol: str
     qty: int
     limit_price: float
     stop_loss: float
     client_order_id: str
-    trigger: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

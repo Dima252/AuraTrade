@@ -28,7 +28,6 @@ from alpaca.trading.requests import (
     LimitOrderRequest,
     MarketOrderRequest,
     ReplaceOrderRequest,
-    StopLimitOrderRequest,
     StopLossRequest,
     StopOrderRequest,
 )
@@ -209,17 +208,14 @@ def to_request(request: OrderRequest) -> Any:
     }
     match request:
         case OtoBuy():
-            oto: dict[str, Any] = {
+            return LimitOrderRequest(
                 **common,
-                "side": OrderSide.BUY,
-                "time_in_force": AlpacaTimeInForce.GTC,
-                "order_class": AlpacaOrderClass.OTO,
-                "limit_price": request.limit_price,
-                "stop_loss": StopLossRequest(stop_price=request.stop_loss),
-            }
-            if request.trigger is None:
-                return LimitOrderRequest(**oto)
-            return StopLimitOrderRequest(**oto, stop_price=request.trigger)
+                side=OrderSide.BUY,
+                time_in_force=AlpacaTimeInForce.GTC,
+                order_class=AlpacaOrderClass.OTO,
+                limit_price=request.limit_price,
+                stop_loss=StopLossRequest(stop_price=request.stop_loss),
+            )
         case StopSell():
             return StopOrderRequest(
                 **common,

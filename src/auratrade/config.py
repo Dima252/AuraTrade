@@ -178,8 +178,6 @@ class IngestConfig(_Strict):
     corporate_actions_lookback_sessions: PositiveInt
     corporate_actions_lookahead_sessions: PositiveInt
     macro: MacroIngestConfig
-    # The setup system's scanner and tracker rows older than this move to Parquet (README §10).
-    archive_after_sessions: PositiveInt
     # Concurrent requests per vendor: the bar requests are bound by response time, and the
     # vendor's rate limiter still applies across the workers.
     http_workers: PositiveInt
@@ -248,12 +246,6 @@ class IndexTrendConfig(_Strict):
     slope_sessions: PositiveInt
 
 
-class BreadthConfig(_Strict):
-    sma: PositiveInt
-    up_min_above: Fraction
-    down_max_above: Fraction
-
-
 class VolatilityConfig(_Strict):
     up_max_vix: Positive
     up_max_ratio: Positive
@@ -267,14 +259,6 @@ class DistributionConfig(_Strict):
     up_max_days: Annotated[int, Field(ge=0)]
     down_min_days: PositiveInt
     exclude_expiration_sessions: bool
-
-
-class LeadershipConfig(_Strict):
-    result_sessions: PositiveInt
-    window_sessions: PositiveInt
-    min_breakouts: PositiveInt
-    up_min_share: Fraction
-    down_max_share: Fraction
 
 
 class FollowThroughConfig(_Strict):
@@ -314,10 +298,8 @@ class RegimeConfig(_Strict):
 
     indexes: tuple[str, ...] = Field(min_length=1)
     index_trend: IndexTrendConfig
-    breadth: BreadthConfig
     volatility: VolatilityConfig
     distribution: DistributionConfig
-    leadership: LeadershipConfig
     follow_through: FollowThroughConfig
     transitions: TransitionsConfig
     crisis: CrisisConfig

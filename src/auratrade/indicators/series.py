@@ -5,7 +5,6 @@ session ``t``, computed from sessions ``<= t`` only, and ``None`` while the wind
 up. Windows are counted in sessions (bars), never calendar days.
 """
 
-from collections import deque
 from collections.abc import Sequence
 
 type Series = list[float | None]
@@ -36,34 +35,6 @@ def rolling_sum(values: Sequence[float], window: int) -> Series:
 
 def rolling_mean(values: Sequence[float], window: int) -> Series:
     return [None if s is None else s / window for s in rolling_sum(values, window)]
-
-
-def _rolling_extreme(values: Sequence[float], window: int, *, highest: bool) -> Series:
-    # Monotonic deque of indices: O(n) instead of O(n * window), which matters over 252-session
-    # windows across the whole universe in backtests.
-    check_window(window)
-    out: Series = []
-    candidates: deque[int] = deque()
-    for t, value in enumerate(values):
-        while candidates and (
-            values[candidates[-1]] <= value if highest else values[candidates[-1]] >= value
-        ):
-            candidates.pop()
-        candidates.append(t)
-        if candidates[0] <= t - window:
-            candidates.popleft()
-        out.append(values[candidates[0]] if t >= window - 1 else None)
-    return out
-
-
-def rolling_max(values: Sequence[float], window: int) -> Series:
-    """Highest of the last ``window`` values (including the current one)."""
-    return _rolling_extreme(values, window, highest=True)
-
-
-def rolling_min(values: Sequence[float], window: int) -> Series:
-    """Lowest of the last ``window`` values (including the current one)."""
-    return _rolling_extreme(values, window, highest=False)
 
 
 def change(values: Sequence[float], lookback: int) -> Series:

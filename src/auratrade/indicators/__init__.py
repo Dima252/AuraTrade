@@ -7,7 +7,4 @@ caller from ``config/risk.yaml``. Windows count sessions (bars), never calendar 
 - ``moving_averages``: SMA, EMA, rising and falling
 - ``volume``: half-day normalization
 - ``distribution``: distribution days, rally attempts and follow-through days (per index)
-
-The setup system's indicators (bases, climax, ranges, relative strength, earnings gaps, breadth)
-went in task 5.2 (#161).
 """

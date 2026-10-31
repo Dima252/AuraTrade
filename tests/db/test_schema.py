@@ -19,7 +19,6 @@ from auratrade.db.models import (
     Base,
     CorporateAction,
     DailyBar,
-    DetectedBase,
     MarketSession,
     Mismatch,
     SystemFlag,
@@ -27,32 +26,20 @@ from auratrade.db.models import (
 )
 from tests.pg import REPO_ROOT, alembic_config, temporary_database, upgrade
 
+IRREVERSIBLE = "0013"
 TABLES = {
     "tickers",
-    "industry_groups",
     "market_sessions",
     "daily_bars",
     "corporate_actions",
     "macro_series",
-    "fundamentals",
-    "earnings_events",
     "job_runs",
     "system_flags",
     "mismatches",
-    "bases",
     "market_regime",
-    "position_plans",
-    "position_events",
     "bar_corrections",
-    "signals",
-    "positions",
     "orders",
-    "trade_journal",
     "account_snapshots",
-    "daily_watchlist",
-    "baseline_signals",
-    "breakout_tracker",
-    "verdict_outcomes",
     "prompt_versions",
     "llm_decisions",
     "portfolio_targets",
@@ -75,16 +62,22 @@ class TestMigrations:
         assert diff == []
 
     def test_downgrade_and_upgrade_round_trip(self) -> None:
+        """Every migration after 0013 (which drops tables and can't be undone) round-trips."""
         with temporary_database("auratrade_migrate") as url:
             upgrade(url)
-            command.downgrade(alembic_config(url), "base")
+            command.downgrade(alembic_config(url), IRREVERSIBLE)
+            upgrade(url)
             engine = make_engine(url)
             try:
-                assert set(inspect(engine).get_table_names()) == {"alembic_version"}
-                upgrade(url)
-                assert set(inspect(engine).get_table_names()) >= TABLES
+                assert set(inspect(engine).get_table_names()) == TABLES | {"alembic_version"}
             finally:
                 engine.dispose()
+
+    def test_the_drop_cannot_be_undone(self) -> None:
+        with temporary_database("auratrade_irreversible") as url:
+            upgrade(url)
+            with pytest.raises(NotImplementedError):
+                command.downgrade(alembic_config(url), "0012")
 
     def test_migration_seeds_match_the_code(self) -> None:
         with temporary_database("auratrade_seed") as url:
@@ -198,7 +191,7 @@ class TestConstraints:
 
     def test_one_active_security_per_symbol(self, pg_engine: Engine, rejects: Rejects) -> None:
         with pg_engine.begin() as conn:
-            add_ticker(conn, "ABC", active=False, delisted_at=date(2019, 5, 1))
+            add_ticker(conn, "ABC", active=False)
             add_ticker(conn, "ABC")  # a reused ticker: a new security
         rejects(lambda conn: add_ticker(conn, "ABC"))
 
@@ -223,7 +216,7 @@ class TestConstraints:
 
     def test_corporate_action_checks(self, rejects: Rejects) -> None:
         row = {
-            "symbol": "NVDA",
+            "symbol": "QUAL",
             "action_type": "SPLIT",
             "ex_date": date(2026, 6, 10),
             "ratio": 10.0,
@@ -260,81 +253,3 @@ class TestConstraints:
 def test_alembic_ini_has_no_url() -> None:
     ini = Path(REPO_ROOT / "alembic.ini").read_text(encoding="utf-8")
     assert not re.search(r"^\s*sqlalchemy\.url\s*=", ini, flags=re.MULTILINE)
-
-
-def base_row(ticker_id: int, **overrides: Any) -> dict[str, Any]:
-    values = {
-        "ticker_id": ticker_id,
-        "start_date": date(2026, 6, 1),
-        "end_date": date(2026, 7, 15),
-        "status": "BROKEN_OUT",
-        "sessions": 31,
-        "high": 120.0,
-        "low": 100.0,
-        "low_date": date(2026, 6, 20),
-        "depth": 1 / 6,
-        "pivot": 118.5,
-        "contraction_count": 2,
-        "contractions": [
-            {"high_date": "2026-06-01", "high": 120.0, "low_date": "2026-06-20", "low": 100.0},
-            {"high_date": "2026-07-01", "high": 118.5, "low_date": "2026-07-08", "low": 112.0},
-        ],
-        "stage_number": 2,
-        "count_reliable": True,
-        "advance": 0.24,
-    }
-    return values | overrides
-
-
-class TestBases:
-    def test_round_trip(self, pg_engine: Engine) -> None:
-        with pg_engine.begin() as conn:
-            tid = add_ticker(conn)
-            conn.execute(insert(DetectedBase).values(**base_row(tid)))
-            row = conn.execute(select(DetectedBase)).mappings().one()
-        assert row["stage_number"] == 2
-        assert row["contractions"][1]["low"] == 112.0
-        assert row["reset"] is False
-
-    def test_a_forming_base_and_a_failed_candidate(self, pg_engine: Engine) -> None:
-        with pg_engine.begin() as conn:
-            tid = add_ticker(conn)
-            conn.execute(
-                insert(DetectedBase).values(
-                    **base_row(tid, status="FAILED", stage_number=None, depth=0.55, low=54.0)
-                )
-            )
-            conn.execute(
-                insert(DetectedBase).values(
-                    **base_row(tid, start_date=date(2026, 8, 3), end_date=None, status="FORMING")
-                )
-            )
-
-    @pytest.mark.parametrize(
-        "overrides",
-        [
-            {"status": "DONE"},
-            {"end_date": None},  # only a forming base has no end
-            {"status": "FORMING"},  # ... and a forming base has none
-            {"stage_number": None},  # only a failed candidate has no stage
-            {"status": "FAILED"},  # ... and a failed candidate has none
-            {"stage_number": 0},
-            {"end_date": date(2026, 6, 1)},
-            {"low": 0.0},
-            {"high": 99.0},
-            {"depth": 1.0},
-            {"contraction_count": -1},
-        ],
-    )
-    def test_bad_rows_are_rejected(
-        self, pg_engine: Engine, rejects: Rejects, overrides: dict[str, Any]
-    ) -> None:
-        with pg_engine.begin() as conn:
-            tid = add_ticker(conn)
-        rejects(lambda c: c.execute(insert(DetectedBase).values(**base_row(tid, **overrides))))
-
-    def test_one_base_per_ticker_and_start(self, pg_engine: Engine, rejects: Rejects) -> None:
-        with pg_engine.begin() as conn:
-            tid = add_ticker(conn)
-            conn.execute(insert(DetectedBase).values(**base_row(tid)))
-        rejects(lambda c: c.execute(insert(DetectedBase).values(**base_row(tid))))
