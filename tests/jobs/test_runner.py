@@ -126,7 +126,7 @@ class TestGuard:
         h = make_harness(sessions=SESSIONS)
         h.calendar.error = RuntimeError("calendar must not be consulted")
         spy = Spy()
-        outcome = h.runner.run(spec("analyst_collect", policy, spy), session=LABOR_DAY)
+        outcome = h.runner.run(spec("evening_job", policy, spy), session=LABOR_DAY)
         assert outcome.status is JobStatus.SUCCEEDED
 
     def test_calendar_error_fails_closed(self, make_harness: MakeHarness) -> None:
@@ -274,7 +274,7 @@ class TestChaining:
     def test_end_of_chain_invokes_nothing(self, make_harness: MakeHarness) -> None:
         h = make_harness(sessions=SESSIONS, now=ny(WED, 17, 50))
         succeeded(h, "scan", WED)
-        h.runner.run(spec("analyst_submit", GuardPolicy.EVENING, Spy()), session=WED)
+        h.runner.run(spec("evening_job", GuardPolicy.EVENING, Spy()), session=WED)
         assert h.invoker.calls == []
 
     def test_predecessor_for_another_session_does_not_count(

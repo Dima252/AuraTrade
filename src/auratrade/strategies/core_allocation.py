@@ -1,4 +1,4 @@
-"""The core allocation: the trend dial (README §6-§7; #154; task 3.19).
+"""The core allocation: the trend dial (README §6-§7; #3).
 
 Pure: no I/O. The live `allocate` job, the twin and the backtest (`sim/portfolio.py`) all call
 these functions; the exact rules are fixed in `docs/backtests/portfolio-preregistration.md` §3.
@@ -158,7 +158,7 @@ def twin_targets(level: float, cfg: PortfolioConfig) -> dict[str, float]:
 
 
 def core_level(level: float, cfg: PortfolioConfig) -> float:
-    """The core's own level for a book ``level`` (#163): sized so that, with the satellite at
+    """The core's own level for a book ``level`` (#4): sized so that, with the satellite at
     its neutral (the market fund at its whole share), the book's exposure is ``level``. At
     neutral the book is the twin."""
     share = cfg.satellite_share

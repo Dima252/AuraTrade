@@ -1,4 +1,4 @@
-"""The scorecard: the evidence for whether the LLM adds value (README §5.5; task 4.4), pure.
+"""The scorecard: the evidence for whether the LLM adds value (README §5.5), pure.
 
 Each decision is scored over its **period**, from its E's close to the next E's; the latest
 decision's period runs to the latest close and is still open. Its E's close is after its own
@@ -11,7 +11,7 @@ costs) close it.
   ``bootstrap_months`` periods are complete, a block-bootstrap interval of the after-tax excess
   a month, annualized.
 - **The tilts:** each satellite weight less its neutral (the market fund at the satellite's
-  whole share, #163) times its total return less the market fund's; the core shift times the
+  whole share, #4) times its total return less the market fund's; the core shift times the
   market fund's return less the cash fund's. The market fund's own tilt always scores 0.
 - **The expectations:** each stated ``expected_vs_market`` (the market fund's own excluded)
   against the fund's return less the market fund's over a complete period: the direction

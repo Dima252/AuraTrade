@@ -1,10 +1,10 @@
-"""The bars step of the evening ingest (README §4, §5.1; slimmed to the ETF list in task 5.2).
+"""The bars step of the evening ingest (README §4, §5.1).
 
 1. The tracked set is **the ETF list** (`tracked_symbols`): the portfolio's funds, the
    satellite's list and the regime's index ETFs. Each must be an active row in `tickers`; one
    that isn't fails the step (fail closed).
 2. Gap-fill each from its last stored session (which re-fetches session T-1, whose volume grows
-   after the evening, #118); one with nothing recent stored gets its whole window.
+   after the evening, #25); one with nothing recent stored gets its whole window.
 3. Each fund's bars: raw close attached, sanity-checked, split check on the re-fetched overlap
    bar (a moved close re-fetches the whole window: a held fund can split, SSO has), outliers
    corrected with the stored bar before as context, upserted.

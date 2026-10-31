@@ -21,14 +21,11 @@ dist/
 coverage.xml
 htmlcov/
 
-# Local data: Parquet bars, spike downloads, charts, recorded payloads
+# Local data: Parquet bars, charts, recorded payloads
 /data/
 # STORAGE_BACKEND=local writes here
 /var/
 *.parquet
-spikes/**/data/
-spikes/**/output/
-spikes/**/*.out
 
 # AWS CDK
 cdk.out/

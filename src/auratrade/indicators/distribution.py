@@ -2,7 +2,7 @@
 
 These are the per-index signals. Combining SPY and QQQ (higher distribution count, an FTD on
 either index), deciding when ``CORRECTION`` starts and what happens after an FTD belong to the
-regime state machine (task 2.3), which drives ``step_rally_attempt`` one session at a time.
+regime state machine, which drives ``step_rally_attempt`` one session at a time.
 """
 
 from collections.abc import Sequence

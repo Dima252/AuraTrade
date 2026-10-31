@@ -21,7 +21,6 @@ from alpaca.trading.models import Position as AlpacaPosition
 from alpaca.trading.requests import (
     LimitOrderRequest,
     MarketOrderRequest,
-    StopLimitOrderRequest,
     StopOrderRequest,
 )
 
@@ -66,7 +65,7 @@ NOW = datetime(2026, 10, 9, 13, 40, tzinfo=UTC)
 def order_json(**overrides: Any) -> dict[str, Any]:
     base: dict[str, Any] = {
         "id": str(uuid.uuid4()),
-        "client_order_id": "at-20261009-F-e1-1",
+        "client_order_id": "at-20261009-F-b-1a2b3c4d",
         "created_at": NOW.isoformat(),
         "updated_at": NOW.isoformat(),
         "submitted_at": NOW.isoformat(),
@@ -183,14 +182,11 @@ def test_a_plain_text_api_error_keeps_its_text() -> None:
 
 
 def test_requests_are_built_as_the_spike_proved() -> None:
-    oto = to_request(OtoBuy("F", 6, 12.13, 11.34, "at-1", trigger=12.07))
-    assert isinstance(oto, StopLimitOrderRequest)
+    oto = to_request(OtoBuy("F", 6, 12.13, 11.34, "at-1"))
+    assert isinstance(oto, LimitOrderRequest)
     assert (oto.order_class, oto.time_in_force) == (AlpacaOrderClass.OTO, AlpacaTimeInForce.GTC)
     assert oto.stop_loss is not None
-    assert (oto.stop_price, oto.limit_price, oto.stop_loss.stop_price) == (12.07, 12.13, 11.34)
-    past = to_request(OtoBuy("F", 6, 12.13, 11.34, "at-2"))
-    assert isinstance(past, LimitOrderRequest)
-    assert past.order_class is AlpacaOrderClass.OTO
+    assert (oto.limit_price, oto.stop_loss.stop_price) == (12.13, 11.34)
     stop = to_request(StopSell("F", 6, 11.34, "at-3"))
     assert isinstance(stop, StopOrderRequest)
     assert (stop.side, stop.time_in_force) == (OrderSide.SELL, AlpacaTimeInForce.GTC)
@@ -334,11 +330,11 @@ class StubData:
 def test_prices_follow_the_decision_price_rule() -> None:
     cfg = load_risk_config().execution.decision_price
     prices = AlpacaPrices(StubData(), cfg, clock=lambda: NOW)  # type: ignore[arg-type]
-    assert prices.prices(["F", "AMD", "NVDA"]) == {"AMD": 100.0, "F": 12.3, "NVDA": None}
+    assert prices.prices(["F", "AMD", "SSO"]) == {"AMD": 100.0, "F": 12.3, "SSO": None}
     assert prices.prices([]) == {}
 
 
-# --- the account's activities (task 5.3) -----------------------------------------------------
+# --- the account's activities  -----------------------------------------------------
 
 ACTIVITIES = Path(__file__).parents[1] / "fixtures" / "alpaca" / "account_activities.json"
 # Alpaca's documented shape for a cash dividend (paper recorded none yet).

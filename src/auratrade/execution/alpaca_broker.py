@@ -1,5 +1,5 @@
 """`Broker` and `PriceSource` on Alpaca (README §5.6): orders through alpaca-py's trading client,
-always on the paper endpoint (CLAUDE.md §3.1); prices from IEX (#120).
+always on the paper endpoint (CLAUDE.md §3.1); prices from IEX (#23).
 
 Errors are mapped to the order layer's: a 5xx or a lost connection is `BrokerUnavailableError`
 (the call may have been carried out), and the rejections spike 0.3b met each get their own
@@ -28,7 +28,6 @@ from alpaca.trading.requests import (
     LimitOrderRequest,
     MarketOrderRequest,
     ReplaceOrderRequest,
-    StopLimitOrderRequest,
     StopLossRequest,
     StopOrderRequest,
 )
@@ -209,17 +208,14 @@ def to_request(request: OrderRequest) -> Any:
     }
     match request:
         case OtoBuy():
-            oto: dict[str, Any] = {
+            return LimitOrderRequest(
                 **common,
-                "side": OrderSide.BUY,
-                "time_in_force": AlpacaTimeInForce.GTC,
-                "order_class": AlpacaOrderClass.OTO,
-                "limit_price": request.limit_price,
-                "stop_loss": StopLossRequest(stop_price=request.stop_loss),
-            }
-            if request.trigger is None:
-                return LimitOrderRequest(**oto)
-            return StopLimitOrderRequest(**oto, stop_price=request.trigger)
+                side=OrderSide.BUY,
+                time_in_force=AlpacaTimeInForce.GTC,
+                order_class=AlpacaOrderClass.OTO,
+                limit_price=request.limit_price,
+                stop_loss=StopLossRequest(stop_price=request.stop_loss),
+            )
         case StopSell():
             return StopOrderRequest(
                 **common,

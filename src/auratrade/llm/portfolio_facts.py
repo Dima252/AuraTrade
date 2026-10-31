@@ -1,6 +1,6 @@
-"""The facts the Portfolio Manager sees (README §5.4; #163; task 4.2), pure.
+"""The facts the Portfolio Manager sees (README §5.4; #4), pure.
 
-The jobs (task 4.3) gather them; this module computes what can be computed (each satellite
+The jobs  gather them; this module computes what can be computed (each satellite
 ETF's facts, each holding's tax if sold now, the tax budget left, the rule level, the band,
 the twin) and renders them as the decision's user message:
 - every number comes from code, so the LLM interprets facts and never derives a price;
@@ -186,7 +186,7 @@ def tax_budget_left(facts: PmFacts, cfg: PortfolioConfig) -> float | None:
 
 def holdings(account: AccountFacts, cfg: PortfolioConfig) -> list[dict[str, Any]]:
     """Each holding's weight, value, cost, unrealized gain and the tax a full sale would
-    realize now (#163). A fund without a price shows no gain (unknown), not zero."""
+    realize now (#4). A fund without a price shows no gain (unknown), not zero."""
     rows = []
     for symbol in sorted(set(account.weights) | set(account.lots)):
         lots = account.lots.get(symbol, ())

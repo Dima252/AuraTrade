@@ -8,8 +8,6 @@ order was cancelled (spike 0.3b), so an id is the idempotency key:
   after a dropped connection reuses its id (`orders.submit_once`).
 
 Leg ids are set by Alpaca (UUIDs), so legs are found through their parent, never by prefix.
-The setup system's entries (`at-20261022-NVDA-e1-1`: a signal's tranche and attempt) are still
-parsed, so an account's older orders are recognised as ours.
 """
 
 from __future__ import annotations
@@ -23,9 +21,8 @@ PREFIX = "at"
 
 
 class Purpose(StrEnum):
-    ENTRY = "e"
     BUY = "b"
-    """A rebalance's buy (task 5.1): decided afresh by each run from the reconciled broker."""
+    """A rebalance's buy: decided afresh by each run from the reconciled broker."""
     STOP = "stop"
     EXIT = "x"
 
@@ -36,11 +33,7 @@ class ParsedId:
     symbol: str
     purpose: Purpose
     detail: str
-    """The tranche for an entry, the exit reason for a sale, empty for a stop or a buy."""
-
-
-def entry_id(session: date, symbol: str, *, tranche: int = 1, attempt: int = 1) -> str:
-    return f"{PREFIX}-{session:%Y%m%d}-{symbol}-{Purpose.ENTRY.value}{tranche}-{attempt}"
+    """The exit reason for a sale, empty for a stop or a buy."""
 
 
 def buy_id(session: date, symbol: str) -> str:
@@ -64,14 +57,14 @@ def parse(client_order_id: str) -> ParsedId | None:
     parts = client_order_id.split("-")
     if len(parts) != 5 or parts[0] != PREFIX:
         return None
-    _, day, symbol, kind, _suffix_or_attempt = parts
+    _, day, symbol, kind, _ = parts
     try:
         session = datetime.strptime(day, "%Y%m%d").date()  # noqa: DTZ007 - a date, no time
     except ValueError:
         return None
     if kind in (Purpose.STOP.value, Purpose.BUY.value):
         return ParsedId(session, symbol, Purpose(kind), "")
-    for purpose in (Purpose.ENTRY, Purpose.EXIT):
-        if kind.startswith(purpose.value) and len(kind) > len(purpose.value):
-            return ParsedId(session, symbol, purpose, kind[len(purpose.value) :])
+    exit_ = Purpose.EXIT.value
+    if kind.startswith(exit_) and len(kind) > len(exit_):
+        return ParsedId(session, symbol, Purpose.EXIT, kind[len(exit_) :])
     return None

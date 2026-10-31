@@ -1,7 +1,7 @@
 # Spike 0.3f: news
 
-**Run:** 2026-10-08 after the close, `uv run python -m spikes.news` (Alpaca `GET /v1beta1/news`, free plan, `dev` keys).
-**Decision: GO.** README §5.1 ("News: Alpaca news API, on demand") stands. Notes for the context builders (task 4.3) are below.
+**Run:** 2026-10-08 after the close (Alpaca `GET /v1beta1/news`, free plan, `dev` keys).
+**Result:** Alpaca's news API serves the Portfolio Manager's headlines on demand (README §5.4), with the notes below.
 
 ## Results
 
@@ -25,12 +25,11 @@ Fields: `id`, `headline`, `author`, `created_at`, `updated_at`, `summary`, `cont
 - Mega caps get swept into round-ups: NVDA is tagged on memory-sector and crypto articles. Raw counts overstate company-specific news.
 - Pagination uses `next_page_token`, with up to 50 items a page; `sort=asc|desc`.
 
-## Notes for the LLM context (task 4.3)
+## Notes for the LLM context
 
 1. **Headlines only, capped per symbol** (e.g. the latest 10 in a window), with `created_at`. Including article bodies would add 4–9k characters each and blow the token budget (§9). NVDA alone has ~19 articles a day.
 2. **Filter round-ups:** prefer articles tagged with ≤ 3 symbols, so multi-ticker lists ("10 Information Technology Stocks Whale Activity…") don't crowd out company news.
-3. **Thin names are normal:** CELH had 2 articles in 30 days. An empty news list must read as "no news found", never as an error that fails closed (§3, rule 6, applies to *missing data*, not to quiet tickers).
-4. **EP backtests:** news history back to 2015 exists, so an EP "news" flag could be tested later. README §17 already documents the gap + volume proxy, and nothing changes now.
+3. **Thin names are normal:** CELH had 2 articles in 30 days. An empty news list must read as "no news found", never as an error that fails closed (CLAUDE.md §3.6 applies to *missing data*, not to quiet tickers).
 
 ## Not covered
 

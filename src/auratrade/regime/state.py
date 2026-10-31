@@ -1,15 +1,18 @@
-"""The regime state machine (README §5.2 transition table; decisions #47, #55, #69, #79, #94).
+"""The regime state machine (README §5.2; #27).
 
-One step per session, at the close. The label computed at session ``t`` governs trading on
-``t + 1``. Sessions are numbered by ``seq`` (0 = the first session stepped), so the state is
-self-contained and can be stored as JSON with each ``market_regime`` row.
+One step per session, at the close. The label computed at session ``t`` describes ``t + 1``.
+Sessions are numbered by ``seq`` (0 = the first session stepped), so the state is
+self-contained and can be stored as JSON with each ``market_regime`` row. The thresholds are
+``regime.transitions`` in ``risk.yaml``.
 
-- **Hysteresis:** downgrades to ``CORRECTION`` take ``correction_sessions`` in a row at <= -1
-  (1: immediate; the index-trend pillar at -1 is always immediate); ``CONFIRMED_UPTREND`` ->
-  ``UNDER_PRESSURE`` is immediate at a score <= +1, or after 2 sessions in a row at +2. Upgrades
-  need 3 sessions in a row at >= +3, counted only while in the current state.
-- **New uptrends need a follow-through day** on either index, or the ``no_ftd`` fallback: 10
-  sessions in a row at >= +3 inside ``CORRECTION``.
+- **Hysteresis:** downgrades to ``CORRECTION`` take ``correction_sessions`` in a row at
+  ``correction_max_score`` or below (the index-trend pillar at -1 makes it immediate);
+  ``CONFIRMED_UPTREND`` -> ``UNDER_PRESSURE`` is immediate below ``debounce_score`` and
+  otherwise takes ``debounce_sessions`` in a row below ``confirmed_min_score``. Upgrades need
+  ``upgrade_sessions`` in a row at ``confirmed_min_score`` or above, counted only while in the
+  current state.
+- **New uptrends need a follow-through day** on either index, or the ``no_ftd`` fallback:
+  ``no_ftd_sessions`` in a row at ``no_ftd_min_score`` or above inside ``CORRECTION``.
 - **``EARLY_UPTREND`` ends** only on a rally-low undercut by either index, or on 6 distribution
   days since entering it (higher index count); never on the score, and never by timeout. It
   upgrades only after ``early_uptrend_min_sessions`` labels in it.

@@ -17,9 +17,6 @@ from sqlalchemy import Connection, Engine, orm, select
 
 from auratrade.db.models import MarketSession
 
-# Fri → Mon is 3 days; anything longer is a long weekend (README §4, "Long weekends").
-NORMAL_WEEKEND_DAYS = 3
-
 
 class CalendarUnavailableError(RuntimeError):
     """The calendar can't answer for this date (outside the synced range, or empty)."""
@@ -115,11 +112,6 @@ class MarketCalendar:
         if i < 0:
             raise CalendarUnavailableError(f"fewer than {n + 1} synced sessions up to {day}")
         return self._by_day[self._days[i]]
-
-    def days_until_next_open(self, day: date) -> int:
-        """Calendar days from `day` to the next session (Fri → Mon = 3). This measures the
-        gap a position is held through, not a market window."""
-        return (self.next_session(day).day - day).days
 
 
 def load_calendar(conn: Connection) -> MarketCalendar:

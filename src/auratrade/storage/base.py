@@ -1,4 +1,4 @@
-"""The object-store interface: charts, LLM payloads, Parquet archives and backups."""
+"""The object-store interface: the Parquet history, the backups and the dashboard's snapshot."""
 
 from __future__ import annotations
 

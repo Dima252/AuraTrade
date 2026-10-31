@@ -175,11 +175,6 @@ infra = [
 mcp = [
     { name = "mcp" },
 ]
-spikes = [
-    { name = "numpy" },
-    { name = "pandas" },
-    { name = "pyarrow" },
-]
 
 [package.metadata]
 requires-dist = [
@@ -202,7 +197,6 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-backtest = []
 dev = [
     { name = "boto3-stubs", extras = ["lambda", "logs", "s3", "scheduler", "ssm"], specifier = ">=1.43.110" },
     { name = "botocore", extras = ["crt"], specifier = ">=1.43.110" },
@@ -220,11 +214,6 @@ infra = [
     { name = "constructs", specifier = ">=10.8.1" },
 ]
 mcp = [{ name = "mcp", specifier = ">=2.3.0" }]
-spikes = [
-    { name = "numpy", specifier = ">=2.5.3" },
-    { name = "pandas", specifier = ">=3.0.6" },
-    { name = "pyarrow", specifier = ">=25.0.1" },
-]
 
 [[package]]
 name = "aws-cdk-asset-awscli-v1"

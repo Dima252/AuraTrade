@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     storage_local_dir: Path = REPO_ROOT / "var" / "storage"
     storage_s3_bucket: str | None = None
     # The public site's bucket: `simulate` publishes the dashboard's snapshot under `data/`
-    # (README §5.8, task 6.2). Unset (locally), the snapshot stays in storage only.
+    # (README §5.8). Unset (locally), the snapshot stays in storage only.
     site_s3_bucket: str | None = None
     # Lambda function name for a chained job; `{env}` and `{job}` are substituted.
     job_function_template: str = "auratrade-{env}-{job}"
@@ -94,7 +94,7 @@ class Settings(BaseSettings):
     def _check(self) -> Self:
         if self.trading_mode is TradingMode.LIVE:
             # No live trading is planned (CLAUDE.md §3.1): it would need the user's explicit
-            # start, its own broker adapter, stack and credentials (task 7.1). Refused outright.
+            # start, its own broker adapter, stack and credentials. Refused outright.
             raise ValueError("TRADING_MODE=live is refused: the system trades paper only")
         if self.storage_backend == "s3" and not self.storage_s3_bucket:
             raise ValueError("STORAGE_S3_BUCKET is required when STORAGE_BACKEND=s3")
@@ -148,7 +148,7 @@ class DataConfig(_Strict):
 class OutlierConfig(_Strict):
     """A high (low) is a bad tick when it lies beyond both the bar's open-close body and the
     neighbouring bars' highs (lows) by more than these fractions, or `adr_multiple` times the
-    stock's average daily range over `adr_sessions` if larger (README §5.1, #126)."""
+    stock's average daily range over `adr_sessions` if larger (README §5.1, #25)."""
 
     min_beyond_body: Positive
     min_beyond_neighbours: Positive
@@ -158,14 +158,14 @@ class OutlierConfig(_Strict):
 
 class MacroIngestConfig(_Strict):
     # The delayed-quote JSON is final once its last trade is this long after the close
-    # (16:15 on a full session, README §5.1 / #117).
+    # (16:15 on a full session, README §5.1 / #26).
     quote_settle_minutes: PositiveInt
     history_mismatch_tolerance: Annotated[float, Field(ge=0.0)]
     fred_lookback_sessions: PositiveInt
 
 
 class IngestConfig(_Strict):
-    """The evening ingest (README §5.1, §10; task 1.5)."""
+    """The evening ingest (README §5.1, §10)."""
 
     # Rolling window of bars kept in Postgres (2 years); older bars live in Parquet.
     bar_history_sessions: PositiveInt
@@ -178,8 +178,6 @@ class IngestConfig(_Strict):
     corporate_actions_lookback_sessions: PositiveInt
     corporate_actions_lookahead_sessions: PositiveInt
     macro: MacroIngestConfig
-    # The setup system's scanner and tracker rows older than this move to Parquet (README §10).
-    archive_after_sessions: PositiveInt
     # Concurrent requests per vendor: the bar requests are bound by response time, and the
     # vendor's rate limiter still applies across the workers.
     http_workers: PositiveInt
@@ -192,7 +190,7 @@ class IngestConfig(_Strict):
 
 
 class HistoryConfig(_Strict):
-    """The Parquet history's backfill for the portfolio's backtest (README §5.1; task 3.18)."""
+    """The Parquet history's backfill for the portfolio's backtest (README §5.1)."""
 
     # Alpaca's SIP daily bars start on 2016-01-04 (spike 0.3a).
     start: date
@@ -238,7 +236,7 @@ def load_risk_config(path: Path = DEFAULT_RISK_CONFIG) -> RiskConfig:
     return RiskConfig.model_validate(raw)
 
 
-# --- risk.yaml: the regime (task 2.3) ------------------------------------------------------
+# --- risk.yaml: the regime --------------------------------------------------------
 # Defined after RiskConfig; `RiskConfig.model_rebuild()` below resolves the forward references.
 
 
@@ -246,12 +244,6 @@ class IndexTrendConfig(_Strict):
     short_sma: PositiveInt
     long_sma: PositiveInt
     slope_sessions: PositiveInt
-
-
-class BreadthConfig(_Strict):
-    sma: PositiveInt
-    up_min_above: Fraction
-    down_max_above: Fraction
 
 
 class VolatilityConfig(_Strict):
@@ -267,14 +259,6 @@ class DistributionConfig(_Strict):
     up_max_days: Annotated[int, Field(ge=0)]
     down_min_days: PositiveInt
     exclude_expiration_sessions: bool
-
-
-class LeadershipConfig(_Strict):
-    result_sessions: PositiveInt
-    window_sessions: PositiveInt
-    min_breakouts: PositiveInt
-    up_min_share: Fraction
-    down_max_share: Fraction
 
 
 class FollowThroughConfig(_Strict):
@@ -314,10 +298,8 @@ class RegimeConfig(_Strict):
 
     indexes: tuple[str, ...] = Field(min_length=1)
     index_trend: IndexTrendConfig
-    breadth: BreadthConfig
     volatility: VolatilityConfig
     distribution: DistributionConfig
-    leadership: LeadershipConfig
     follow_through: FollowThroughConfig
     transitions: TransitionsConfig
     crisis: CrisisConfig
@@ -346,7 +328,7 @@ class TrailSpec(_Strict):
 
 
 class DecisionPriceConfig(_Strict):
-    """The decision price (README glossary, #120): the last IEX trade if at most
+    """The decision price (README glossary, #23): the last IEX trade if at most
     ``trade_max_age_seconds`` old, else the quote midpoint if at most ``quote_max_age_seconds``
     old with a spread of at most ``max_spread`` of the midpoint."""
 
@@ -365,7 +347,7 @@ class ExecutionConfig(_Strict):
     # market order gets before the run gives up and leaves it to the next one (README §5.6.2).
     sell_wait_seconds: PositiveInt
     market_order_wait_seconds: PositiveInt
-    # A rebalance's buy works this long; what hasn't filled is cancelled (task 5.1).
+    # A rebalance's buy works this long; what hasn't filled is cancelled.
     buy_wait_seconds: PositiveInt
     fill_poll_seconds: Positive
     # Attempts per order call that failed without an answer (a 5xx, a dropped connection),
@@ -390,7 +372,7 @@ class ExecutionConfig(_Strict):
 
 
 class ChartsConfig(_Strict):
-    """The Portfolio Manager's `get_chart` (README §5.4; task 3.4); see ``auratrade.charts``."""
+    """The Portfolio Manager's `get_chart` (README §5.4); see ``auratrade.charts``."""
 
     daily_sessions: PositiveInt
     daily_width: PositiveInt
@@ -400,7 +382,7 @@ class ChartsConfig(_Strict):
 
 
 class PortfolioBacktestConfig(_Strict):
-    """The portfolio's backtest (`docs/backtests/portfolio-preregistration.md`, #156)."""
+    """The portfolio's backtest (`docs/backtests/portfolio-preregistration.md`, #7)."""
 
     start_equity: Positive
     score_start_year: PositiveInt
@@ -436,7 +418,7 @@ class PortfolioBacktestConfig(_Strict):
 
 
 class PortfolioConfig(_Strict):
-    """The portfolio manager (README §5.4, §6-§8; decisions #154-#155)."""
+    """The portfolio manager (README §5.4, §6-§8; decisions #3-#5)."""
 
     satellite_share: Fraction
     sma_months: PositiveInt
@@ -481,7 +463,7 @@ class PortfolioConfig(_Strict):
         if self.max_etf_weight > self.satellite_share:
             raise ValueError("portfolio max_etf_weight can't exceed satellite_share")
         # The core is sized so the book, with the satellite at its neutral (the market fund),
-        # is at the level (#163): its level must stay within [0, leverage].
+        # is at the level (#4): its level must stay within [0, leverage].
         if self.satellite_share >= 1 or self.min_level < self.satellite_share:
             raise ValueError("portfolio needs satellite_share < 1 and min_level >= it")
         top = (self.max_level - self.satellite_share) / (1 - self.satellite_share)
@@ -500,7 +482,7 @@ class TokenPrices(_Strict):
 
 
 class LlmConfig(_Strict):
-    """The Claude client (README §9; task 4.1); see ``auratrade.llm.client``."""
+    """The Claude client (README §9); see ``auratrade.llm.client``."""
 
     max_tokens: PositiveInt
     max_turns: PositiveInt
@@ -514,7 +496,7 @@ class LlmConfig(_Strict):
 
 
 class PmScorecardConfig(_Strict):
-    """The scorecard of the Portfolio Manager's decisions (README §5.5; task 4.4)."""
+    """The scorecard of the Portfolio Manager's decisions (README §5.5)."""
 
     # An expectation within this of 0 calls the fund level with the market fund; it is right
     # when the outcome is within it too.
@@ -530,7 +512,7 @@ class PmScorecardConfig(_Strict):
 
 
 class PortfolioManagerConfig(_Strict):
-    """The Portfolio Manager's facts and tools (README §5.4; task 4.2)."""
+    """The Portfolio Manager's facts and tools (README §5.4)."""
 
     # Each satellite ETF's returns, by label, over this many sessions.
     return_sessions: dict[str, PositiveInt] = Field(min_length=1)

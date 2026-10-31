@@ -1,4 +1,4 @@
-"""Confirm every external key in .env works (task 0.2).
+"""Confirm every external key in .env works.
 
 Only free, read-only endpoints are called: no orders, no tokens spent. Every output
 line goes through `redact()`, so a secret never reaches the terminal even if a vendor
@@ -121,7 +121,6 @@ def check_alpaca_account(env: Env, http: httpx.Client, opts: Options) -> Result:
     notes = []
     if account.trading_blocked or account.account_blocked:
         notes.append("BLOCKED")
-    # No PDT note: FINRA dropped the pattern-day-trader rule in 2026 (README decision #123).
     detail = (
         f"paper account ...{account.account_number[-4:]}, {account.status}, equity ${equity:,.2f}"
     )

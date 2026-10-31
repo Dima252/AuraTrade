@@ -1,5 +1,5 @@
 """`daily_bars` I/O for ingest. Every write is an upsert that changes nothing when the values
-are equal, so a second run of the same evening writes no rows (task 1.5 acceptance)."""
+are equal, so a second run of the same evening writes no rows."""
 
 from __future__ import annotations
 

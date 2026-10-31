@@ -1,4 +1,4 @@
-"""The portfolio's market from the real funds' daily bars (task 4.3, #166), pure.
+"""The portfolio's market from the real funds' daily bars (#31), pure.
 
 `sim/portfolio.py` runs on a `Market`: each fund's price index, its distributions as a
 fraction of its value per session, the market's total-return index (the trend's signal) and

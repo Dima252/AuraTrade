@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>AuraTrade</title>
-  <meta name="description" content="An autonomous portfolio manager aiming to beat the S&amp;P 500 over 10 years after tax: a trend rule sets how much of the market to own, Claude allocates a satellite, and code enforces limits it cannot override. Paper trading, in development.">
+  <meta name="description" content="An autonomous portfolio manager aiming to beat the S&amp;P 500 over 10 years after tax: a trend rule sets how much of the market to own, Claude allocates a satellite, and code enforces limits it cannot override. Paper trading.">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="styles.css">
@@ -32,7 +32,7 @@
   <main>
     <section class="hero">
       <div class="wrap">
-        <p class="badge"><span class="dot" aria-hidden="true"></span>Paper trading only · in development</p>
+        <p class="badge"><span class="dot" aria-hidden="true"></span>Paper trading only · trial running since November 2026</p>
         <h1>An LLM portfolio manager<br>on a short leash.</h1>
         <p class="lede">
           AuraTrade manages a whole account with one goal: beat the S&amp;P 500 over
@@ -56,7 +56,7 @@
         <h2>The book so far</h2>
         <p class="section-lede">The account against its rules-only twin and the S&amp;P 500, before and after the estimated tax, with every month's decision and its reasons. Updated each evening.</p>
         <div id="dash" class="dash" aria-live="polite">
-          <p class="dash-empty">The paper trial hasn't started yet. From its first month, this section shows the book against the twin and the S&amp;P 500, the exposure history, the scorecard and the decision journal, updated every trading evening.</p>
+          <p class="dash-empty">The first results appear after the trial's first rebalance on 2 November 2026. From then on, this section shows the book against the twin and the S&amp;P 500, the exposure history, the scorecard and the decision journal, updated every trading evening.</p>
         </div>
       </div>
     </section>
@@ -89,7 +89,7 @@
 
         <h2 class="sub">A month, and a day</h2>
         <ol class="timeline">
-          <li><time>Every evening</time><div><strong>Ingest, journal, twin.</strong> ETF bars, macro data and news come in; the rules-only twin is played forward; the drawdown is checked.</div></li>
+          <li><time>Every evening</time><div><strong>Ingest, journal, twin.</strong> ETF bars and macro data come in; the rules-only twin is played forward; the drawdown is checked.</div></li>
           <li><time>Month end</time><div><strong>The trend.</strong> The market's month-end value is read against its 10-month average; the volatility cap and the halt set the rule level.</div></li>
           <li><time>08:45</time><div><strong>Portfolio Manager.</strong> On the first session of the month, Claude sets the satellite and the core's shift, with its reasons. No valid decision by noon means holding: the rule level and last month's satellite.</div></li>
           <li><time>15:40</time><div><strong>Rebalance.</strong> Holdings more than 5 points off target are traded back to it: sales first, then buys, as limit orders.</div></li>
@@ -158,24 +158,19 @@
             <p>Each month's tilts and expectations are scored against what happened, before and after the estimated tax.</p>
           </article>
         </div>
-        <p class="note">The test was written down before any data was read, and run once. Two earlier stock-picking designs failed theirs and were dropped.</p>
+        <p class="note">The test was written down before any data was read, and run once.</p>
       </div>
     </section>
 
     <section id="status" class="band alt">
       <div class="wrap">
-        <h2>Build status</h2>
-        <ol class="phases">
-          <li class="done"><span aria-label="Phase 0, done">&#10003;</span>Foundations and spikes</li>
-          <li class="done"><span aria-label="Phase 1, done">&#10003;</span>Data layer and skeleton</li>
-          <li class="done"><span aria-label="Phase 2, done">&#10003;</span>Indicators and regime</li>
-          <li class="done"><span aria-label="Phase 3, done">&#10003;</span>The portfolio rules and their backtest</li>
-          <li class="done"><span aria-label="Phase 4, done">&#10003;</span>LLM layer</li>
-          <li class="done"><span aria-label="Phase 5, done">&#10003;</span>Execution</li>
-          <li class="active"><span>6</span>Paper trial and dashboard</li>
-        </ol>
-        <p class="note">The first designs picked stocks: chart-pattern breakouts in the style of Minervini, O'Neil and Kullamägi, then a momentum book. Both failed their backtests in October 2026, so the system became a portfolio manager.</p>
-        <p class="note">The paper trial runs on a $100,000 Alpaca paper account for twelve months; its results are <a href="#results">at the top of this page</a>.</p>
+        <h2>Status</h2>
+        <div class="grid">
+          <div class="limit"><strong>Built</strong><span>and running on AWS since 28 October 2026</span></div>
+          <div class="limit"><strong>2 Nov 2026</strong><span>the first monthly rebalance</span></div>
+          <div class="limit"><strong>12 months</strong><span>of paper trading on a $100,000 Alpaca paper account</span></div>
+        </div>
+        <p class="note">Its results are <a href="#results">at the top of this page</a>, updated every trading evening.</p>
       </div>
     </section>
   </main>

@@ -1,5 +1,5 @@
-"""Retire the setup system's loss halts (README §5.9, #172): the daily and weekly loss halts
-were the setup system's (#161); the portfolio has only the kill switch and the drawdown halt,
+"""Retire the setup system's loss halts (README §5.9, #34): the daily and weekly loss halts
+belonged to an earlier design; the portfolio has only the kill switch and the drawdown halt,
 and nothing reads the two rows any more.
 
 Revision ID: 0012

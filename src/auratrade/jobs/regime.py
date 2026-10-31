@@ -9,10 +9,8 @@ The first form is the evening step: it continues the state machine from the last
 starts `regime.replay_warmup_sessions` before `--from` in `CORRECTION` and writes the rows from
 `--from` through `--session`. The replay doesn't go through the job runner (no heartbeat).
 
-A fact for the Portfolio Manager; no rule reads it (README §5.2). Since task 5.2 it runs on three
-pillars (index trend, volatility, distribution): breadth and leadership health read the stock
-universe and the breakout tracker, both retired, and score 0. The effective regime is the
-computed one.
+A fact for the Portfolio Manager; no rule reads it (README §5.2). Three pillars: index trend,
+volatility, distribution.
 """
 
 from __future__ import annotations

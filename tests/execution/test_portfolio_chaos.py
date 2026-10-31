@@ -1,7 +1,7 @@
-"""Chaos tests of the portfolio's orders (execution plan task 5.1, "Accept"): a crash between the
+"""Chaos tests of the portfolio's orders ("Accept"): a crash between the
 stop reduction and the sale, a partly filled OTO, a rejected stop with the price through it, a
 split on the leveraged fund, the halt's sale under the kill switch, a rebalance killed after a
-buy and run again; and the order layer's own (task 1.7): two jobs at once, a 500, a dropped
+buy and run again; and the order layer's own : two jobs at once, a 500, a dropped
 connection.
 
 Each ends with the order layer's two properties (README §5.6, CLAUDE.md §3.5):
@@ -78,7 +78,7 @@ def assert_sale_finished(world: World, row: int) -> None:
 def test_killed_after_the_leg_was_cancelled_stop_guard_covers_the_shares(world: World) -> None:
     bought_from_cash(world)
     row = lower_target_tomorrow(world)
-    # The sale first swaps the OTO leg for a standalone stop: cancel, then place (#113).
+    # The sale first swaps the OTO leg for a standalone stop: cancel, then place (#18).
     world.fake.kill_after("cancel")
     with pytest.raises(ProcessKilled):
         world.run(execute_close.make_job, session=NEXT)
@@ -159,7 +159,7 @@ def test_killed_while_the_oto_was_partly_filled_stop_guard_protects_it(world: Wo
     partly = [o for o in world.fake.open_orders() if o.symbol == "SSO" and o.side is Side.BUY]
     assert [o.filled_qty for o in partly] == [100]
     out = world.run(stop_guard.make_job)
-    assert "PARTIAL_ENTRY" in out["problems"]["SSO"]
+    assert "PARTIAL_BUY" in out["problems"]["SSO"]
     assert world.fake.position("SSO") == 100
     assert protected(world)
     assert no_duplicates(world.fake)
@@ -227,7 +227,7 @@ def test_a_split_scales_the_level_and_replaces_the_stop_without_selling(world: W
         )
     fake.close_market()
     fake.split_ex_date("SSO")  # 04:00: Alpaca rejects the resting stops (spike 0.3b)
-    fake.set_price("SSO", 50.0)  # the new shares' price; paper keeps 298 old ones (#116)
+    fake.set_price("SSO", 50.0)  # the new shares' price; paper keeps 298 old ones (#22)
     world.clock.now = fake.now = ny(NEXT, 9, 20)
     world.run(execute_open.make_job, session=NEXT)
 
@@ -316,7 +316,7 @@ def test_a_sale_rejected_by_the_broker_restores_the_stop(world: World) -> None:
     assert protected(world)
 
 
-# --- two order jobs at once, a 500, a dropped connection (task 1.7's, on the funds) -----------
+# --- two order jobs at once, a 500, a dropped connection (on the funds) -----------
 
 
 def test_a_second_order_job_waits_for_the_lock(world: World) -> None:

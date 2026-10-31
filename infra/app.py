@@ -32,7 +32,7 @@ TradingStack(
     env=env,
 )
 
-# The remote MCP server's public tools (#175). Capped at one run unless `-c mcp_uncapped=true`,
+# The remote MCP server's public tools (#38). Capped at one run unless `-c mcp_uncapped=true`,
 # which exists only for an account whose Lambda concurrency limit is still 10.
 McpStack(
     app,

@@ -1,4 +1,4 @@
-"""The dashboard's page (task 6.6): one self-contained document, its data as text only."""
+"""The dashboard's page : one self-contained document, its data as text only."""
 
 import re
 from pathlib import Path

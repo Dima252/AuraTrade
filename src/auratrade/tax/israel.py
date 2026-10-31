@@ -1,4 +1,4 @@
-"""The Israeli tax model (README §5.7; #154; `docs/backtests/portfolio-preregistration.md` §3.8).
+"""The Israeli tax model (README §5.7; #3; `docs/backtests/portfolio-preregistration.md` §3.8).
 
 Pure: no I/O. The backtest, the twin and the live journal keep one `TaxBook` each.
 

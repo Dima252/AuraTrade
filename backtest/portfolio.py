@@ -9,7 +9,7 @@ before any of this read data. **One scored run:** the scored report is refused i
 exists; a second run would be a new trial, which the pre-registration doesn't allow (§9).
 
 - **The market:** Kenneth French's daily market and T-bill returns and Shiller's dividend yield
-  (carried forward past its last month, #157), synthesized into the three funds (§3.2).
+  (carried forward past its last month, #9), synthesized into the three funds (§3.2).
 - **The runs:** the primary (the twin's rules) and the benchmark, each after tax and before;
   the rolling 10-year windows, each an independent run (§3.1); the periods after publication;
   C1-C5 and D-a to D-c, reported and never adopted (§6).
@@ -59,7 +59,7 @@ def _log(message: str) -> None:
 
 def dividend_yields(history: LongHistory) -> list[float]:
     """Each session's annual dividend yield (D / P) from its month's Shiller row; months after
-    the last published dividend carry the last yield forward (#157)."""
+    the last published dividend carry the last yield forward (#9)."""
     by_month: dict[tuple[int, int], float] = {}
     last: float | None = None
     for month, price, dividend in zip(

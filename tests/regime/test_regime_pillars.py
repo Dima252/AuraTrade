@@ -2,16 +2,12 @@ from datetime import date, timedelta
 
 import pytest
 
-from auratrade.config import DEFAULT_RISK_CONFIG, Regime, load_risk_config
-from auratrade.regime.ladder import LADDER, most_conservative, rank
+from auratrade.config import DEFAULT_RISK_CONFIG, load_risk_config
 from auratrade.regime.pillars import (
     IndexTrend,
-    TrackedBreakout,
-    breadth_pillar,
     crisis_override,
     distribution_pillar,
     index_trend_pillar,
-    leadership_pillar,
     quarterly_expiration_sessions,
     volatility_pillar,
 )
@@ -46,25 +42,6 @@ class TestIndexTrend:
         assert index_trend_pillar({}) == 0
 
 
-class TestBreadth:
-    @pytest.mark.parametrize(
-        ("above", "net", "score"),
-        [
-            (0.61, 5.0, 1),
-            (0.60, 5.0, 0),  # "> 60%"
-            (0.61, 0.0, 0),  # net new highs must be > 0
-            (0.50, 2.0, 0),
-            (0.34, 2.0, -1),  # < 35% above
-            (0.35, 2.0, 0),
-            (0.70, -0.1, -1),  # new lows outnumber new highs
-            (None, 2.0, 0),
-            (0.70, None, 0),
-        ],
-    )
-    def test_thresholds(self, above: float | None, net: float | None, score: int) -> None:
-        assert breadth_pillar(above, net, CFG.breadth) == score
-
-
 class TestVolatility:
     @pytest.mark.parametrize(
         ("vix", "vix3m", "score"),
@@ -91,39 +68,6 @@ class TestVolatility:
 )
 def test_distribution_pillar(days: int, score: int) -> None:
     assert distribution_pillar(days, CFG.distribution) == score
-
-
-def tracked(results: list[bool], sessions_ago: int = 5) -> list[TrackedBreakout]:
-    return [TrackedBreakout(sessions_ago, r) for r in results]
-
-
-class TestLeadership:
-    def test_fewer_than_ten_breakouts_score_zero(self) -> None:
-        result = leadership_pillar(tracked([True] * 9), CFG.leadership)
-        assert (result.score, result.breakouts, result.share_above) == (0, 9, None)
-
-    @pytest.mark.parametrize(
-        ("held", "score"), [(11, 1), (10, 0), (8, 0), (7, -1), (0, -1), (20, 1)]
-    )
-    def test_shares(self, held: int, score: int) -> None:
-        # 20 breakouts: 11 held = 55% -> +1; 7 held = 35% -> -1.
-        breakouts = tracked([True] * held + [False] * (20 - held))
-        assert leadership_pillar(breakouts, CFG.leadership).score == score
-
-    def test_only_the_window_t_minus_24_to_t_minus_5_counts(self) -> None:
-        # Recent breakouts (T-4..T) have no complete result and are ignored, as are older ones.
-        breakouts = [
-            *tracked([True] * 10, sessions_ago=24),
-            *tracked([False] * 30, sessions_ago=25),
-            *[TrackedBreakout(k, None) for k in range(5)],
-            *[TrackedBreakout(k, False) for k in range(5)],
-        ]
-        result = leadership_pillar(breakouts, CFG.leadership)
-        assert (result.score, result.breakouts) == (1, 10)
-
-    def test_an_incomplete_result_inside_the_window_is_an_error(self) -> None:
-        with pytest.raises(ValueError, match="no complete result"):
-            leadership_pillar([TrackedBreakout(7, None)], CFG.leadership)
 
 
 class TestCrisis:
@@ -178,19 +122,3 @@ class TestExpirations:
 
     def test_no_sessions(self) -> None:
         assert quarterly_expiration_sessions([]) == set()
-
-
-class TestLadder:
-    def test_order(self) -> None:
-        assert [rank(r) for r in LADDER] == [0, 1, 2, 3]
-        assert LADDER[0] is Regime.CORRECTION
-        assert LADDER[-1] is Regime.CONFIRMED_UPTREND
-
-    def test_most_conservative(self) -> None:
-        assert (
-            most_conservative(Regime.CONFIRMED_UPTREND, Regime.EARLY_UPTREND)
-            is Regime.EARLY_UPTREND
-        )
-        assert most_conservative(Regime.UNDER_PRESSURE) is Regime.UNDER_PRESSURE
-        with pytest.raises(ValueError, match="at least one"):
-            most_conservative()

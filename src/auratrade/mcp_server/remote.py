@@ -1,5 +1,5 @@
 """The public tools as a remote MCP server: a Lambda function with a public URL, for any MCP
-client (README §5.10, task 6.4 step 2, #175). `infra/stacks/mcp.py` bounds what it can cost.
+client (README §5.10, #38). `infra/stacks/mcp.py` bounds what it can cost.
 
 MCP's Streamable HTTP in its stateless, JSON-response form: each POST is one JSON-RPC exchange
 answered in full, so nothing lives between invocations and no session needs a sticky route.

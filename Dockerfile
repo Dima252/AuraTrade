@@ -37,7 +37,7 @@ RUN uv export --frozen --only-group mcp --no-emit-project -o /tmp/requirements.t
 COPY README.md ${LAMBDA_TASK_ROOT}/
 COPY docs/runbook.md ${LAMBDA_TASK_ROOT}/docs/
 COPY docs/backtests/portfolio.md ${LAMBDA_TASK_ROOT}/docs/backtests/
-# The dashboard's page inlines the site's drawing (task 6.6).
+# The dashboard's page inlines the site's drawing.
 COPY web/chart.js web/chart.css ${LAMBDA_TASK_ROOT}/web/
 ENV AURATRADE_DOCS_ROOT=${LAMBDA_TASK_ROOT}
 CMD ["auratrade.mcp_server.remote.handler"]

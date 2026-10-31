@@ -2,12 +2,12 @@
 
     uv run python -m auratrade.jobs.simulate --session 2026-10-23 --dry-run
 
-**The twin and the book** (task 4.3, #166): the twin, the book's decided targets replayed and
+**The twin and the book** (#31): the twin, the book's decided targets replayed and
 SPY bought and held, all through `sim/portfolio.py` from the trial's first R to T, written whole
-to `twin_book`, with the scorecard in each month's `portfolio_journal` row (task 4.4, #167); on
-`paper` the row carries the account's own month too (task 5.3). Then **the dashboard's
+to `twin_book`, with the scorecard in each month's `portfolio_journal` row (#32); on
+`paper` the row carries the account's own month too. Then **the dashboard's
 snapshot** (README §5.8, `journal.dashboard`), now that the day's twin exists, in storage and,
-when `SITE_S3_BUCKET` is set, on the public site (task 6.2); a failure to store or publish it
+when `SITE_S3_BUCKET` is set, on the public site ; a failure to store or publish it
 is logged and doesn't fail the job. Nothing is written before the trial starts, or
 when T's data isn't COMPLETE (fail closed). The job places no orders, so `--dry-run` changes
 nothing here.

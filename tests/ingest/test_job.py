@@ -1,5 +1,5 @@
 """The `ingest` job end to end on Postgres, every vendor faked: the ETF list's bars, its
-corporate actions, macro and retention (task 5.2)."""
+corporate actions, macro and retention."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ class FakeAlpaca(FakeBars):
 @pytest.fixture
 def tickers(pg_engine: Engine) -> dict[str, int]:
     with pg_engine.begin() as conn:
-        return {s: add_ticker(conn, s, "ETF", "ARCA") for s in FUNDS}
+        return {s: add_ticker(conn, s) for s in FUNDS}
 
 
 def sources(

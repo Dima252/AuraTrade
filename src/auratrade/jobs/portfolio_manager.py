@@ -6,10 +6,10 @@ through the guardrails, into `portfolio_targets`.
         --session 2026-11-12 --dry-run
 
 On E it decides from the facts `allocate` wrote on R; on other sessions it does nothing. An
-event (until task 5.x raises them, by hand) decides at once and may only reduce risk. **A
-paid Claude call** (about $0.15-0.30, README §9). A failure holds (#164) and alerts; so do
-the guardrails' clips and a decision above `llm.cost_alert_usd`. Orders aren't sent in any
-mode until task 5.1; the targets are written.
+event (raised by hand, `--event`) decides at once and may only reduce risk. **A
+paid Claude call** (about $0.15-0.30, README §9). A failure holds (#6) and alerts; so do
+the guardrails' clips and a decision above `llm.cost_alert_usd`. It sends no orders: it writes
+the targets, and `execute_close` trades them.
 """
 
 from __future__ import annotations

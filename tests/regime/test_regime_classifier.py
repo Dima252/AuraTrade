@@ -6,7 +6,7 @@ import pytest
 from auratrade.config import DEFAULT_RISK_CONFIG, Regime, load_risk_config
 from auratrade.indicators.bars import Bar
 from auratrade.regime.classifier import SessionInputs, classify
-from auratrade.regime.pillars import IndexTrend, TrackedBreakout
+from auratrade.regime.pillars import IndexTrend
 from auratrade.regime.state import RegimeState
 
 RISK = load_risk_config(DEFAULT_RISK_CONFIG)
@@ -21,25 +21,21 @@ def inputs(**changes: object) -> SessionInputs:
         session=date(2026, 10, 9),
         index_bars={"SPY": (FLAT, FLAT), "QQQ": (FLAT, FLAT)},
         index_trend={"SPY": TREND, "QQQ": TREND},
-        fraction_above=0.7,
-        net_new_highs=12.0,
         vix=15.0,
         vix3m=18.0,
         macro_stale_sessions=0,
-        breakouts=[TrackedBreakout(6, True)] * 12,
         prior_vix_ratios=(0.8,),
     )
     return replace(base, **changes)  # type: ignore[arg-type]
 
 
-def test_a_healthy_market_scores_five() -> None:
+def test_a_healthy_market_scores_three() -> None:
     state = RegimeState(regime=Regime.CONFIRMED_UPTREND, seq=0, entered_seq=0)
     result = classify(state, inputs(), CFG, macro_stale_limit=STALE)
-    assert result.score == 5
+    assert result.score == 3
     assert result.regime is Regime.CONFIRMED_UPTREND
     assert not result.changed
     assert not result.crisis.active
-    assert result.features["leadership_breakouts"] == 12
     assert result.features["vix_ratio"] == pytest.approx(15 / 18)
 
 
@@ -112,12 +108,16 @@ def test_no_vix_ratio_without_both_values() -> None:
 
 def test_the_index_trend_pillar_at_minus_one_makes_the_downgrade_immediate() -> None:
     # correction_sessions 2: a -1 score with a neutral index trend waits a session; with an
-    # index below its falling 200-day it doesn't.
+    # index below its falling 200-day it doesn't. The flat bars count no distribution days, which
+    # would score +1: the copy makes that pillar neutral (model_copy skips validation).
     two = CFG.model_copy(
-        update={"transitions": CFG.transitions.model_copy(update={"correction_sessions": 2})}
+        update={
+            "transitions": CFG.transitions.model_copy(update={"correction_sessions": 2}),
+            "distribution": CFG.distribution.model_copy(update={"up_max_days": -1}),
+        }
     )
     state = RegimeState(regime=Regime.UNDER_PRESSURE, seq=0, entered_seq=0)
-    weak = {"fraction_above": 0.2, "vix": 35.0, "vix3m": 30.0, "breakouts": ()}
+    weak = {"vix": 35.0, "vix3m": 30.0}
     flat = replace(TREND, short_rising=False)
     waits = classify(
         state, inputs(**weak, index_trend={"SPY": flat, "QQQ": flat}), two, macro_stale_limit=STALE

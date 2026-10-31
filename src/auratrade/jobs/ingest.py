@@ -6,8 +6,7 @@
 The first form goes through the job runner (calendar guard, heartbeat, chaining: it waits for
 `post_market`). The second runs the steps directly, without the runner.
 
-Steps, each in its own transaction, in this order (slimmed to the ETF list in task 5.2; the
-stock universe's steps are gone):
+Steps, each in its own transaction, in this order:
 
 1. **Calendar** re-sync and cross-check (a disagreement alerts; README §4).
 2. **Bars** for the ETF list: gap-fill, T-1 re-fetch, splits, outliers, coverage →

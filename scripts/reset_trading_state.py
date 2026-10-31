@@ -1,17 +1,17 @@
-"""Clear the trading state of a database copied from another environment (task 1.8).
+"""Clear the trading state of a database copied from another environment.
 
     uv run python scripts/reset_trading_state.py --env-file .env.paper            # plan
     uv run python scripts/reset_trading_state.py --env-file .env.paper --apply    # clear
 
-A Neon branch made from `dev` carries `dev`'s positions, orders, signals, mismatches, job runs,
+A Neon branch made from `dev` carries `dev`'s orders, mismatches, job runs, account snapshots,
 tax lots and the leveraged fund's stop level. Against a different Alpaca account (README §12)
 they would read as mismatches and unprotected positions, and the chain would skip sessions `dev`
 already ran. This deletes them in one transaction and puts the flags back to their seed: **the
 kill switch on** (increases off), the halt off, so the new environment trades only after `auratrade
 kill off`.
 
-Market data stays: bars, tickers, sessions, corporate actions, macro, earnings, fundamentals,
-bases and the regime history are the same for every environment.
+Market data stays: bars, tickers, sessions, corporate actions, macro and the regime history are
+the same for every environment.
 
 Refused when the target is the `dev` database (`--dev-env-file`, default `.env`), and when it is
 on localhost unless `--allow-local` says that is intended (a cloud branch is the usual target).
@@ -37,12 +37,7 @@ TRADING_TABLES = frozenset(
     {
         "job_runs",
         "mismatches",
-        "signals",
         "orders",
-        "positions",
-        "position_plans",
-        "position_events",
-        "trade_journal",
         "account_snapshots",
         "tax_lots",
         "fund_stops",

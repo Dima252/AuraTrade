@@ -2,7 +2,7 @@
 
 Neon's free tier keeps a short restore window, and these tables are the validation record, so
 each night writes one Parquet file per table: `backup/<table>/<session>.parquet`. S3's lifecycle
-keeps 90 days of dailies plus month-ends (task 1.8).
+keeps 90 days of dailies plus month-ends.
 """
 
 from __future__ import annotations
@@ -21,8 +21,7 @@ from auratrade.storage import ObjectStore
 
 BACKUP_PREFIX = "backup"
 # The tables README §10 keeps forever: the portfolio's (the validation record) and the order
-# layer's. Bars have their own retention (Parquet archives), and job_runs is operational. The
-# setup system's tables are no longer written (task 5.2): their last backups stay.
+# layer's. Bars have their own retention (Parquet archives), and job_runs is operational.
 KEPT_FOREVER: tuple[str, ...] = (
     "portfolio_targets",
     "portfolio_journal",

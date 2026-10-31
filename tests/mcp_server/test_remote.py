@@ -1,5 +1,5 @@
 """The remote server's Lambda handler: function URL requests through the SDK's own HTTP app
-(README §5.10, task 6.4 step 2)."""
+(README §5.10)."""
 
 import base64
 import json
@@ -99,7 +99,7 @@ async def test_a_tool_call_in_a_base64_body() -> None:
 
 @pytest.mark.anyio
 async def test_a_resource() -> None:
-    result = await _answer(_event(_call("resources/read", {"uri": "auratrade://decision/174"})))
+    result = await _answer(_event(_call("resources/read", {"uri": "auratrade://decision/37"})))
 
     assert "Read-only." in result["contents"][0]["text"]
 

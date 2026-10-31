@@ -1,13 +1,13 @@
-"""The portfolio manager's evening steps on the database (README §5.3-§5.5; task 4.3, #166).
+"""The portfolio manager's evening steps on the database (README §5.3-§5.5, #31).
 
 - **The funds' bars** (split-adjusted and total-return, free Alpaca calls) for the core funds
   and the satellite list, from ``history_sessions`` before the trial's start to T.
 - **The books:** the twin (the rules on the whole account), SPY bought and held, and the book
-  itself (its decided targets replayed: in `dry_run` the account, #166; on `paper` the
+  itself (its decided targets replayed: in `dry_run` the account, #31; on `paper` the
   like-for-like return beside the paper fills), all through `sim/portfolio.py` from the trial's
   first R, written whole to `twin_book` each evening (`simulate`), with the scorecard (README
   §5.5, `journal/portfolio_scorecard.py`) in each month's `portfolio_journal` row; on `paper`
-  the row's results also carry the account's own month (`paper`, task 5.3).
+  the row's results also carry the account's own month (`paper`).
 - **On R** (`allocate`): the trend, the cap and the book's halt from the same runs (ranked at
   R), the rule level, the twin's targets, and the Portfolio Manager's facts, in an ALLOCATED
   `portfolio_targets` row for E. On `paper` the halt is the account's (`execution.halt`),
@@ -15,7 +15,7 @@
 
 The trial starts at the first R `allocate` ever ran on; both books start there from
 ``dry_run_equity`` in cash. **The account the Portfolio Manager sees** is, in `dry_run`, the
-simulated book (#166); on `paper`, the broker's (task 5.3, #170): the close's snapshot, the
+simulated book (#31); on `paper`, the broker's (#35): the close's snapshot, the
 live tax lots and the live halt's peak. Without that snapshot, or with its lots not rebuilt, no
 facts are written (fail closed: E holds).
 """
@@ -79,7 +79,7 @@ TWIN, SIM, SPY = "TWIN", "SIM", "SPY"
 NY = ZoneInfo("America/New_York")
 DRY_RUN_NOTE = (
     "dry_run: no orders are sent, so the account is your decided targets replayed through the "
-    "simulator from the trial's start (#166)."
+    "simulator from the trial's start (#31)."
 )
 PAPER_NOTE = (
     "paper: the account is the paper broker's. Paper fills are optimistic, so the scorecard "
@@ -539,10 +539,8 @@ def regime_fact(conn: Connection, upto: date) -> dict[str, Any] | None:
         "score": row.score,
         "pillars": {
             "index_trend": row.index_trend,
-            "breadth": row.breadth,
             "volatility": row.volatility,
             "distribution": row.distribution,
-            "leadership": row.leadership,
         },
         "sessions_in_state": row.sessions_in_state,
         "note": "a descriptive classifier; no rule reads it",

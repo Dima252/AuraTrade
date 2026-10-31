@@ -1,4 +1,4 @@
-"""The live drawdown halt (README §7.3; task 5.2), on the account the order layer trades.
+"""The live drawdown halt (README §7.3), on the account the order layer trades.
 
 The state is the `halt_drawdown` flag in `system_flags`, with its running peak (and the session
 it turned on) in the flag's details, moved only by `core_allocation`'s pure functions, the same
@@ -10,7 +10,7 @@ ones the twin and the backtest run:
   at its old peak (`halt_on_ranking`).
 
 Without a stored peak the halt starts from the equity it is first given (`start_halt`). In
-dry_run the account is the simulated book, whose halt is simulated (#166): the check is
+dry_run the account is the simulated book, whose halt is simulated (#31): the check is
 reported and nothing is written.
 """
 

@@ -1,4 +1,4 @@
-"""The MCP server's tools, resources and prompts (README §5.10, #174).
+"""The MCP server's tools, resources and prompts (README §5.10, #37).
 
 Strictly read-only: every tool reads (the snapshot, the read-only database, the broker as a
 `BrokerReader`, CloudWatch's `FilterLogEvents`) and carries the read-only hint. Without the
@@ -91,7 +91,7 @@ def build_server(deps: ServerDeps) -> MCPServer:
 
 
 def _apps(deps: ServerDeps) -> Apps:
-    """The `dashboard` tool and its page (task 6.6, #176): the page draws `structuredContent`,
+    """The `dashboard` tool and its page (#39): the page draws `structuredContent`,
     which hosts keep out of the model's context; the text is what the model reads and what a
     client without MCP Apps shows."""
     apps = Apps()
@@ -261,14 +261,14 @@ def _resources(server: MCPServer, deps: ServerDeps) -> None:
 def _prompts(server: MCPServer, deps: ServerDeps) -> None:
     @server.prompt()
     def monthly_review(month: str = "") -> str:
-        """The monthly journal review (task 6.3): judged on process, not returns."""
+        """The monthly journal review : judged on process, not returns."""
         which = f"the decision executed in {month}" if month else "the latest complete month"
         tools = "`performance`, `decisions`, `scorecard`, `exposure`"
         if deps.operator is not None:
             tools += ", `decision`, `tax`, `jobs`"
         return (
             f"Review {which} of the AuraTrade paper trial. Use {tools}.\n\n"
-            "Judge it on process, not returns (README §15, #163): did the decision follow the "
+            "Judge it on process, not returns (README §15, #4): did the decision follow the "
             "rules and stay inside its limits (which limits clipped it, and why)? Were the "
             "LLM's expectations calibrated (direction and rough size against what happened)? "
             "How much tax did its changes realize, against the twin's, and was each change "

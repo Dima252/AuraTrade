@@ -2,7 +2,7 @@
 
 portfolio_targets (each decision: the rule level and facts on R, the enforced targets on E or
 an event), prompt_versions and llm_decisions (README §9), tax_lots (the live account's lots,
-written from task 5.3), twin_book (the twin and, in dry_run, the simulated book, #166) and
+written from task 5.3), twin_book (the twin and, in dry_run, the simulated book, #31) and
 portfolio_journal (one row per month).
 
 Revision ID: 0008

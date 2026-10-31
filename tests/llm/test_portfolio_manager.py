@@ -1,6 +1,6 @@
 """The Portfolio Manager on hand-built responses in the API's wire format: a normal month, a
 hold month, the clips (the hold rule, the tax budget), a refusal, a timeout, invalid output,
-an event (task 4.2's acceptance). No request leaves the machine (CLAUDE.md §3.3)."""
+an event. No request leaves the machine (CLAUDE.md §3.3)."""
 
 from __future__ import annotations
 
@@ -237,7 +237,7 @@ def test_an_unapproved_fund_and_an_upward_shift_are_clipped() -> None:
     assert "TQQQ" not in result.enforced.targets
 
 
-# --- failures hold (#164) ---------------------------------------------------------------------
+# --- failures hold (#6) ---------------------------------------------------------------------
 
 
 def assert_held(result: PmResult, failure: Failure) -> None:

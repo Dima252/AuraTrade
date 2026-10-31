@@ -1,4 +1,4 @@
-"""The portfolio's trades through `execute_close` (task 5.1) on the fake broker and the test
+"""The portfolio's trades through `execute_close`  on the fake broker and the test
 Postgres: the rebalance, its retry, the stop and its raise, the blocks, the halt's sale."""
 
 from __future__ import annotations
@@ -225,7 +225,7 @@ def test_a_fund_without_a_price_is_owed_to_the_retry(world: World) -> None:
     assert protected(world)
 
 
-# --- stop_guard and the invariant for #155 -------------------------------------------------
+# --- stop_guard and the invariant for #5 -------------------------------------------------
 
 
 def test_stop_guard_leaves_the_unleveraged_funds_alone(world: World) -> None:
@@ -276,8 +276,8 @@ def test_the_halts_sale_moves_the_leveraged_fund_into_the_market_fund(
 
 
 def unknown_position(world: World) -> None:
-    world.fake.set_price("NVDA", 99.0)
-    world.fake._book("NVDA", Side.BUY, 1, 99.0)
+    world.fake.set_price("AAPL", 99.0)
+    world.fake._book("AAPL", Side.BUY, 1, 99.0)  # bought by hand: not one of the funds
 
 
 def account_mismatch(world: World) -> None:

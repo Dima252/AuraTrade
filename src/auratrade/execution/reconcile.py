@@ -7,8 +7,7 @@ Run first in every order-touching job, under the lock:
 2. Every order seen in the held symbols (open, and created in the last `LOOKBACK_MARGIN`) is
    mirrored into `orders`.
 
-The leveraged fund's stop level and the funds' splits are `execution.funds`'; the setup
-system's positions, plans and signals went in task 5.2 (#161).
+The leveraged fund's stop level and the funds' splits are `execution.funds`'.
 """
 
 from __future__ import annotations

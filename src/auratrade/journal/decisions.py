@@ -1,4 +1,4 @@
-"""The Portfolio Manager's decision on the database (README §5.4, §5.7, §9; task 4.3).
+"""The Portfolio Manager's decision on the database (README §5.4, §5.7, §9).
 
 - **On E** the ALLOCATED row `allocate` wrote on R gives the facts; the headlines are fetched
   now. The tools read the funds' bars through R, Alpaca's news and the decision history.

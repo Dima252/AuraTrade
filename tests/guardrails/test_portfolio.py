@@ -55,7 +55,7 @@ def rules(result: EnforcedTargets) -> list[GuardrailRule]:
     return [f.rule for f in result.findings]
 
 
-# --- the level and the core (#163) ------------------------------------------------------------
+# --- the level and the core (#4) ------------------------------------------------------------
 
 
 def test_a_decision_inside_the_limits_passes_and_fills_the_satellite_with_cash() -> None:
@@ -145,7 +145,7 @@ def test_a_satellite_over_its_share_is_scaled_down() -> None:
     assert "BIL" not in got.satellite
 
 
-# --- hold by default (#163) -------------------------------------------------------------------
+# --- hold by default (#4) -------------------------------------------------------------------
 
 
 def test_small_changes_keep_last_months_targets() -> None:
@@ -182,7 +182,7 @@ def test_holding_gives_back_the_excess_from_the_changed_funds() -> None:
     assert got.satellite == pytest.approx({"GLD": 0.10, "IEF": 0.1 * scale, "QQQ": 0.015 * scale})
 
 
-# --- the tax budget (#163) --------------------------------------------------------------------
+# --- the tax budget (#4) --------------------------------------------------------------------
 
 PREVIOUS = {"QQQ": 0.10, "GLD": 0.10}
 SWAP = {"GLD": 0.10, "IEF": 0.10}  # sells all $10,000 of QQQ

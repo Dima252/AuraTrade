@@ -24,7 +24,7 @@ OPERATOR_TOOLS = {"status", "jobs", "logs", "portfolio", "trend", "tax", "decisi
 NOW = datetime(2026, 10, 28, 17, 0, tzinfo=UTC)
 README = (
     "## 5. Components\n\n### 5.4 Portfolio Manager\n\nThe LLM.\n\n"
-    "## 16. Decision log\n\n| 174 | The MCP server (6.4) | Read-only. |\n"
+    "## 16. Decision log\n\n| 37 | The MCP server | Read-only. |\n"
 )
 
 
@@ -239,7 +239,7 @@ async def test_the_documents() -> None:
     async with Client(build_server(_public())) as client:
         index = await client.read_resource("auratrade://readme")
         section = await client.read_resource("auratrade://readme/5.4")
-        entry = await client.read_resource("auratrade://decision/174")
+        entry = await client.read_resource("auratrade://decision/37")
         decisions = await client.read_resource("auratrade://decisions")
         runbook = await client.read_resource("auratrade://runbook")
         backtest = await client.read_resource("auratrade://backtest")
@@ -247,8 +247,8 @@ async def test_the_documents() -> None:
 
     assert "5.4 Portfolio Manager" in index.contents[0].text  # type: ignore[union-attr]
     assert section.contents[0].text.endswith("The LLM.")  # type: ignore[union-attr]
-    assert entry.contents[0].text.startswith("# Decision #174")  # type: ignore[union-attr]
-    assert "#174" in decisions.contents[0].text  # type: ignore[union-attr]
+    assert entry.contents[0].text.startswith("# Decision #37")  # type: ignore[union-attr]
+    assert "#37" in decisions.contents[0].text  # type: ignore[union-attr]
     assert "runbook" in runbook.contents[0].text.lower()  # type: ignore[union-attr]
     assert "portfolio" in backtest.contents[0].text.lower()  # type: ignore[union-attr]
     review_text = review.messages[0].content.text  # type: ignore[union-attr]

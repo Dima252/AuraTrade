@@ -2,8 +2,7 @@
 
 Each function takes a connection; the caller owns the transaction. Order sections keep their
 transactions short (one per step), because Neon ends a transaction idle for 5 minutes and an
-order section waits on fills. (The setup system's signals, positions and plans went in task
-5.2, #161; their tables are kept, no longer written.)
+order section waits on fills.
 """
 
 from __future__ import annotations
@@ -65,14 +64,13 @@ def order_purpose(order: BrokerOrder) -> str:
     parsed = ids.parse(order.client_order_id)
     if parsed is not None:
         return {
-            ids.Purpose.ENTRY: "ENTRY",
-            ids.Purpose.BUY: "ENTRY",
+            ids.Purpose.BUY: "BUY",
             ids.Purpose.STOP: "STOP",
             ids.Purpose.EXIT: "EXIT",
         }[parsed.purpose]
     if order.is_sell_stop:
         return "STOP"  # a replaced standalone stop gets a broker-assigned id
-    return "ENTRY" if order.side is Side.BUY else "OTHER"
+    return "BUY" if order.side is Side.BUY else "OTHER"
 
 
 def mirror_orders(
