@@ -4,6 +4,8 @@
     "include": ["app.py", "stacks/**", "../web/**"]
   },
   "context": {
-    "@aws-cdk/core:defaultCrossStackReferences": "strong"
+    "@aws-cdk/core:defaultCrossStackReferences": "strong",
+    "site_domain": "auratrade.dev",
+    "site_hosted_zone_id": "Z05328262PHUBF7BSRE8T"
   }
 }

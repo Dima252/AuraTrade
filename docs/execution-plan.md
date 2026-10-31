@@ -144,7 +144,7 @@ Ticked tasks are the record of what was built at the time: files they name may s
 | GitHub remote repository | Phase 0 | Private repo |
 | AWS account | Phase 1 (task 1.8) | Root MFA, an admin user (IAM Identity Center, or an IAM user signed in with `aws login`), budget alarms |
 | Install AWS CLI + GitHub CLI | Phase 0 / 1.8 | Both installed; AWS CLI profile `auratrade` (us-east-1) |
-| Domain name (optional) | Task 1.8 | For the public site (0.5). Buying it through Route 53 (about $13/year for a `.com`) creates the hosted zone the stack needs. Without one, the site lives on its `*.cloudfront.net` address |
+| Domain name (optional) | Task 1.8 | For the public site (0.5). **Done 2026-10-31:** `auratrade.dev`, bought at Porkbun (Route 53 doesn't sell domains to Free Tier accounts), delegated to a Route 53 hosted zone; the site serves on it |
 
 ---
 
