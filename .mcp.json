@@ -10,7 +10,7 @@
         "-m",
         "auratrade.mcp_server",
         "--snapshot",
-        "https://dk5a9tokky27z.cloudfront.net/data/snapshot.json"
+        "https://auratrade.dev/data/snapshot.json"
       ],
       "env": {
         "AWS_PROFILE": "auratrade",

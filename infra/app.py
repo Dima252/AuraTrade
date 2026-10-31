@@ -11,8 +11,8 @@ from stacks.trading import TradingStack
 app = cdk.App()
 env = cdk.Environment(account=os.environ.get("CDK_DEFAULT_ACCOUNT"), region="us-east-1")
 
-# Optional custom domain: `-c site_domain=example.com -c site_hosted_zone_id=Z123...`.
-# Without them the site is served on its *.cloudfront.net address.
+# Optional custom domain: `site_domain` and `site_hosted_zone_id` (set in cdk.json, so every deploy
+# keeps them; `-c` overrides). Without them the site is served on its *.cloudfront.net address.
 site = PublicSiteStack(
     app,
     "AuraTradePublicSite",

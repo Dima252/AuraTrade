@@ -11,7 +11,7 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 
 ## Next
 
-1. **Deployed 2026-10-28** (task 6.1's checklist, [runbook.md](runbook.md)): the `paper` account (…0O7Z) at $100,000, the kill switch off. The site is https://dk5a9tokky27z.cloudfront.net.
+1. **Deployed 2026-10-28** (task 6.1's checklist, [runbook.md](runbook.md)): the `paper` account (…0O7Z) at $100,000, the kill switch off. The site is https://auratrade.dev (since 2026-10-31; the CloudFront address https://dk5a9tokky27z.cloudfront.net still works).
 2. **Friday 30 Oct (R), evening:** `allocate` reads the trend and writes the facts; the trial starts there, and the dashboard's snapshot with it.
 3. **Monday 2 Nov (E):** `portfolio_manager` at 08:45 (a paid call), `execute_close` at 15:40: the first real orders. Check the fills, SSO's stop at the broker, and that evening's tax lots.
 4. **The carried 1.7 / 1.8 checks** (the stop hand check on SSO, the watchdog and dead-man's-switch tests, cost and Neon compute), then three rebalances unattended.
@@ -33,4 +33,5 @@ A handoff for the next session. The [progress tracker](execution-plan.md#progres
 - **AWS:** account 391732005061, CLI profile `auratrade` (us-east-1), signed in with `aws login`. `cdk deploy` is run by the user (Claude Code's auto mode blocks it).
 - **Local tests** need Docker Desktop running (`docker compose up -d`) for the database tests; CI runs them always.
 - **Time zones in Git Bash:** `TZ=America/New_York date` prints UTC; use PowerShell for Eastern time.
+- **The domain** `auratrade.dev` is registered at Porkbun (bought 2026-10-31, auto-renew on, ~$13/year; Route 53 doesn't sell domains to Free Tier accounts). Its nameservers point at the Route 53 zone `Z05328262PHUBF7BSRE8T` (~$0.50/month), which the site stack writes its records into; the domain and the zone ID are in `infra/cdk.json`, so every deploy keeps them. Keep DNSSEC off at Porkbun unless it is set up in Route 53 first.
 - **The long history** is in the local store (`scripts/backfill.py longhistory`, #157): 26,317 sessions from 1926-07-01 to 2026-08-31.
