@@ -45,7 +45,6 @@ class McpStack(Stack):
         construct_id: str,
         *,
         site_bucket: s3.IBucket,
-        capped: bool = True,
         env: Environment | None = None,
     ) -> None:
         super().__init__(scope, construct_id, env=env)
@@ -77,9 +76,9 @@ class McpStack(Stack):
             architecture=lambda_.Architecture.X86_64,
             memory_size=512,
             timeout=Duration.seconds(30),
-            # Uncapped only until the account's limit is above 10 (Lambda keeps 10 unreserved, so
-            # reserving any is refused below that); the breaker still bounds it meanwhile.
-            reserved_concurrent_executions=CONCURRENCY if capped else None,
+            # Lambda keeps 10 of the account's concurrency unreserved, so this needs a limit above
+            # 10 (the account's is 1,000).
+            reserved_concurrent_executions=CONCURRENCY,
             environment={"MCP_SNAPSHOT": f"s3://{site_bucket.bucket_name}/{SNAPSHOT_KEY}"},
             log_group=log_group("Logs", FUNCTION_NAME),
         )
