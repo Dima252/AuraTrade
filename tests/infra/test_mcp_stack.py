@@ -119,14 +119,3 @@ def test_the_image_is_the_mcp_target() -> None:
 def test_the_url_names_the_path(template: Any) -> None:
     value = template.find_outputs("McpUrl")["McpUrl"]["Value"]["Fn::Join"][1]
     assert value[-1] == "mcp"
-
-
-def test_uncapped_only_on_request_and_still_with_its_breaker() -> None:
-    # For an account whose Lambda concurrency limit is still 10: reserving any is refused.
-    _, stack = _app(capped=False)
-    template = Template.from_stack(stack)
-    assert "ReservedConcurrentExecutions" not in _function(template, FUNCTION_NAME)
-    template.resource_count_is("AWS::CloudWatch::Alarm", 1)
-    assert _function(template, BREAKER_NAME)["Environment"]["Variables"]["MCP_FUNCTION"] == (
-        FUNCTION_NAME
-    )

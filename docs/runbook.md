@@ -17,7 +17,7 @@ Outside market hours (no order job running), in order:
 | 3 | Deploy the trading stack (it deploys the site first) | `cd infra && npx aws-cdk deploy AuraTradePaper -c trading_mode=paper --profile auratrade` | Outputs show `TradingMode paper` |
 | 4 | Watch the next evening | Telegram daily report after 16:20 ET; `job_runs` for `post_market` → `allocate` | No FAILED or BLOCKED alerts |
 
-The remote MCP server is its own stack: `cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade` (add `-c mcp_uncapped=true` while the account's Lambda limit is 10). After a paper account reset: `auratrade halt reset`, and `scripts/reset_trading_state.py` to clear the old account's orders and lots (it plans, then `--apply`; the kill switch is on afterwards).
+The remote MCP server is its own stack: `cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade`. After a paper account reset: `auratrade halt reset`, and `scripts/reset_trading_state.py` to clear the old account's orders and lots (it plans, then `--apply`; the kill switch is on afterwards).
 
 ## Alerts
 
@@ -44,6 +44,7 @@ Every alert starts `[AuraTrade <env>]`. None of them needs an answer for the sys
 | `<job> has waited N s for the order lock` | Two order jobs overlapped | If it recurs, look for a stuck job in `job_runs` |
 | `watchdog: - <job> missed` | A scheduled job left no heartbeat | Check the schedule group and CloudWatch; re-run the job by hand if it matters (an order job only on its session) |
 | No `watchdog` ping at healthchecks.io | The watchdog itself stopped | Check the AWS account and the Lambda |
+| `MCP server auratrade-mcp switched off: …` | The public MCP server took 1,000 calls in an hour; the breaker set its reserved concurrency to 0 | Nothing else is affected. Look at who called (`/aws/lambda/auratrade-mcp`); once it has stopped, re-arm with the command in the alert (`put-function-concurrency … 1`) |
 
 ## Operator commands
 

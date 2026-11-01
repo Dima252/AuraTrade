@@ -105,7 +105,7 @@ uv run python scripts/preview_site.py     # the public site and its dashboard on
 uv run --env-file .env.paper python -m auratrade.mcp_server   # the read-only MCP server over stdio (Claude Code reads .mcp.json; --public: the snapshot's tools only)
 cd infra && npx aws-cdk synth             # synthesize the CDK stacks (needs Node; no AWS calls)
 cd infra && npx aws-cdk deploy AuraTradePaper -c trading_mode=paper --profile auratrade   # the trading stack (user's OK first; deploys the site first; docs/runbook.md "Deploying a change")
-cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade   # the remote MCP server (user's OK first; -c mcp_uncapped=true while the Lambda limit is 10); prints McpUrl
+cd infra && npx aws-cdk deploy AuraTradeMcp --profile auratrade   # the remote MCP server (user's OK first); prints McpUrl
 ```
 
 CI (`.github/workflows/ci.yml`) runs the same lint → type-check → test steps on every PR, with the coverage floors. Keep this section up to date.
