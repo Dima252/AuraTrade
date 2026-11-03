@@ -1,4 +1,4 @@
-"""The job schedule (README §2, §3), all America/New_York, weekdays.
+"""The job schedule (spec §2, §3), all America/New_York, weekdays.
 
 The single source for the runner (the evening chain), the scheduler stack , the
 `watchdog`'s expected heartbeats and the local stand-in `scripts/local_session.py`.
@@ -54,7 +54,7 @@ def successor(job: str) -> str | None:
 class Close(StrEnum):
     """Which sessions a slot belongs to. A scheduler can't follow the calendar, so every slot
     fires every weekday; this says which sessions the `watchdog` expects its heartbeat on
-    (`execute_close` at 15:40 is after a half day's close: no trades then, README §4)."""
+    (`execute_close` at 15:40 is after a half day's close: no trades then, spec §4)."""
 
     ANY = "any"
     REGULAR = "regular"
@@ -120,7 +120,7 @@ _DAY_SLOTS: tuple[Slot, ...] = (
 
 
 def weekday_slots(chain_wait_minutes: int) -> tuple[Slot, ...]:
-    """The weekday schedule (README §3). Each chained job after `post_market` fires from its
+    """The weekday schedule (spec §3). Each chained job after `post_market` fires from its
     fallback start through its deadline (fallback + `jobs.chain_wait_minutes`), where a run
     without a successful predecessor fails closed."""
     head, *rest = EVENING_CHAIN

@@ -1,14 +1,14 @@
 # Every trading threshold lives here (CLAUDE.md §6), loaded into `auratrade.config.RiskConfig`.
-# The portfolio manager's values are under `portfolio:` (README §5.4, §6-§8).
+# The portfolio manager's values are under `portfolio:` (spec §5.4, §6-§8).
 # Unknown keys are rejected. The hash of the validated values is logged with every job run,
 # so a change here is visible in every log line that follows it.
 #
 # Fractions are of equity (0.01 = 1%). Windows count sessions, never calendar days.
 
-data:  # README §4
+data:  # spec §4
   macro_stale_sessions: 2
 
-ingest:  # README §5.1, §10; see auratrade.ingest
+ingest:  # spec §5.1, §10; see auratrade.ingest
   bar_history_sessions: 504          # 2 years of the ETF list in Postgres; older bars in Parquet
   split_close_tolerance: 0.02        # re-fetched overlap bar moved > 2%: re-fetch the window
   outliers:                          # NVDA high 195.95 on 2024-06-10 (true ~122), #25
@@ -27,17 +27,17 @@ ingest:  # README §5.1, §10; see auratrade.ingest
   db_size_limit_mb: 512              # Neon free tier
   db_size_alert_fraction: 0.70
 
-history:  # README §5.1; the backtest's history backfill (scripts/backfill.py longhistory)
+history:  # spec §5.1; the backtest's history backfill (scripts/backfill.py longhistory)
   start: 2016-01-04                  # the first session; Alpaca SIP daily bars begin here
   workers: 8                         # concurrent requests, under Alpaca's 200 a minute
 
-jobs:  # README §2
+jobs:  # spec §2
   chain_wait_minutes: 30
   duration_alert_minutes: 10
   stale_running_minutes: 20
   watchdog_grace_minutes: 15
 
-regime:  # README §5.2; a fact for the LLM, no rule reads it (#27)
+regime:  # spec §5.2; a fact for the LLM, no rule reads it (#27)
   indexes: [SPY, QQQ]                # both for +1, either for -1; distribution counted per index
   index_trend:
     short_sma: 50
@@ -70,33 +70,33 @@ regime:  # README §5.2; a fact for the LLM, no rule reads it (#27)
     no_ftd_sessions: 10              # CORRECTION -> EARLY_UPTREND (no_ftd) after 10 sessions >= +2
     no_ftd_min_score: 2
     early_uptrend_max_distribution: 6    # since entering EARLY_UPTREND, higher index count (kept at 6, #27)
-  crisis:  # the crisis override in the regime the Portfolio Manager sees (README §5.2)
+  crisis:  # the crisis override in the regime the Portfolio Manager sees (spec §5.2)
     vix_ratio_above: 1.0             # VIX/VIX3M > 1.0 ...
     vix_ratio_sessions: 2            # ... for >= 2 sessions
     index: SPY
     index_drop: 0.04                 # SPY -4% in a session: that session and the next
   replay_warmup_sessions: 252        # a replay starts this many sessions before its first label
 
-execution:  # README §5.6; see auratrade.execution
+execution:  # spec §5.6; see auratrade.execution
   decision_price:                    # #23
     trade_max_age_seconds: 120       # the last IEX trade if <= 2 minutes old ...
     quote_max_age_seconds: 60        # ... else the quote midpoint if <= 1 minute old ...
     max_spread: 0.02                 # ... with a spread <= 2% of the midpoint (provisional)
   marketable_limit_slippage: 0.005   # a marketable sell limit 0.5% below the decision price
-  sell_wait_seconds: 30              # README §5.6.2: re-price once after ~30 s, then market
+  sell_wait_seconds: 30              # spec §5.6.2: re-price once after ~30 s, then market
   market_order_wait_seconds: 30
   buy_wait_seconds: 30               # a rebalance's buy works this long; the rest is cancelled
   fill_poll_seconds: 2
   call_attempts: 3                   # an unanswered order call is retried with the same id
-  lock_wait_alert_seconds: 120       # README §5.6.5: a job waiting > 2 minutes alerts
+  lock_wait_alert_seconds: 120       # spec §5.6.5: a job waiting > 2 minutes alerts
   lock_wait_max_seconds: 480         # then fails (Lambda retries it), inside Lambda's 15 min
   lock_idle_timeout_minutes: 10      # backstop for a frozen holder; longer than any order section
 
-charts:  # README §5.4: the Portfolio Manager's get_chart; see auratrade.charts. Image tokens ~ width x height / 750.
+charts:  # spec §5.4: the Portfolio Manager's get_chart; see auratrade.charts. Image tokens ~ width x height / 750.
   daily_sessions: 252                # 1 year
   daily_width: 800
   daily_height: 600
-  daily_averages:                    # the 10/21/50/150/200 of the README
+  daily_averages:                    # the chart's moving averages
     10-day SMA: {kind: SMA, window: 10}
     21-day EMA: {kind: EMA, window: 21}
     50-day SMA: {kind: SMA, window: 50}
@@ -104,7 +104,7 @@ charts:  # README §5.4: the Portfolio Manager's get_chart; see auratrade.charts
     200-day SMA: {kind: SMA, window: 200}
   dpi: 100
 
-portfolio:  # README §5.4, §6-§8; the backtest's rules: docs/backtests/portfolio-preregistration.md
+portfolio:  # spec §5.4, §6-§8; the backtest's rules: docs/backtests/portfolio-preregistration.md
   satellite_share: 0.20              # the LLM's part of equity; the core is the rest
   sma_months: 10                     # the trend: month-end total-return values against their 10-month SMA
   buffer: 0.02                       # DOWN below SMA x 0.98, UP above SMA x 1.02; between them the state stays
@@ -159,7 +159,7 @@ portfolio:  # README §5.4, §6-§8; the backtest's rules: docs/backtests/portfo
     blind_max_flips_per_year: 4
     blind_max_halt_share: 0.30
 
-llm:  # README §9; see auratrade.llm.client. The model and its effort are settings (PM_MODEL, PM_EFFORT).
+llm:  # spec §9; see auratrade.llm.client. The model and its effort are settings (PM_MODEL, PM_EFFORT).
   max_tokens: 16000                  # per response, thinking included; non-streaming stays under the SDK's timeout
   max_turns: 6                       # tool rounds in one decision; the last must answer
   request_timeout_seconds: 300       # one attempt; the job's deadline cuts it shorter
@@ -171,7 +171,7 @@ llm:  # README §9; see auratrade.llm.client. The model and its effort are setti
     claude-opus-5: {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}
     claude-opus-4-8: {input: 5.00, output: 25.00, cache_write: 6.25, cache_read: 0.50}
 
-portfolio_manager:  # README §5.4: the facts the Portfolio Manager sees and its tools
+portfolio_manager:  # spec §5.4: the facts the Portfolio Manager sees and its tools
   return_sessions: {1m: 21, 3m: 63, 6m: 126, 12m: 252}   # each satellite ETF's returns
   volatility_sessions: 63            # its realized volatility, annualized
   sma_sessions: 200                  # its distance from this moving average
@@ -183,7 +183,7 @@ portfolio_manager:  # README §5.4: the facts the Portfolio Manager sees and its
   dry_run_equity: 100000             # the simulated book's and the twin's start (#31); the paper account's too
   deadline: "12:00"                  # ET on E: no valid decision by then holds (#6)
   headline_sessions: 5               # the headlines in the facts: from this many sessions back
-  scorecard:                         # README §5.5: each decision scored against the twin
+  scorecard:                         # spec §5.5: each decision scored against the twin
     flat_band: 0.01                  # an expectation within ±1 point says "level with SPY"; right if the outcome is too
     size_factor: 2.0                 # the size is right when the outcome is within 2x of the expectation, either way
     bootstrap_months: 24             # the headline's interval from this many complete months

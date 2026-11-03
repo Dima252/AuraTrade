@@ -1,4 +1,4 @@
-"""`stop_guard` (every 5 minutes, 09:35-16:00; README §3, §5.6.1): the invariant between jobs.
+"""`stop_guard` (every 5 minutes, 09:35-16:00; spec §3, §5.6.1): the invariant between jobs.
 
     uv run python -m auratrade.jobs.stop_guard --dry-run
 
@@ -11,7 +11,7 @@ between "reduce the stop" and "sell"), and alerts if the lock has been held long
 server-side backstop.
 
 It is a quiet job: the runner records it only when it repaired or failed, so the database is
-touched only then (README §12, Neon compute).
+touched only then (spec §12, Neon compute).
 """
 
 from __future__ import annotations

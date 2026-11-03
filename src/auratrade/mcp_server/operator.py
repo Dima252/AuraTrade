@@ -1,4 +1,4 @@
-"""The operator tools (README §5.10): the database, the broker and the logs, read only.
+"""The operator tools (spec §5.10): the database, the broker and the logs, read only.
 
 Each takes an open connection (the server's engine is read-only, `sources.read_only_engine`)
 and returns plain JSON: dates as ISO strings, non-finite numbers as null. No order ids, keys

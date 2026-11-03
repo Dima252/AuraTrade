@@ -1,11 +1,11 @@
-"""The portfolio manager's evening steps on the database (README §5.3-§5.5, #31).
+"""The portfolio manager's evening steps on the database (spec §5.3-§5.5, #31).
 
 - **The funds' bars** (split-adjusted and total-return, free Alpaca calls) for the core funds
   and the satellite list, from ``history_sessions`` before the trial's start to T.
 - **The books:** the twin (the rules on the whole account), SPY bought and held, and the book
   itself (its decided targets replayed: in `dry_run` the account, #31; on `paper` the
   like-for-like return beside the paper fills), all through `sim/portfolio.py` from the trial's
-  first R, written whole to `twin_book` each evening (`simulate`), with the scorecard (README
+  first R, written whole to `twin_book` each evening (`simulate`), with the scorecard (spec
   §5.5, `journal/portfolio_scorecard.py`) in each month's `portfolio_journal` row; on `paper`
   the row's results also carry the account's own month (`paper`).
 - **On R** (`allocate`): the trend, the cap and the book's halt from the same runs (ranked at
@@ -83,7 +83,7 @@ DRY_RUN_NOTE = (
 )
 PAPER_NOTE = (
     "paper: the account is the paper broker's. Paper fills are optimistic, so the scorecard "
-    "compares your decisions replayed through the simulator with the twin's (README §5.5)."
+    "compares your decisions replayed through the simulator with the twin's (spec §5.5)."
 )
 
 
@@ -315,7 +315,7 @@ def paper_months(
     conn: Connection, card: Scorecard, funds: Sequence[str]
 ) -> dict[date, dict[str, Any]]:
     """The paper account over each scored month (`post_market`'s snapshots at its E and its
-    end, before and after the estimated tax) and its fills on E (README §5.5: the paper fills
+    end, before and after the estimated tax) and its fills on E (spec §5.5: the paper fills
     reported beside the sim return). A month without both snapshots has no entry."""
     days = {d for p in card.periods for d in (p.session, p.end)}
     snaps = {

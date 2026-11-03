@@ -1,4 +1,4 @@
-"""The public dashboard's snapshot (README §5.8, #35): one allow-listed JSON file.
+"""The public dashboard's snapshot (spec §5.8, #35): one allow-listed JSON file.
 
 Written by `simulate` each evening, once the day's twin exists, to ``public/snapshot.json`` in
 the private storage bucket and, on AWS, to ``data/snapshot.json`` in the site's bucket, where

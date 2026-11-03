@@ -1,6 +1,6 @@
 """The bar shape every indicator reads.
 
-Bars are daily, split-adjusted (README §5.1), oldest first, one per session with no gaps for
+Bars are daily, split-adjusted (spec §5.1), oldest first, one per session with no gaps for
 closed days. Volume should already be half-day normalized where it is compared across sessions
 (``volume.normalize_session_volumes``).
 """

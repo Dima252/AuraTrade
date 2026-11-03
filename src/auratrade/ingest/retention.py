@@ -1,8 +1,8 @@
-"""Retention (README §10): keep Neon's free tier under its 0.5 GB.
+"""Retention (spec §10): keep Neon's free tier under its 0.5 GB.
 
 - `daily_bars` older than the `bar_history_sessions` window move to Parquet, then leave Postgres.
   The portfolio's tables, `llm_decisions` among them, are kept forever: one decision a month is
-  the validation record (README §10).
+  the validation record (spec §10).
 - The database size is reported every evening, with an alert from `db_size_alert_fraction` of
   the limit.
 """

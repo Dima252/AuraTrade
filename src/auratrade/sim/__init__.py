@@ -1,1 +1,1 @@
-"""The one fill simulator and fake broker (README §13, #11)."""
+"""The one fill simulator and fake broker (spec §13, #11)."""

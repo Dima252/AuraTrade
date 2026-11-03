@@ -1,6 +1,6 @@
 # AuraTrade: the plan
 
-What is built, what is left, and how to work on it. The system itself is specified in the [README](../README.md); the builder's rules are in [CLAUDE.md](../CLAUDE.md).
+What is built, what is left, and how to work on it. The system itself is specified in [the specification](specification.md); the builder's rules are in [CLAUDE.md](../CLAUDE.md).
 
 Tasks marked 👤 need you (accounts, approvals, deploys, money).
 
@@ -8,13 +8,13 @@ Tasks marked 👤 need you (accounts, approvals, deploys, money).
 
 1. **Merge the previous task's branch into `main` first.** Its box is ticked on that branch, so until it's merged the next session sees the task as open.
 2. Open a new Claude Code chat in this folder (`CLAUDE.md` loads automatically) and say: **"Take the next task from the plan."**
-3. Claude names the task, reads the README sections it touches, builds and verifies it against its acceptance criteria, and ticks the box.
+3. Claude names the task, reads the spec sections it touches, builds and verifies it against its acceptance criteria, and ticks the box.
 
 ## Where things stand
 
 **The system is built and running on paper.** Deployed on AWS on 2026-10-28 against a $100,000 Alpaca paper account; the first trend reading was R 2026-10-30, the first rebalance E 2026-11-02. The public dashboard is at [auratrade.dev](https://auratrade.dev).
 
-| Area | Built | README |
+| Area | Built | Spec |
 |---|---|---|
 | The backtest | The pre-registered test of the twin on 1926-2026: **passed** (+9.2% a year after tax against +8.7%, max drawdown 68% against 85%) | §15, #7, #8 |
 | Data | The market calendar and its cross-check; the evening ingest of the ETF list (bars, corporate actions, VIX/VIX3M, FRED); the long history for the backtest | §4, §5.1 |
@@ -29,13 +29,13 @@ Tasks marked 👤 need you (accounts, approvals, deploys, money).
 
 ## Open tasks
 
-- [ ] **6.1 👤 Three monthly rebalances unattended.** The trial runs; check each E: the fills, SSO's stop at the broker, that evening's tax lots and snapshot. The carried checks, each once: the stop hand check on SSO (a stop deleted at the broker is replaced by `stop_guard` within one run), the watchdog and the dead-man's switch (a missed heartbeat alerts; a stopped watchdog alerts from healthchecks.io), and the month's AWS cost and Neon compute. **Accept:** three rebalances executed or correctly blocked, README §15's operations criteria met.
+- [ ] **6.1 👤 Three monthly rebalances unattended.** The trial runs; check each E: the fills, SSO's stop at the broker, that evening's tax lots and snapshot. The carried checks, each once: the stop hand check on SSO (a stop deleted at the broker is replaced by `stop_guard` within one run), the watchdog and the dead-man's switch (a missed heartbeat alerts; a stopped watchdog alerts from healthchecks.io), and the month's AWS cost and Neon compute. **Accept:** three rebalances executed or correctly blocked, spec §15's operations criteria met.
 - [x] **6.2 👤 Deploy the sweep of 2026-10-31.** *(Done 2026-10-31: the dropped data saved locally first (`var/backup-0013/`); `paper` and `dev` at 0013, their models matching the schema; the regime replayed (`paper` to 10-30, `dev` to 10-27, its last bars); `AuraTradePaper` deployed, all 10 functions on the new image, a smoke run of `regime` clean; the site's page updated.)* Migration 0013 drops the unused tables and the regime's two empty pillars. On `paper` and `dev`: `alembic upgrade head`, then replay the regime history (`python -m auratrade.jobs.regime --from 2026-09-01 --session <last session>`), then `cdk deploy AuraTradePaper -c trading_mode=paper`, outside market hours ([the runbook](runbook.md#deploying-a-change)). **Accept:** `alembic current` shows 0013 on both branches; the next evening's chain runs clean.
 - [ ] **6.3 👤 The first real snapshot.** After Monday 2 Nov's evening: the dashboard on auratrade.dev checked by eye on real data; then the `dashboard` tool checked in claude.ai (web and phone). **Accept:** both pages draw the trial's first month correctly.
 - [x] **6.4 👤 The remote MCP server's cap.** *(Done 2026-11-01: the account's Lambda concurrency limit raised to 1,000; `AuraTradeMcp` deployed capped, reserved concurrency 1, 999 left unreserved for the trading jobs; `initialize` and `tools/list` answer on the live URL.)* Reserved concurrency 1 on the public server, so a flood can hold one run at most and never delays a trading job; the breaker switches it off at 1,000 calls in an hour (re-armed with `aws lambda put-function-concurrency --function-name auratrade-mcp --reserved-concurrent-executions 1`). **Accept:** deployed capped; the URL can be shared.
 - [ ] **6.5 👤 The presentation.** The codebase, the documentation and the dashboard, for a reader new to the project (an interviewer). The sweep of 2026-10-31 (only the current system, a renumbered decision log) is its first part; the rest to your requirements. Next: the dashboard, to your design. Then the codebase, in this order:
-  1. **A front door:** a one-page overview before the specification (what it is, a diagram, the results, the live dashboard, how to run it, where to look).
-  2. **A code tour and showcase touches:** the 6-8 files worth reading (the guardrails, the trend dial, the stop invariant, the simulator, the Claude client), a CI badge, a dashboard screenshot.
+  1. **A front door:** *(Done 2026-11-03: a short README; the specification moved to `docs/specification.md`, cited as `spec §N`.)* A one-page overview before the specification (what it is, a diagram, the results, the live dashboard, how to run it, where to look).
+  2. **A code tour and showcase touches:** *(Done 2026-11-03, in the README; the screenshot leaves out the return chart until its labels are fixed.)* the 6-8 files worth reading (the guardrails, the trend dial, the stop invariant, the simulator, the Claude client), a CI badge, a dashboard screenshot.
   3. **Names that reflect the design:** `strategies/` holds only the trend dial; `journal/` mixes the books' simulation with the journal; `market_regime.computed_regime`.
   4. **Test doubles out of `src/`:** the fake broker and the in-memory job store into `tests/`.
   5. **Large files split along their seams:** `journal/portfolio.py`, `sim/portfolio.py`, `config.py`.
@@ -45,7 +45,7 @@ Tasks marked 👤 need you (accounts, approvals, deploys, money).
 ## Ground rules
 
 - **Branching:** `main` is always deployable. Every change is a branch → PR → CI green → merge.
-- **Definition of done:** code + tests + `mypy --strict` + ruff clean + the README updated if behaviour changed (and its decision log, with the reason).
+- **Definition of done:** code + tests + `mypy --strict` + ruff clean + the spec updated if behaviour changed (and its decision log, with the reason).
 - **Tests:** pure logic on hand-built data with known answers; recorded HTTP fixtures, never a live or paid call in CI; the order layer's chaos tests against the fake broker. **CI enforces at least 95% branch coverage overall, and 100% on `guardrails/`, `core_allocation`, `tax/`, `calendar/rebalance.py`, `journal/portfolio_scorecard.py` and `execution/rebalance.py`.**
 - **Every job runs locally** with `--session YYYY-MM-DD --dry-run` before it is deployed.
 - **No secrets in git:** `.env` / `.env.paper` locally (`.env.example` committed), SSM Parameter Store on AWS.

@@ -13,14 +13,15 @@ AuraTrade is an autonomous **portfolio manager** that aims to beat the S&P 500 o
 
 | Document | What it answers | Rule |
 |---|---|---|
-| [README.md](README.md) | **What** the system does: every component, rule, threshold and table | The specification. Code must match it. |
-| README §16 "Decision log" | **Why** things are the way they are: each decision in force, with its reason (#1–#39) | Don't reopen a logged decision unless the user asks. **The design is frozen (#12):** don't start or propose another design review; changes come only from findings in data (§5) or the user. |
+| [docs/specification.md](docs/specification.md) ("the spec") | **What** the system does: every component, rule, threshold and table | Code must match it. Cited as `spec §N`. |
+| [README.md](README.md) | The overview for a reader new to the project: what it is, the results, the code tour, how to run it | Keep its facts in step with the spec. |
+| spec §16 "Decision log" | **Why** things are the way they are: each decision in force, with its reason (#1–#39) | Don't reopen a logged decision unless the user asks. **The design is frozen (#12):** don't start or propose another design review; changes come only from findings in data (§5) or the user. |
 | [docs/execution-plan.md](docs/execution-plan.md) | **What is left**, in order, with acceptance criteria; the accounts and environment | Work strictly in its order. |
 | [docs/runbook.md](docs/runbook.md) | What to do for each alert, and how to deploy a change | Keep it current with the alerts the code sends. |
-| `docs/spikes/*.md` | The findings from data the design rests on | A new finding that contradicts the README goes to the user first (§5). |
+| `docs/spikes/*.md` | The findings from data the design rests on | A new finding that contradicts the spec goes to the user first (§5). |
 | `docs/backtests/` | The pre-registration and the scored run (passed, #8) | Records: never re-run, never edited except to fix references. |
 
-If code and README disagree, the README wins until the user approves a change. Then update the README (and the decision log) in the same PR.
+If code and the spec disagree, the spec wins until the user approves a change. Then update the spec (and the decision log) in the same PR.
 
 ## 3. Hard rules: never break these
 
@@ -36,36 +37,36 @@ If code and README disagree, the README wins until the user approves a change. T
 
 1. **Find the current task:** take the first unchecked task in `docs/execution-plan.md`. Say which task you're starting.
    - First check `git branch` for an unmerged `phase-*` branch. Its task may be done and ticked there but not on `main`. If there is one, ask the user to merge it, or branch from it, before starting.
-2. **Read** the matching README sections and the task's acceptance criteria before writing code.
+2. **Read** the matching spec sections and the task's acceptance criteria before writing code.
 3. **Branch:** `phase-<n>/<short-task-name>`, e.g. `phase-6/site-domain`.
 4. **Build in small steps** with tests alongside. Run the checks (§7) before saying anything is done.
-5. **Definition of done:** code + tests passing + `ruff` clean + `mypy` clean + the README updated if behaviour changed + the task's box ticked + a short summary to the user of what was built, what was verified and what wasn't.
+5. **Definition of done:** code + tests passing + `ruff` clean + `mypy` clean + the spec updated if behaviour changed + the task's box ticked + a short summary to the user of what was built, what was verified and what wasn't.
 6. **One task per session is fine.** Prefer finishing and verifying one task over starting several.
-7. **Ask the user** when a decision isn't covered by the README, the decision log or this file. Don't guess on anything involving money, orders or risk.
+7. **Ask the user** when a decision isn't covered by the spec, the decision log or this file. Don't guess on anything involving money, orders or risk.
 
 ## 5. When reality contradicts the design
 
-When data (a vendor's behaviour, a paper fill, a backtest) contradicts the README:
+When data (a vendor's behaviour, a paper fill, a backtest) contradicts the spec:
 1. Stop building on that assumption.
 2. Write the finding in `docs/spikes/<name>.md` (what was expected, what happened, the evidence).
 3. Propose 1–2 workarounds to the user with a recommendation.
-4. After approval, update the README, the decision log and the plan, then continue.
+4. After approval, update the spec, the decision log and the plan, then continue.
 
 ## 6. Code conventions
 
-- **Python 3.13**, managed with **uv**; `src/` layout (`src/auratrade/`), structure as in README §13.
+- **Python 3.13**, managed with **uv**; `src/` layout (`src/auratrade/`), structure as in spec §13.
 - **Typing:** full type hints; `mypy --strict` on `src/`, `scripts/`, `backtest/` and `infra/`. Pydantic v2 for config, API payloads and LLM schemas.
 - **Pure logic is pure:** indicators, the regime, the trend dial, the guardrails, the rebalance's orders, the tax book and the scorecard are pure functions with no I/O, unit-tested on hand-built data with known answers. The guardrails and the portfolio's pure layer need 100% branch coverage (CI enforces it).
 - **One simulator:** the backtest, the twin, the book's replay, the scorecard and the replay tests all go through `sim/portfolio.py` on `sim/fills.py`, which call the live pure functions (#11). Never write a second fill model.
-- **The backtest follows README §15 and its pre-registration** (`docs/backtests/portfolio-preregistration.md`): the long history and the synthesized leveraged fund, the fill model, the Israeli tax model, no tuning, a blind check then one scored run, comparisons reported and never adopted (#7). It has run (#8) and is never re-run.
+- **The backtest follows spec §15 and its pre-registration** (`docs/backtests/portfolio-preregistration.md`): the long history and the synthesized leveraged fund, the fill model, the Israeli tax model, no tuning, a blind check then one scored run, comparisons reported and never adopted (#7). It has run (#8) and is never re-run.
 - **Time:** store UTC; compute in `America/New_York`; timezone-aware datetimes only. **Count trading sessions, never calendar days** (use the calendar helpers, never `timedelta(days=...)` for market windows).
 - **Money and prices:** round order prices to the valid tick ($0.01 for prices ≥ $1). Live share counts are integers, floored; the backtest trades dollar amounts (pre-registration §3.5).
 - **Config:** every threshold lives in `config/risk.yaml` (typed and hashed), never hard-coded.
 - **Jobs:** each job in `src/auratrade/jobs/` runs via the shared runner (calendar guard, heartbeat, logging, alerts) and is runnable locally: `uv run python -m auratrade.jobs.<job> --session YYYY-MM-DD --dry-run`.
 - **HTTP:** httpx + tenacity, with rate limiting per vendor. **Logging:** structlog, JSON, no secrets.
-- **DB:** SQLAlchemy 2.0 + Alembic. Every schema change is a migration. Mind the Neon 0.5 GB limit (retention in README §10).
-- **Claude API:** use the official `anthropic` SDK. Model `claude-opus-5-5`, adaptive thinking with explicit `effort`, structured outputs, prompt caching, refusal handling (README §9). Load the `claude-api` skill before writing LLM code.
-- **Comments** explain *why*, not *what*, and describe the code as it is: no build history (task numbers, earlier designs). Cite the README by section and the decision log by number (`#18`).
+- **DB:** SQLAlchemy 2.0 + Alembic. Every schema change is a migration. Mind the Neon 0.5 GB limit (retention in spec §10).
+- **Claude API:** use the official `anthropic` SDK. Model `claude-opus-5-5`, adaptive thinking with explicit `effort`, structured outputs, prompt caching, refusal handling (spec §9). Load the `claude-api` skill before writing LLM code.
+- **Comments** explain *why*, not *what*, and describe the code as it is: no build history (task numbers, earlier designs). Cite the spec by section and the decision log by number (`#18`).
 - Match the style of surrounding code.
 
 ## 7. Commands
@@ -118,7 +119,7 @@ CI (`.github/workflows/ci.yml`) runs the same lint → type-check → test steps
 | **Ranking / execution session (R / E)** | R: the last session of each month, when the trend is read. E: the next full session, when the book trades at 15:40 |
 | **Core / satellite** | The satellite (20%): the LLM's weights over the approved ETF list. The core (80%): SPY / SSO / BIL sized so the book, with the satellite at its neutral, is at the rule level plus the shift: core level = (level − 0.2) / 0.8 (#4) |
 | **Neutral** | The satellite all in SPY with no shift: the book is then exactly the twin. Tilts are scored against it |
-| **Trend state** | UP or DOWN, from the month-end total-return value against its 10-month SMA with a ±2% buffer (README §6) |
+| **Trend state** | UP or DOWN, from the month-end total-return value against its 10-month SMA with a ±2% buffer (spec §6) |
 | **Rule level** | The book's S&P exposure the rules give: 1.3x UP, 0.5x DOWN, at most 1.0x while capped or halted |
 | **Shift** | The LLM's change to the rule level: ±0.2x, never above 1.5x, downward only while DOWN, capped or halted |
 | **Volatility cap** | SPY's 21-session realized volatility above 25% a year on R → at most 1.0x |

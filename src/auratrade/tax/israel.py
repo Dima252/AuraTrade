@@ -1,4 +1,4 @@
-"""The Israeli tax model (README §5.7; #3; `docs/backtests/portfolio-preregistration.md` §3.8).
+"""The Israeli tax model (spec §5.7; #3; `docs/backtests/portfolio-preregistration.md` §3.8).
 
 Pure: no I/O. The backtest, the twin and the live journal keep one `TaxBook` each.
 
@@ -7,7 +7,7 @@ Pure: no I/O. The backtest, the twin and the live journal keep one `TaxBook` eac
 - **The year's tax:** ``rate`` on the year's net realized gains less the loss carried in; a net
   loss is carried forward without limit (against gains only). ``rate`` on the year's income
   (dividends and interest), which losses don't offset.
-- Nominal USD throughout: a simplification of Israel's real gains in shekels (README §17).
+- Nominal USD throughout: a simplification of Israel's real gains in shekels (spec §17).
 """
 
 from __future__ import annotations
@@ -181,7 +181,7 @@ class TaxBook:
     ) -> float:
         """The tax owed if every lot were sold at ``values`` (each symbol's market value) now:
         the year's tax so far, the sale's and the pending income's. What "after the estimated
-        tax" takes off equity (README §5.5). A closed year has paid its tax, so the sale falls
+        tax" takes off equity (spec §5.5). A closed year has paid its tax, so the sale falls
         in the next."""
         missing = sorted(set(self._lots) - values.keys())
         if missing or pending_income < 0:

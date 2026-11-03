@@ -1,4 +1,4 @@
-"""The order desk's sequences against the fake broker (README §5.7)."""
+"""The order desk's sequences against the fake broker (spec §5.7)."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""The stop invariant (CLAUDE.md §3.5, README §5.6), checked from broker state alone (pure).
+"""The stop invariant (CLAUDE.md §3.5, spec §5.6), checked from broker state alone (pure).
 
 Every stopped position's live GTC sell stops together cover its full quantity, each at or above
 the fund's level (`fund_stops`), and a partly filled buy counts as unprotected (#18). The

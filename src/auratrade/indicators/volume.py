@@ -8,7 +8,7 @@ from auratrade.indicators.series import check_same_length, check_window
 def normalize_session_volume(
     volume: float, session_minutes: int, full_session_minutes: int
 ) -> float:
-    """Scale a short session's volume to a full-session equivalent (README §4).
+    """Scale a short session's volume to a full-session equivalent (spec §4).
 
     ``volume * 390 / 210`` on a 13:00 early close, so half days don't drag down averages or read
     as light volume.

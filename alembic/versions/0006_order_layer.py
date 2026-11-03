@@ -1,4 +1,4 @@
-"""The order layer (task 1.7, README §5.7, §10).
+"""The order layer (task 1.7, spec §5.7, §10).
 
 signals (the queue), positions, orders (the broker mirror), trade_journal and
 account_snapshots; position_plans and position_events now reference positions.

@@ -1,11 +1,11 @@
-"""The facts the Portfolio Manager sees (README §5.4; #4), pure.
+"""The facts the Portfolio Manager sees (spec §5.4; #4), pure.
 
 The jobs  gather them; this module computes what can be computed (each satellite
 ETF's facts, each holding's tax if sold now, the tax budget left, the rule level, the band,
 the twin) and renders them as the decision's user message:
 - every number comes from code, so the LLM interprets facts and never derives a price;
 - third-party text (headlines) goes in an ``<untrusted_headlines>`` block as JSON strings, with
-  ``<`` and ``>`` escaped so no headline can close the block (README §9).
+  ``<`` and ``>`` escaped so no headline can close the block (spec §9).
 """
 
 from __future__ import annotations
@@ -35,7 +35,7 @@ from auratrade.tax.israel import Lot, fifo_gain
 
 
 class EventKind(StrEnum):
-    """The events the Portfolio Manager runs on between rebalances (README §5.4)."""
+    """The events the Portfolio Manager runs on between rebalances (spec §5.4)."""
 
     HALT = "HALT"  # the drawdown halt turned on
     STOP_FILLED = "STOP_FILLED"  # the leveraged fund's stop filled
@@ -158,7 +158,7 @@ def _returns(closes: Sequence[float]) -> list[float]:
 
 
 def context(facts: PmFacts, *, increases_allowed: bool) -> PortfolioContext:
-    """The guardrails' view of the facts. An event only reduces risk (README §5.4), so it
+    """The guardrails' view of the facts. An event only reduces risk (spec §5.4), so it
     blocks increases as the kill switch does."""
     a = facts.account
     return PortfolioContext(

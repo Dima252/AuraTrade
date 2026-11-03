@@ -1,4 +1,4 @@
-"""The nightly backup (README §10): the kept-forever tables exported to storage by `post_market`.
+"""The nightly backup (spec §10): the kept-forever tables exported to storage by `post_market`.
 
 Neon's free tier keeps a short restore window, and these tables are the validation record, so
 each night writes one Parquet file per table: `backup/<table>/<session>.parquet`. S3's lifecycle
@@ -20,7 +20,7 @@ from sqlalchemy import Connection, MetaData, Table, inspect, select
 from auratrade.storage import ObjectStore
 
 BACKUP_PREFIX = "backup"
-# The tables README §10 keeps forever: the portfolio's (the validation record) and the order
+# The tables spec §10 keeps forever: the portfolio's (the validation record) and the order
 # layer's. Bars have their own retention (Parquet archives), and job_runs is operational.
 KEPT_FOREVER: tuple[str, ...] = (
     "portfolio_targets",

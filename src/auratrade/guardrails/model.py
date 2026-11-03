@@ -1,4 +1,4 @@
-"""What every guardrail returns: a finding per rule that clipped or rejected (README §8).
+"""What every guardrail returns: a finding per rule that clipped or rejected (spec §8).
 
 Findings are recorded with each decision (`llm_decisions`, the journal's `clips`).
 """
@@ -14,10 +14,10 @@ class Outcome(StrEnum):
 
 
 class GuardrailRule(StrEnum):
-    """README §8, one per guardrail row (plus input validation)."""
+    """spec §8, one per guardrail row (plus input validation)."""
 
     INVALID_INPUT = "INVALID_INPUT"
-    # The portfolio manager's (README §8, #5).
+    # The portfolio manager's (spec §8, #5).
     CORE_SHIFT = "CORE_SHIFT"
     """The core level outside the LLM's band."""
     SATELLITE_LIST = "SATELLITE_LIST"

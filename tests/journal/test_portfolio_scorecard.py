@@ -1,4 +1,4 @@
-"""The scorecard (README §5.5) on hand-built books with known answers."""
+"""The scorecard (spec §5.5) on hand-built books with known answers."""
 
 from __future__ import annotations
 

@@ -1,16 +1,16 @@
-"""Operator commands (README §5.9).
+"""Operator commands (spec §5.9).
 
     uv run auratrade kill on        # increases off; resting buy orders cancelled at once
     uv run auratrade kill off       # increases on (a fresh database starts with them off)
     uv run auratrade kill status
     uv run auratrade mismatches     # open reconciliation and corporate-action mismatches
     uv run auratrade resolve 12 --note "DXJ split fixed by hand at the broker"
-    uv run auratrade halt status    # the drawdown halt and its peak (README §7.3)
+    uv run auratrade halt status    # the drawdown halt and its peak (spec §7.3)
     uv run auratrade halt reset     # off, the peak at the broker's equity (after a paper reset)
     uv run auratrade flatten --confirm   # kill switch on, then sell every position (market hours)
 
 The kill switch blocks increases of exposure only; it never touches a protective stop, a sale
-toward a lower target, the halt's sale or reconciliation (README §5.9). `kill on` cancels
+toward a lower target, the halt's sale or reconciliation (spec §5.9). `kill on` cancels
 resting buy orders under the order lock; every order job also checks the flag and cancels any
 that remain. `flatten` is manual only: nothing automatic calls it. It turns the kill switch on
 first, so nothing buys the positions back, and sells the leveraged fund with the sell sequence

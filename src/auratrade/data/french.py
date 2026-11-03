@@ -1,4 +1,4 @@
-"""Kenneth French's data library: the daily US market and T-bill returns from 1926 (README §5.1,
+"""Kenneth French's data library: the daily US market and T-bill returns from 1926 (spec §5.1,
 `docs/backtests/portfolio-preregistration.md` §4.1). Free, no key.
 
 The "Fama/French 3 Factors [Daily]" file is a zipped CSV: a few lines of notes, a header

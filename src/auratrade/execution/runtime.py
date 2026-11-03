@@ -1,4 +1,4 @@
-"""What every order job shares (README §5.6): its dependencies, the order section (lock →
+"""What every order job shares (spec §5.6): its dependencies, the order section (lock →
 reconcile → desk), the stop invariant on the portfolio's funds, and the kill switch.
 
 An order job runs:
@@ -8,7 +8,7 @@ An order job runs:
         ...its own work, through section.desk...
 
 `dry_run` (the default trading mode) reconciles and reports what the invariant would repair,
-and changes no order: only `TRADING_MODE=paper` sends orders (README §14).
+and changes no order: only `TRADING_MODE=paper` sends orders (spec §14).
 """
 
 from __future__ import annotations
@@ -143,7 +143,7 @@ class Section:
 
 @contextmanager
 def order_section(ctx: JobContext, deps: ExecutionDeps) -> Iterator[Section]:
-    """Wait for the order lock, reconcile, and yield a desk (README §5.6.5)."""
+    """Wait for the order lock, reconcile, and yield a desk (spec §5.6.5)."""
     with deps.lock.hold(ctx.job, wait=True):
         yield _section(ctx, deps)
 
@@ -208,7 +208,7 @@ class InvariantReport:
 
 
 def enforce_invariant(section: Section) -> InvariantReport:
-    """Check the funds' stops against the leveraged fund's level; repair what is wrong (README
+    """Check the funds' stops against the leveraged fund's level; repair what is wrong (spec
     §5.6.1). A repair alerts, and the caller blocks increases for the run. Positions outside the
     funds are reconciliation's mismatches: not the portfolio's, left alone."""
     broker, rec, desk = section.deps.broker, section.rec, section.desk
@@ -250,7 +250,7 @@ def enforce_invariant(section: Section) -> InvariantReport:
 
 
 def enforce_kill_switch(section: Section) -> bool:
-    """True when the kill switch is on; it also cancels resting buy orders (README §5.9)."""
+    """True when the kill switch is on; it also cancels resting buy orders (spec §5.9)."""
     with section.deps.engine.connect() as conn:
         flags = read_flags(conn)
     if not flags.trading_enabled and not section.dry_run:

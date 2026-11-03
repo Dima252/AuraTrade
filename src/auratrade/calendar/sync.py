@@ -1,7 +1,7 @@
 """Sync `market_sessions` from Alpaca and cross-check it with `pandas_market_calendars`.
 
 - Alpaca is the authority: its sessions are the rows. A row whose times the library
-  disagrees with is marked `DISAGREE` (no increase of exposure that day, README §4); a date only the
+  disagrees with is marked `DISAGREE` (no increase of exposure that day, spec §4); a date only the
   library has is reported, since Alpaca's "closed" stands.
 - Idempotent: a second run with the same data writes nothing.
 - A synced session missing from Alpaca's new answer (an unscheduled closure) is removed,

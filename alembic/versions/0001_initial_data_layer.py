@@ -1,4 +1,4 @@
-"""Initial data layer (task 1.2, README §10).
+"""Initial data layer (task 1.2, spec §10).
 
 tickers, industry_groups, market_sessions, daily_bars, corporate_actions, macro_series,
 fundamentals, earnings_events, job_runs, system_flags (seeded) and mismatches.

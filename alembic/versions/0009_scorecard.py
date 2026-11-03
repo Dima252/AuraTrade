@@ -1,4 +1,4 @@
-"""The scorecard (task 4.4, README §5.5): twin_book keeps each book's estimated tax at the close
+"""The scorecard (task 4.4, spec §5.5): twin_book keeps each book's estimated tax at the close
 (tax_owed) and a third book, SPY bought and held.
 
 Revision ID: 0009

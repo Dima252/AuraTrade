@@ -1,4 +1,4 @@
-"""The trading stack for one environment (README §12): the portfolio's jobs as Lambda
+"""The trading stack for one environment (spec §12): the portfolio's jobs as Lambda
 functions on one container image, started by EventBridge Scheduler on `jobs.schedule`.
 
 - **Image:** the repo's `Dockerfile`, built and pushed to the CDK asset repository by
@@ -14,7 +14,7 @@ functions on one container image, started by EventBridge Scheduler on `jobs.sche
   covers them.
 - **Storage:** one private bucket for the nightly backup, the bar retention archive and the
   dashboard's snapshot; `simulate` also writes that snapshot, and only it, to the public site's
-  bucket (README §5.8).
+  bucket (spec §5.8).
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ class Function:
     job: str
     memory_mb: int
     timeout_s: int
-    # Lambda's async retries: on for order jobs (README §5.6, plan 1.8), off otherwise.
+    # Lambda's async retries: on for order jobs (spec §5.6, plan 1.8), off otherwise.
     retries: int = 0
     storage: bool = False
     # Writes the dashboard's snapshot: `public/` in storage, `data/snapshot.json` on the site.

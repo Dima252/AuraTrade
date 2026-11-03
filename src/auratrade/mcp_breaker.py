@@ -1,4 +1,4 @@
-"""The remote MCP server's circuit breaker (README §5.10, #38).
+"""The remote MCP server's circuit breaker (spec §5.10, #38).
 
 The server's URL is public, capped at one concurrent run (10 requests a second at most). An
 alarm on its invocations calls this when they look like a flood rather than a conversation: it

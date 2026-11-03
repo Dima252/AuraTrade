@@ -1,5 +1,5 @@
 """The watchlist, the baseline book, the breakout tracker and the scorecard (task 3.7,
-README §5.12, §10).
+spec §5.12, §10).
 
 daily_watchlist (the full scan), baseline_signals (the shadow book), breakout_tracker
 (leadership health) and verdict_outcomes (the Analyst verdict scorecard).

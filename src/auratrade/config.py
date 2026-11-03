@@ -1,4 +1,4 @@
-"""Runtime settings (README §14) and the typed, hashed `config/risk.yaml`.
+"""Runtime settings (spec §14) and the typed, hashed `config/risk.yaml`.
 
 Settings come from the environment (`.env` locally, SSM-backed environment variables in
 AWS). Every trading threshold lives in `risk.yaml`, never in code or the environment.
@@ -64,11 +64,11 @@ class Settings(BaseSettings):
     telegram_bot_token: SecretStr | None = None
     telegram_chat_id: str | None = None
     database_url: SecretStr | None = None
-    # The external dead-man's switch the watchdog pings (README §5.9). The URL is the
+    # The external dead-man's switch the watchdog pings (spec §5.9). The URL is the
     # credential: anyone holding it can ping.
     healthchecks_ping_url: SecretStr | None = None
 
-    # The Portfolio Manager's model and effort (README §9).
+    # The Portfolio Manager's model and effort (spec §9).
     pm_model: str = DEFAULT_MODEL
     pm_effort: Effort = Effort.HIGH
 
@@ -76,7 +76,7 @@ class Settings(BaseSettings):
     storage_local_dir: Path = REPO_ROOT / "var" / "storage"
     storage_s3_bucket: str | None = None
     # The public site's bucket: `simulate` publishes the dashboard's snapshot under `data/`
-    # (README §5.8). Unset (locally), the snapshot stays in storage only.
+    # (spec §5.8). Unset (locally), the snapshot stays in storage only.
     site_s3_bucket: str | None = None
     # Lambda function name for a chained job; `{env}` and `{job}` are substituted.
     job_function_template: str = "auratrade-{env}-{job}"
@@ -148,7 +148,7 @@ class DataConfig(_Strict):
 class OutlierConfig(_Strict):
     """A high (low) is a bad tick when it lies beyond both the bar's open-close body and the
     neighbouring bars' highs (lows) by more than these fractions, or `adr_multiple` times the
-    stock's average daily range over `adr_sessions` if larger (README §5.1, #25)."""
+    stock's average daily range over `adr_sessions` if larger (spec §5.1, #25)."""
 
     min_beyond_body: Positive
     min_beyond_neighbours: Positive
@@ -158,14 +158,14 @@ class OutlierConfig(_Strict):
 
 class MacroIngestConfig(_Strict):
     # The delayed-quote JSON is final once its last trade is this long after the close
-    # (16:15 on a full session, README §5.1 / #26).
+    # (16:15 on a full session, spec §5.1 / #26).
     quote_settle_minutes: PositiveInt
     history_mismatch_tolerance: Annotated[float, Field(ge=0.0)]
     fred_lookback_sessions: PositiveInt
 
 
 class IngestConfig(_Strict):
-    """The evening ingest (README §5.1, §10)."""
+    """The evening ingest (spec §5.1, §10)."""
 
     # Rolling window of bars kept in Postgres (2 years); older bars live in Parquet.
     bar_history_sessions: PositiveInt
@@ -190,7 +190,7 @@ class IngestConfig(_Strict):
 
 
 class HistoryConfig(_Strict):
-    """The Parquet history's backfill for the portfolio's backtest (README §5.1)."""
+    """The Parquet history's backfill for the portfolio's backtest (spec §5.1)."""
 
     # Alpaca's SIP daily bars start on 2016-01-04 (spike 0.3a).
     start: date
@@ -294,7 +294,7 @@ class CrisisConfig(_Strict):
 
 
 class RegimeConfig(_Strict):
-    """The regime classifier and state machine (README §5.2); see `auratrade.regime`."""
+    """The regime classifier and state machine (spec §5.2); see `auratrade.regime`."""
 
     indexes: tuple[str, ...] = Field(min_length=1)
     index_trend: IndexTrendConfig
@@ -328,7 +328,7 @@ class TrailSpec(_Strict):
 
 
 class DecisionPriceConfig(_Strict):
-    """The decision price (README glossary, #23): the last IEX trade if at most
+    """The decision price (spec §4, #23): the last IEX trade if at most
     ``trade_max_age_seconds`` old, else the quote midpoint if at most ``quote_max_age_seconds``
     old with a spread of at most ``max_spread`` of the midpoint."""
 
@@ -338,13 +338,13 @@ class DecisionPriceConfig(_Strict):
 
 
 class ExecutionConfig(_Strict):
-    """The order layer (README §5.6); see ``auratrade.execution``."""
+    """The order layer (spec §5.6); see ``auratrade.execution``."""
 
     decision_price: DecisionPriceConfig
     # A marketable sell limit sits this far below the decision price.
     marketable_limit_slippage: Fraction
     # How long a sale may work before it is re-priced (then sent at market), and how long the
-    # market order gets before the run gives up and leaves it to the next one (README §5.6.2).
+    # market order gets before the run gives up and leaves it to the next one (spec §5.6.2).
     sell_wait_seconds: PositiveInt
     market_order_wait_seconds: PositiveInt
     # A rebalance's buy works this long; what hasn't filled is cancelled.
@@ -353,7 +353,7 @@ class ExecutionConfig(_Strict):
     # Attempts per order call that failed without an answer (a 5xx, a dropped connection),
     # each with the same client_order_id.
     call_attempts: PositiveInt
-    # The single-writer lock (README §5.6.5): an order job alerts after waiting this long and
+    # The single-writer lock (spec §5.6.5): an order job alerts after waiting this long and
     # gives up (fails, so Lambda retries it) after the maximum.
     lock_wait_alert_seconds: PositiveInt
     lock_wait_max_seconds: PositiveInt
@@ -372,7 +372,7 @@ class ExecutionConfig(_Strict):
 
 
 class ChartsConfig(_Strict):
-    """The Portfolio Manager's `get_chart` (README §5.4); see ``auratrade.charts``."""
+    """The Portfolio Manager's `get_chart` (spec §5.4); see ``auratrade.charts``."""
 
     daily_sessions: PositiveInt
     daily_width: PositiveInt
@@ -418,7 +418,7 @@ class PortfolioBacktestConfig(_Strict):
 
 
 class PortfolioConfig(_Strict):
-    """The portfolio manager (README §5.4, §6-§8; decisions #3-#5)."""
+    """The portfolio manager (spec §5.4, §6-§8; decisions #3-#5)."""
 
     satellite_share: Fraction
     sma_months: PositiveInt
@@ -482,7 +482,7 @@ class TokenPrices(_Strict):
 
 
 class LlmConfig(_Strict):
-    """The Claude client (README §9); see ``auratrade.llm.client``."""
+    """The Claude client (spec §9); see ``auratrade.llm.client``."""
 
     max_tokens: PositiveInt
     max_turns: PositiveInt
@@ -496,7 +496,7 @@ class LlmConfig(_Strict):
 
 
 class PmScorecardConfig(_Strict):
-    """The scorecard of the Portfolio Manager's decisions (README §5.5)."""
+    """The scorecard of the Portfolio Manager's decisions (spec §5.5)."""
 
     # An expectation within this of 0 calls the fund level with the market fund; it is right
     # when the outcome is within it too.
@@ -512,7 +512,7 @@ class PmScorecardConfig(_Strict):
 
 
 class PortfolioManagerConfig(_Strict):
-    """The Portfolio Manager's facts and tools (README §5.4)."""
+    """The Portfolio Manager's facts and tools (spec §5.4)."""
 
     # Each satellite ETF's returns, by label, over this many sessions.
     return_sessions: dict[str, PositiveInt] = Field(min_length=1)

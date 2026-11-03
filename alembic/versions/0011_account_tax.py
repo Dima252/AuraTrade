@@ -1,4 +1,4 @@
-"""Live tax lots (task 5.3, README §5.7): account_snapshots carries the account's holdings and
+"""Live tax lots (task 5.3, spec §5.7): account_snapshots carries the account's holdings and
 the estimated tax a sale of everything would owe at the close (tax_owed; NULL when the lots
 couldn't be rebuilt that evening).
 

@@ -1,4 +1,4 @@
-"""Secrets from SSM Parameter Store, for the Lambda functions (README §12).
+"""Secrets from SSM Parameter Store, for the Lambda functions (spec §12).
 
 Locally the settings come from `.env`. In AWS each function's environment names a parameter
 path (`SSM_PARAMETER_PATH=/auratrade/paper/`), and the parameters under it are read once per

@@ -1,4 +1,4 @@
-"""bases: detected bases and IBD base count (task 2.2, README §5.3 / §10).
+"""bases: detected bases and IBD base count (task 2.2, spec §5.3 / §10).
 
 Revision ID: 0002
 Revises: 0001

@@ -205,7 +205,7 @@ def test_no_chain_invoker_only_logs() -> None:
 
 
 class TestSchedule:
-    def test_chain_order_matches_readme(self) -> None:
+    def test_chain_order_matches_the_spec(self) -> None:
         assert [link.job for link in schedule.EVENING_CHAIN] == [
             "post_market",
             "ingest",

@@ -1,7 +1,7 @@
-"""The Portfolio Manager (README §5.4, §9; #4, #6): one decision, from the facts
+"""The Portfolio Manager (spec §5.4, §9; #4, #6): one decision, from the facts
 to enforced targets.
 
-- **The answer** (`PmAnswer`) is the README §9 schema: the core shift, the satellite (or null
+- **The answer** (`PmAnswer`) is the spec §9 schema: the core shift, the satellite (or null
   to hold it), the reasons, the expectations, the tax note. No field is a price.
 - **Tools** read through `PmSources`, which the jobs implement : the ETF facts, a
   chart, news (as untrusted data), the decision history. Only funds on the ETF list are served.

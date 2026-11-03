@@ -1,5 +1,5 @@
-// The public dashboard (README §5.8): reads data/snapshot.json, which `simulate` publishes each
-// evening, and draws it into #dash with chart.js, in the MCP dashboard's layout (README §5.10).
+// The public dashboard (spec §5.8): reads data/snapshot.json, which `simulate` publishes each
+// evening, and draws it into #dash with chart.js, in the MCP dashboard's layout (spec §5.10).
 // Without the file or without JavaScript, the static text in #dash stays. Every value reaches the
 // page through textContent, an SVG attribute or the CSSOM, never as markup or a style attribute
 // (the content-security policy allows neither).

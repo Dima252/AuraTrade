@@ -1,4 +1,4 @@
-"""`execute_open` (09:20, and the 09:31 check run; README §3, §5.6).
+"""`execute_open` (09:20, and the 09:31 check run; spec §3, §5.6).
 
     uv run python -m auratrade.jobs.execute_open --session 2026-10-22 --dry-run
 

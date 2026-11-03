@@ -1,4 +1,4 @@
-"""Ingest (task 1.5, README §5.1).
+"""Ingest (task 1.5, spec §5.1).
 
 bar_corrections (the outlier filter's audit trail); earnings timing provenance, fiscal period
 and headline time; Finnhub's industry as the SIC fallback.

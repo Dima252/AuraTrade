@@ -1,1 +1,1 @@
-"""Market calendar: sessions, early closes, session arithmetic (README §4)."""
+"""Market calendar: sessions, early closes, session arithmetic (spec §4)."""

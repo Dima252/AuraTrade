@@ -25,7 +25,7 @@ def make_store(settings: Settings) -> ObjectStore:
 
 
 def make_site_store(settings: Settings) -> ObjectStore | None:
-    """The public site's `data/` prefix (README §5.8), or None when no site bucket is set."""
+    """The public site's `data/` prefix (spec §5.8), or None when no site bucket is set."""
     if settings.site_s3_bucket is None:
         return None
     import boto3

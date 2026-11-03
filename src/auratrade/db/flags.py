@@ -1,4 +1,4 @@
-"""`system_flags`: the kill switch and the drawdown halt (README §5.9).
+"""`system_flags`: the kill switch and the drawdown halt (spec §5.9).
 
 They block increases of exposure only; nothing here may touch a protective stop or a sale toward
 a lower target.

@@ -56,8 +56,8 @@ jobs:
           AURATRADE_REQUIRE_DB: "1"
         run: uv run pytest --cov --cov-report=term --cov-fail-under=95
 
-      - name: Guardrails coverage (100% branch, README §8)
+      - name: Guardrails coverage (100% branch, spec §8)
         run: uv run coverage report --include="*/auratrade/guardrails/*" --fail-under=100
 
-      - name: Portfolio pure layer coverage (100% branch, README #10)
+      - name: Portfolio pure layer coverage (100% branch, #10)
         run: uv run coverage report --include="*/auratrade/strategies/core_allocation.py,*/auratrade/tax/*,*/auratrade/calendar/rebalance.py,*/auratrade/journal/portfolio_scorecard.py,*/auratrade/execution/rebalance.py" --fail-under=100

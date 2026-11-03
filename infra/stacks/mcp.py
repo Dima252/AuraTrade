@@ -1,4 +1,4 @@
-"""The remote MCP server (README §5.10, #38): the public tools on one Lambda
+"""The remote MCP server (spec §5.10, #38): the public tools on one Lambda
 function with a public URL, for any MCP client (claude.ai's connectors, Claude Desktop, Gemini).
 
 It serves only what the site already shows, so it takes no auth; three things bound what a

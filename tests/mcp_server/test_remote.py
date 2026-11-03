@@ -1,5 +1,5 @@
 """The remote server's Lambda handler: function URL requests through the SDK's own HTTP app
-(README §5.10)."""
+(spec §5.10)."""
 
 import base64
 import json

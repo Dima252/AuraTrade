@@ -92,7 +92,7 @@ def decide(c: ClaudeClient, **kwargs: Any) -> Any:
 # --- the request ------------------------------------------------------------------------------
 
 
-def test_the_request_carries_the_readme_settings() -> None:
+def test_the_request_carries_the_spec_settings() -> None:
     api = Api(fixture("answer"))
     outcome = decide(client(api), tools=[facts_tool()])
     assert outcome.ok

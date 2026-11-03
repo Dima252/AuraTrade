@@ -20,7 +20,7 @@ The book was the core (80%) at the rule level plus the shift, and the satellite 
 - **The twin's own mix (70% SPY, 30% SSO) was out of the satellite's reach:** SPY capped at 10%, SSO forbidden. To match the tested strategy, the LLM had to spend its whole upward shift.
 - **The cost:** in up-trend months a diversified satellite ran about 0.15-0.25x below the twin, roughly 0.5-1 point a year (an equity premium of about 6% over T-bills, up about 70% of the months). The backtest's edge is +0.5 a year after tax (#8). The scorecard would have charged that structural gap to the LLM.
 - **In a down-trend** the satellite could add equity the rules said not to hold: the twin at 0.5x, the book at 0.8 × 0.5 + 20% in QQQ and IWM ≈ 0.6x.
-- **Tax:** a changed target is always traded (the drift band only spares unchanged targets), and every sale of a gain realizes 25%. Nothing in code limited the tax the LLM's changes could realize; README §7.4 left it to the prompt.
+- **Tax:** a changed target is always traded (the drift band only spares unchanged targets), and every sale of a gain realizes 25%. Nothing in code limited the tax the LLM's changes could realize; spec §7.4 left it to the prompt.
 - **Measurement:** with a tracking error of 3-5% a year against the twin, 12 months can't separate skill from luck: a 1-point edge needs decades to show at two standard errors. The latitude rule at month 12 can't rest on returns.
 
 ## The changes (approved)

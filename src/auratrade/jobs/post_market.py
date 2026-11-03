@@ -1,16 +1,16 @@
-"""`post_market` (16:20, the head of the evening chain; README §3, §5.7, §10).
+"""`post_market` (16:20, the head of the evening chain; spec §3, §5.7, §10).
 
     uv run python -m auratrade.jobs.post_market --session 2026-10-22 --dry-run
 
 1. Under the order lock: reconcile, enforce the stop invariant (the market is closed: a missing
    stop is placed to rest for the morning, nothing is sold), and cancel any buy still resting:
-   no buy order rests overnight (README §4).
-2. **The tax lots** (README §5.7): `tax_lots` rebuilt whole from the broker's
+   no buy order rests overnight (spec §4).
+2. **The tax lots** (spec §5.7): `tax_lots` rebuilt whole from the broker's
    activities (`tax.live`); what doesn't add up (a sale beyond the lots, lots that differ from
    the positions, an entry the lots don't apply) goes in the daily report. If the activities
    can't be read, the lots stay as they were and the snapshot's tax is unknown.
 3. The account snapshot (the funds' holdings and the tax a sale of everything would owe) and
-   **the drawdown check** (README §7.3, `execution.halt`): equity at most 75% of its peak turns
+   **the drawdown check** (spec §7.3, `execution.halt`): equity at most 75% of its peak turns
    the halt on, and `execute_close` sells the leveraged fund into the market fund at 15:40 on
    the next session.
 4. The Telegram daily report, and the nightly backup of the kept-forever tables to storage.

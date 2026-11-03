@@ -1,4 +1,4 @@
-"""The bars step of the evening ingest (README §4, §5.1).
+"""The bars step of the evening ingest (spec §4, §5.1).
 
 1. The tracked set is **the ETF list** (`tracked_symbols`): the portfolio's funds, the
    satellite's list and the regime's index ETFs. Each must be an active row in `tickers`; one
@@ -66,7 +66,7 @@ class MissingTickerError(RuntimeError):
 
 
 def tracked_symbols(risk: RiskConfig) -> list[str]:
-    """The ETF list (README §5.1)."""
+    """The ETF list (spec §5.1)."""
     p = risk.portfolio
     return sorted({p.market, p.leveraged, p.cash, *p.satellite_list, *risk.regime.indexes})
 

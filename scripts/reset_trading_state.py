@@ -4,7 +4,7 @@
     uv run python scripts/reset_trading_state.py --env-file .env.paper --apply    # clear
 
 A Neon branch made from `dev` carries `dev`'s orders, mismatches, job runs, account snapshots,
-tax lots and the leveraged fund's stop level. Against a different Alpaca account (README §12)
+tax lots and the leveraged fund's stop level. Against a different Alpaca account (spec §12)
 they would read as mismatches and unprotected positions, and the chain would skip sessions `dev`
 already ran. This deletes them in one transaction and puts the flags back to their seed: **the
 kill switch on** (increases off), the halt off, so the new environment trades only after `auratrade

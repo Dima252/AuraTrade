@@ -6,7 +6,7 @@ import pytest
 from auratrade.config import REPO_ROOT
 from auratrade.mcp_server import docs
 
-README = """# Title
+SPEC = """# Title
 
 ## 5. Components
 
@@ -38,7 +38,7 @@ Limits.
 
 
 def test_sections_run_to_the_next_heading_of_their_level() -> None:
-    found = docs.sections(README)
+    found = docs.sections(SPEC)
 
     assert list(found) == ["5", "5.1", "5.2", "16", "17"]
     assert found["5.1"].title == "Ingest (`ingest`)"
@@ -49,31 +49,31 @@ def test_sections_run_to_the_next_heading_of_their_level() -> None:
 
 
 def test_decisions_by_number() -> None:
-    assert docs.decisions(README) == {1: ("First", "The first one"), 2: ("Second", "A | B")}
-    assert docs.decision(README, 2) == "# Decision #2: Second\n\nA | B"
+    assert docs.decisions(SPEC) == {1: ("First", "The first one"), 2: ("Second", "A | B")}
+    assert docs.decision(SPEC, 2) == "# Decision #2: Second\n\nA | B"
     with pytest.raises(docs.NotFoundError):
-        docs.decision(README, 3)
+        docs.decision(SPEC, 3)
     assert docs.decisions("## 5. Only\n") == {}
 
 
 def test_the_indexes() -> None:
-    assert "- 5.1 Ingest (`ingest`)" in docs.readme_index(README)
-    assert "- #2 Second" in docs.decision_index(README)
+    assert "- 5.1 Ingest (`ingest`)" in docs.spec_index(SPEC)
+    assert "- #2 Second" in docs.decision_index(SPEC)
 
 
 def test_a_section_and_the_decision_log_by_entry() -> None:
-    assert docs.readme_section(README, " 5.2 ").startswith("### 5.2 Regime")
-    assert docs.readme_section(README, "16").startswith("# Decision log")
+    assert docs.spec_section(SPEC, " 5.2 ").startswith("### 5.2 Regime")
+    assert docs.spec_section(SPEC, "16").startswith("# Decision log")
     with pytest.raises(docs.NotFoundError):
-        docs.readme_section(README, "9")
+        docs.spec_section(SPEC, "9")
 
 
-def test_the_real_readme_parses() -> None:
-    readme = docs.read(docs.README)
+def test_the_real_spec_parses() -> None:
+    spec = docs.read(docs.SPEC)
 
-    assert "MCP server" in docs.sections(readme)["5.10"].title
-    assert docs.decisions(readme)[37][0] == "The MCP server: strictly read-only"
-    assert len(docs.decisions(readme)) >= 39
+    assert "MCP server" in docs.sections(spec)["5.10"].title
+    assert docs.decisions(spec)[37][0] == "The MCP server: strictly read-only"
+    assert len(docs.decisions(spec)) >= 39
 
 
 def test_a_missing_file(tmp_path: Path) -> None:
@@ -86,9 +86,9 @@ def test_the_documents_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> 
     monkeypatch.setenv("AURATRADE_DOCS_ROOT", str(tmp_path))
     try:
         moved = importlib.reload(docs)
-        assert tmp_path / "README.md" == moved.README
+        assert tmp_path / "docs" / "specification.md" == moved.SPEC
         assert tmp_path / "docs" / "backtests" / "portfolio.md" == moved.BACKTEST
     finally:
         monkeypatch.delenv("AURATRADE_DOCS_ROOT")
         importlib.reload(docs)
-    assert docs.README == REPO_ROOT / "README.md"
+    assert docs.SPEC == REPO_ROOT / "docs" / "specification.md"

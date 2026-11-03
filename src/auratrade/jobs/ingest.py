@@ -1,4 +1,4 @@
-"""`ingest` (evening chain, after `post_market`; README §3, §5.1): the data for session T.
+"""`ingest` (evening chain, after `post_market`; spec §3, §5.1): the data for session T.
 
     uv run python -m auratrade.jobs.ingest --session 2026-10-15 --dry-run
     uv run python -m auratrade.jobs.ingest --direct --session 2026-10-15
@@ -8,7 +8,7 @@ The first form goes through the job runner (calendar guard, heartbeat, chaining:
 
 Steps, each in its own transaction, in this order:
 
-1. **Calendar** re-sync and cross-check (a disagreement alerts; README §4).
+1. **Calendar** re-sync and cross-check (a disagreement alerts; spec §4).
 2. **Bars** for the ETF list: gap-fill, T-1 re-fetch, splits, outliers, coverage →
    `market_sessions.data_status`.
 3. **Corporate actions** of the ETF list, 4. **macro** (evening VIX, FRED), 5. **retention** and

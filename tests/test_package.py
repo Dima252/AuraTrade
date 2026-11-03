@@ -5,7 +5,7 @@ import pytest
 
 import auratrade
 
-# README §13 repository layout.
+# spec §13 repository layout.
 SUBPACKAGES = [
     "calendar",
     "db",

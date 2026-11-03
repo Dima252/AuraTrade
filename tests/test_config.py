@@ -107,7 +107,7 @@ def risk_dict() -> dict[str, object]:
 
 
 class TestRiskConfig:
-    def test_repo_config_loads_with_readme_values(self) -> None:
+    def test_repo_config_loads_with_spec_values(self) -> None:
         risk = load_risk_config()
         assert risk.jobs.chain_wait_minutes == 30
         assert risk.jobs.duration_alert_minutes == 10

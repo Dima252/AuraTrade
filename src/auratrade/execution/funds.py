@@ -1,4 +1,4 @@
-"""The portfolio's funds in the order layer (README §5.6, §7.2; #5).
+"""The portfolio's funds in the order layer (spec §5.6, §7.2; #5).
 
 - **Which funds carry a stop:** only the leveraged fund. The others (the market fund, cash and
   the satellite's list) have none; the trend rule and the halt are their exits, so the stop

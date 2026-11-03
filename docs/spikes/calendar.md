@@ -1,7 +1,7 @@
 # Spike 0.3c: market calendar
 
 **Run:** 2026-10-08 (Alpaca `GET /v2/calendar`, paper endpoint; `pandas_market_calendars` 5.5.0, calendar `NYSE`).
-**Result:** the two sources agree exactly over 12 years; README §4 (Alpaca primary, `pandas_market_calendars` the cross-check) stands, with the three notes below.
+**Result:** the two sources agree exactly over 12 years; spec §4 (Alpaca primary, `pandas_market_calendars` the cross-check) stands, with the three notes below.
 
 ## What the README assumes
 

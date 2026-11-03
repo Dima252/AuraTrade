@@ -9,7 +9,7 @@
 | Question | Answer |
 |---|---|
 | Daily bars, `feed=sip`, `adjustment=split`, many symbols a request | **Yes**: up to 1,000 symbols a request, 10,000 bars a page, paginated |
-| History depth | **2016-01-04** for every name tested. Nothing earlier (README §17) |
+| History depth | **2016-01-04** for every name tested. Nothing earlier (spec §17) |
 | Rate limit | **200 requests a minute**, shared across the data endpoints; a full page takes ~7 s, so latency dominates |
 | Recent SIP | Refused for anything newer than 15 minutes (`403 subscription does not permit querying recent SIP data`). A date-only `end` for today counts as recent, so the evening ingest passes an explicit `end` |
 | Do daily bars match the regular session? | **OHLC yes** (the official open and closing print). **Volume no:** it includes extended hours and the closing auction |

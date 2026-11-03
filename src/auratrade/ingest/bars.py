@@ -1,4 +1,4 @@
-"""Daily-bar rules for ingest (README §4, §5.1), pure.
+"""Daily-bar rules for ingest (spec §4, §5.1), pure.
 
 - **Sanity:** positive prices, a high and low that contain the open and close, volume > 0.
   Zero-volume bars are dropped: Alpaca repeats the last close with volume 0 for months after a

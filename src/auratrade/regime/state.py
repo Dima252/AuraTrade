@@ -1,4 +1,4 @@
-"""The regime state machine (README §5.2; #27).
+"""The regime state machine (spec §5.2; #27).
 
 One step per session, at the close. The label computed at session ``t`` describes ``t + 1``.
 Sessions are numbered by ``seq`` (0 = the first session stepped), so the state is
@@ -138,7 +138,7 @@ class Tracking:
 
 
 def _start_correction(bars: IndexBars, seq: int) -> dict[str, RallyAttempt]:
-    # The session it enters CORRECTION sets the first correction low (README §5.2).
+    # The session it enters CORRECTION sets the first correction low (spec §5.2).
     return {i: start_rally_attempt(bar, seq) for i, (_, bar) in bars.items()}
 
 

@@ -1,4 +1,4 @@
-"""`client_order_id`s (README §5.6.4): how the order layer finds its own orders again.
+"""`client_order_id`s (spec §5.6.4): how the order layer finds its own orders again.
 
 Alpaca keeps ids unique for the account's lifetime and rejects a duplicate even after the first
 order was cancelled (spike 0.3b), so an id is the idempotency key:
