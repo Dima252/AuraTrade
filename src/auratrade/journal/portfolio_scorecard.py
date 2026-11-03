@@ -1,4 +1,4 @@
-"""The scorecard: the evidence for whether the LLM adds value (README §5.5), pure.
+"""The scorecard: the evidence for whether the LLM adds value (spec §5.5), pure.
 
 Each decision is scored over its **period**, from its E's close to the next E's; the latest
 decision's period runs to the latest close and is still open. Its E's close is after its own

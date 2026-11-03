@@ -1,4 +1,4 @@
-"""Position plans (task 3.5a, README §7.3, §10).
+"""Position plans (task 3.5a, spec §7.3, §10).
 
 position_plans (versioned, tighten-only plan per position) and position_events.
 

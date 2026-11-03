@@ -1,4 +1,4 @@
-"""The MCP server's tools, resources and prompts (README §5.10, #37).
+"""The MCP server's tools, resources and prompts (spec §5.10, #37).
 
 Strictly read-only: every tool reads (the snapshot, the read-only database, the broker as a
 `BrokerReader`, CloudWatch's `FilterLogEvents`) and carries the read-only hint. Without the
@@ -36,7 +36,7 @@ results are judged after the estimated Israeli tax (25%).
 
 This server is read-only: it can't trade, change a flag or write anything. Start with \
 `performance` or `status`; `dashboard` draws the book as a page where the client supports MCP \
-Apps. The README and the decision log are resources (auratrade://readme, \
+Apps. The specification and the decision log are resources (auratrade://spec, \
 auratrade://decisions) for why the system works as it does."""
 
 READ = ToolAnnotations(
@@ -64,7 +64,7 @@ class ServerDeps:
     now: Callable[[], datetime]
     """Timezone-aware, New York."""
     operator: Operator | None = None
-    readme: Callable[[], str] = lambda: docs.read(docs.README)
+    spec: Callable[[], str] = lambda: docs.read(docs.SPEC)
 
 
 def _answer[T](deps: ServerDeps, call: Callable[[], T]) -> T:
@@ -225,27 +225,28 @@ def _resources(server: MCPServer, deps: ServerDeps) -> None:
         except docs.NotFoundError as exc:
             raise ResourceNotFoundError(str(exc)) from exc
 
-    @server.resource("auratrade://readme", mime_type="text/markdown")
-    def readme_index() -> str:
-        """The README's sections: what the system does, every rule and threshold."""
-        return text(lambda: docs.readme_index(deps.readme()))
+    @server.resource("auratrade://spec", mime_type="text/markdown")
+    def spec_index() -> str:
+        """The specification's sections: what the system does, every rule and threshold."""
+        return text(lambda: docs.spec_index(deps.spec()))
 
-    @server.resource("auratrade://readme/{section}", mime_type="text/markdown")
-    def readme_section(section: str) -> str:
-        """One README section by number, e.g. 5.4 (the Portfolio Manager) or 7.2 (the stop)."""
-        return text(lambda: docs.readme_section(deps.readme(), section))
+    @server.resource("auratrade://spec/{section}", mime_type="text/markdown")
+    def spec_section(section: str) -> str:
+        """One specification section by number, e.g. 5.4 (the Portfolio Manager) or 7.2 (the
+        stop)."""
+        return text(lambda: docs.spec_section(deps.spec(), section))
 
     @server.resource("auratrade://decisions", mime_type="text/markdown")
     def decision_index() -> str:
         """The decision log's entries: why things are the way they are."""
-        return text(lambda: docs.decision_index(deps.readme()))
+        return text(lambda: docs.decision_index(deps.spec()))
 
     @server.resource("auratrade://decision/{number}", mime_type="text/markdown")
     def decision_entry(number: str) -> str:
-        """One decision-log entry by number, e.g. 163 (the neutral satellite and the tax rules)."""
+        """One decision-log entry by number, e.g. 4 (the neutral satellite and the tax rules)."""
         if not number.isdigit():
             raise ResourceNotFoundError(f"not a decision number: {number!r}")
-        return text(lambda: docs.decision(deps.readme(), int(number)))
+        return text(lambda: docs.decision(deps.spec(), int(number)))
 
     @server.resource("auratrade://runbook", mime_type="text/markdown")
     def runbook() -> str:
@@ -268,7 +269,7 @@ def _prompts(server: MCPServer, deps: ServerDeps) -> None:
             tools += ", `decision`, `tax`, `jobs`"
         return (
             f"Review {which} of the AuraTrade paper trial. Use {tools}.\n\n"
-            "Judge it on process, not returns (README §15, #4): did the decision follow the "
+            "Judge it on process, not returns (spec §15, #4): did the decision follow the "
             "rules and stay inside its limits (which limits clipped it, and why)? Were the "
             "LLM's expectations calibrated (direction and rough size against what happened)? "
             "How much tax did its changes realize, against the twin's, and was each change "

@@ -1,4 +1,4 @@
-"""market_regime: the computed regime per session (task 2.3, README §5.2 / §10).
+"""market_regime: the computed regime per session (task 2.3, spec §5.2 / §10).
 
 Revision ID: 0003
 Revises: 0002

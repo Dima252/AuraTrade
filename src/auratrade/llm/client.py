@@ -1,8 +1,8 @@
-"""The Claude client (README §9): one decision is one conversation, run to a
+"""The Claude client (spec §9): one decision is one conversation, run to a
 validated answer or to a named failure.
 
 - **The model always thinks** (`claude-opus-5-5` rejects disabled thinking); the depth is the
-  explicit `effort`, since the model's own default (`medium`) is not the README's.
+  explicit `effort`, since the model's own default (`medium`) is not the spec's.
 - **Structured output:** the answer's Pydantic model becomes `output_config.format`, and the
   final text is validated against the same model.
 - **Tools** are strict and `tool_choice` is `auto` (a forced choice is a 400 on this model).
@@ -132,7 +132,7 @@ class Outcome[T: pydantic.BaseModel]:
 
     @property
     def model(self) -> str | None:
-        """The model that gave the last answer (README §9: stored on every decision)."""
+        """The model that gave the last answer (spec §9: stored on every decision)."""
         return self.turns[-1].model if self.turns else None
 
     @property

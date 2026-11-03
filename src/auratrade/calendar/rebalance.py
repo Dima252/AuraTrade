@@ -1,4 +1,4 @@
-"""The monthly rebalance calendar (README §6-§7): the ranking session R (the last session of
+"""The monthly rebalance calendar (spec §6-§7): the ranking session R (the last session of
 each month) and the execution session E (the next full session).
 """
 

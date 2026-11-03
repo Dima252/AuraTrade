@@ -1,4 +1,4 @@
-"""The shared job runner (README §2, §3, §4): calendar guard, `job_runs` heartbeat, structlog
+"""The shared job runner (spec §2, §3, §4): calendar guard, `job_runs` heartbeat, structlog
 context, alerts, duration check, evening chaining, and the CLI and Lambda entrypoints.
 
 Each job module defines `JOB = JobSpec(...)` and ends with::
@@ -17,7 +17,7 @@ predecessor fails closed (`BLOCKED_PREDECESSOR`) and alerts. A chained job never
 twice for a session: a run that finds it succeeded, or running, records
 `SKIPPED_ALREADY_RAN`.
 
-**Quiet jobs** (`stop_guard`, every 5 minutes) open the database only when they act (README
+**Quiet jobs** (`stop_guard`, every 5 minutes) open the database only when they act (spec
 §5.6.1, §12): the runner skips the calendar and the RUNNING heartbeat, and records the run only
 when it fails or its output says `acted`. The job checks the broker's clock instead.
 """
@@ -52,7 +52,7 @@ log = structlog.get_logger(__name__)
 
 
 class GuardPolicy(StrEnum):
-    """When a job may run (README §4, "Guard policy per job type")."""
+    """When a job may run (spec §4, "Guard policy per job type")."""
 
     SESSION_TODAY = "session_today"  # morning and intraday jobs
     EVENING = "evening"  # today was a session; chained when in the evening chain

@@ -1,4 +1,4 @@
-"""The regime state machine: every row of the README §5.2 transition table, plus the edge cases
+"""The regime state machine: every row of the spec §5.2 transition table, plus the edge cases
 of plan §2.3. Scores are given directly; bars drive distribution days, rally attempts and FTDs.
 """
 

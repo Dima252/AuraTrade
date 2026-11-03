@@ -1,4 +1,4 @@
-"""The live drawdown halt (README §7.3) on the test Postgres: its state, `post_market`'s
+"""The live drawdown halt (spec §7.3) on the test Postgres: its state, `post_market`'s
 check at the close, and its turning off on R."""
 
 from __future__ import annotations

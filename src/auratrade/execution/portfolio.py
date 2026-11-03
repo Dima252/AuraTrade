@@ -1,4 +1,4 @@
-"""The portfolio's trades (README §5.6.3, §7), on an order section
+"""The portfolio's trades (spec §5.6.3, §7), on an order section
 (`execution.runtime`), so under the single-writer lock and after the stop invariant.
 
 **The rebalance** (on E at 15:40, and on its retry while E's run didn't finish):
@@ -16,10 +16,10 @@
 
 **The halt's sale** (any session while the drawdown halt is on and the leveraged fund is held):
 all of it through the sell sequence, then the market fund bought with the proceeds. Neither the
-kill switch nor any other block stops it: it lowers exposure (README §5.9).
+kill switch nor any other block stops it: it lowers exposure (spec §5.9).
 
 **The stop's proceeds** (any session after the rebalance finished, until the next E): when the
-leveraged fund's stop filled since then, the proceeds go into the cash fund (README §7.2), as far
+leveraged fund's stop filled since then, the proceeds go into the cash fund (spec §7.2), as far
 as the cash left pays for whole shares; the buy follows the same blocks as the rebalance's (under
 the kill switch only if the cash fund is already held). What earlier runs bought of the cash
 fund since the fill counts against the proceeds, so a later run buys only what is still owed.
@@ -289,7 +289,7 @@ def rebalance(section: Section, invariant: InvariantReport, due: Due) -> dict[st
 
 
 def halt_sale(section: Section) -> dict[str, Any] | None:
-    """The drawdown halt's sale (README §7.3): the leveraged fund into the market fund. None
+    """The drawdown halt's sale (spec §7.3): the leveraged fund into the market fund. None
     when there is nothing to sell."""
     ctx, deps, desk = section.ctx, section.deps, section.desk
     cfg = ctx.risk.portfolio
@@ -369,7 +369,7 @@ def stopped_out(order: BrokerOrder) -> bool:
 
 
 def stop_proceeds(section: Section, invariant: InvariantReport) -> dict[str, Any] | None:
-    """The leveraged fund's stop fills since the rebalance finished, into the cash fund (README
+    """The leveraged fund's stop fills since the rebalance finished, into the cash fund (spec
     §7.2). None when no stop filled."""
     ctx, deps, desk = section.ctx, section.deps, section.desk
     cfg = ctx.risk.portfolio
@@ -404,7 +404,7 @@ def stop_proceeds(section: Section, invariant: InvariantReport) -> dict[str, Any
         "into": cash_fund,
     }
     if bought == 0:
-        # The first run since the fill (README §5.9): the operator raises the event by hand.
+        # The first run since the fill (spec §5.9): the operator raises the event by hand.
         desk.alert(
             f"{lev}'s stop filled: {out['stopped']} shares sold for {proceeds:,.2f}; the "
             f"proceeds go into {cash_fund}. Explain it with portfolio_manager --event STOP_FILLED."

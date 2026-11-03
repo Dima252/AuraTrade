@@ -1,4 +1,4 @@
-"""The public tools (README §5.10): views of the dashboard's snapshot (§5.8), nothing more.
+"""The public tools (spec §5.10): views of the dashboard's snapshot (§5.8), nothing more.
 
 The snapshot is allow-listed field by field (`journal/dashboard.py`), so these only select and
 summarise it: a server serving them can't show more than the site does. Pure.

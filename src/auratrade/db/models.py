@@ -1,4 +1,4 @@
-"""The data-layer tables (README §10). Every change here needs an Alembic migration.
+"""The data-layer tables (spec §10). Every change here needs an Alembic migration.
 
 Neon's free tier is 0.5 GB, so `daily_bars` — by far the largest table — uses 4-byte
 floats for prices and orders its columns to avoid alignment padding.
@@ -115,7 +115,7 @@ class MarketSession(Base):
     data_status: Mapped[str] = mapped_column(Text, server_default=text("'PENDING'"))
     coverage: Mapped[float | None] = mapped_column(REAL)
     data_checked_at: Mapped[datetime | None]
-    # Alpaca is primary; pandas_market_calendars is the cross-check (README §4).
+    # Alpaca is primary; pandas_market_calendars is the cross-check (spec §4).
     calendar_check: Mapped[str] = mapped_column(Text, server_default=text("'UNCHECKED'"))
     calendar_check_detail: Mapped[str | None] = mapped_column(Text)
     synced_at: Mapped[datetime] = _created()
@@ -155,7 +155,7 @@ BAR_FIELDS = ("HIGH", "LOW")
 
 
 class BarCorrection(Base):
-    """A bad high or low caught by ingest's outlier filter (README §5.1, #25). `daily_bars`
+    """A bad high or low caught by ingest's outlier filter (spec §5.1, #25). `daily_bars`
     holds the corrected value; the vendor's is kept here."""
 
     __tablename__ = "bar_corrections"
@@ -263,7 +263,7 @@ REGIMES = ("CORRECTION", "EARLY_UPTREND", "UNDER_PRESSURE", "CONFIRMED_UPTREND")
 
 
 class MarketRegimeRow(Base):
-    """One row per session (README §5.2), written at the close; it governs the next
+    """One row per session (spec §5.2), written at the close; it governs the next
     session. `state` carries the state machine to the next evening. Kept forever (small)."""
 
     __tablename__ = "market_regime"
@@ -299,13 +299,13 @@ class MarketRegimeRow(Base):
     computed_at: Mapped[datetime] = _created()
 
 
-# --- The order layer (README §5.6, §10) -------------------------------------------------------
+# --- The order layer (spec §5.6, §10) -------------------------------------------------------
 
 ORDER_PURPOSES = ("BUY", "STOP_LEG", "STOP", "EXIT", "OTHER")
 
 
 class OrderRow(Base):
-    """The broker's orders as last seen (README §10). Legs carry their parent's id."""
+    """The broker's orders as last seen (spec §10). Legs carry their parent's id."""
 
     __tablename__ = "orders"
     __table_args__ = (
@@ -335,7 +335,7 @@ class OrderRow(Base):
 
 
 class AccountSnapshot(Base):
-    """The account at each session's `post_market` (README §5.7)."""
+    """The account at each session's `post_market` (spec §5.7)."""
 
     __tablename__ = "account_snapshots"
 
@@ -355,7 +355,7 @@ class AccountSnapshot(Base):
     created_at: Mapped[datetime] = _created()
 
 
-# --- The portfolio manager (README §5.4-§5.7, §10) ---------------------------------
+# --- The portfolio manager (spec §5.4-§5.7, §10) ---------------------------------
 
 TARGET_KINDS = ("REBALANCE", "EVENT")
 TARGET_STATUSES = ("ALLOCATED", "DECIDED")
@@ -365,7 +365,7 @@ STOP_CHANGES = ("ENTRY", "RAISE", "SPLIT")
 
 
 class PromptVersion(Base):
-    """A prompt as sent: its id is the version and the rendered text's hash (README §9)."""
+    """A prompt as sent: its id is the version and the rendered text's hash (spec §9)."""
 
     __tablename__ = "prompt_versions"
 
@@ -376,7 +376,7 @@ class PromptVersion(Base):
 
 
 class LlmDecision(Base):
-    """One LLM decision: the answer or the failure, who answered, what it cost (README §9)."""
+    """One LLM decision: the answer or the failure, who answered, what it cost (spec §9)."""
 
     __tablename__ = "llm_decisions"
 
@@ -446,11 +446,11 @@ class PortfolioTarget(Base):
     executions: Mapped[list[Any]] = mapped_column(JSONB, server_default=text("'[]'"))
     """`execute_close`'s runs on a rebalance's targets : one entry per run."""
     executed_at: Mapped[datetime | None]
-    """When a run finished every trade; until then the retry tries again (README §3)."""
+    """When a run finished every trade; until then the retry tries again (spec §3)."""
 
 
 class TaxLot(Base):
-    """The live account's tax lots and income (README §5.7), rebuilt whole each evening from
+    """The live account's tax lots and income (spec §5.7), rebuilt whole each evening from
     the broker's activities (`tax.live`): open lots, closed pieces, income."""
 
     __tablename__ = "tax_lots"
@@ -471,7 +471,7 @@ class TaxLot(Base):
 
 
 class FundStop(Base):
-    """The leveraged fund's stop level (README §7.2), one row per change: the latest
+    """The leveraged fund's stop level (spec §7.2), one row per change: the latest
     is in force. Set when the fund is bought from flat, raised on each later E, never lowered;
     a split scales it (#22)."""
 
@@ -493,7 +493,7 @@ class FundStop(Base):
 
 
 class BookMark(Base):
-    """The twin's simulated account each session (README §5.5), in `dry_run` the book's own
+    """The twin's simulated account each session (spec §5.5), in `dry_run` the book's own
     decisions replayed (SIM, #31), and SPY bought and held (the scorecard's third line):
     rewritten whole each evening from the trial's start."""
 
@@ -515,7 +515,7 @@ class BookMark(Base):
 
 
 class PortfolioJournal(Base):
-    """One row per month (README §5.7): the decision and its reasons, the clips, the trades,
+    """One row per month (spec §5.7): the decision and its reasons, the clips, the trades,
     and the month's results."""
 
     __tablename__ = "portfolio_journal"

@@ -1,4 +1,4 @@
-"""Public project site: static files in a private S3 bucket, served by CloudFront (README §12)."""
+"""Public project site: static files in a private S3 bucket, served by CloudFront (spec §12)."""
 
 from pathlib import Path
 
@@ -22,7 +22,7 @@ CONTENT_SECURITY_POLICY = (
     "base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 )
 
-# The nightly public snapshot `simulate` writes (README §5.8); deploys must not prune it.
+# The nightly public snapshot `simulate` writes (spec §5.8); deploys must not prune it.
 DATA_PREFIX = "data/*"
 # The snapshot changes once an evening: served fresh within minutes, not a day.
 DATA_TTL = Duration.minutes(5)

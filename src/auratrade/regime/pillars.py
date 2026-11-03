@@ -1,7 +1,7 @@
-"""The three regime pillars, the crisis override and the expiration-session flag (README §5.2).
+"""The three regime pillars, the crisis override and the expiration-session flag (spec §5.2).
 
 Pure functions on precomputed values. Each pillar scores +1, 0 or -1. A missing input scores 0
-(neutral), the same rule README §4 sets for stale macro data. The job decides separately whether
+(neutral), the same rule spec §4 sets for stale macro data. The job decides separately whether
 missing data is a reason to fail.
 """
 
@@ -53,7 +53,7 @@ def index_trend_pillar(indexes: Mapping[str, IndexTrend]) -> PillarScore:
 def volatility_pillar(
     vix: float | None, vix3m: float | None, *, stale: bool, cfg: VolatilityConfig
 ) -> PillarScore:
-    """Stale macro data (more than ``data.macro_stale_sessions``) scores 0 (README §4)."""
+    """Stale macro data (more than ``data.macro_stale_sessions``) scores 0 (spec §4)."""
     if stale or vix is None or vix3m is None:
         return 0
     ratio = vix / vix3m
@@ -86,7 +86,7 @@ def crisis_override(
     index_return: float | None,
     cfg: CrisisConfig,
 ) -> Crisis:
-    """The crisis override (README §5.2), decided at a session's close for the next session.
+    """The crisis override (spec §5.2), decided at a session's close for the next session.
 
     - ``ratios``: VIX/VIX3M at this session and the sessions before it, newest last, each from
       the latest values on or before that session (CBOE, or FRED when CBOE is late). The last

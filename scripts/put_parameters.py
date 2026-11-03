@@ -1,4 +1,4 @@
-"""Copy an environment's secrets from its env file into SSM Parameter Store (README §12).
+"""Copy an environment's secrets from its env file into SSM Parameter Store (spec §12).
 
     uv run python scripts/put_parameters.py --env paper --env-file .env.paper            # plan
     uv run python scripts/put_parameters.py --env paper --env-file .env.paper --apply \

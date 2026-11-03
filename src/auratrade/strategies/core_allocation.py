@@ -1,4 +1,4 @@
-"""The core allocation: the trend dial (README §6-§7; #3).
+"""The core allocation: the trend dial (spec §6-§7; #3).
 
 Pure: no I/O. The live `allocate` job, the twin and the backtest (`sim/portfolio.py`) all call
 these functions; the exact rules are fixed in `docs/backtests/portfolio-preregistration.md` §3.
@@ -126,7 +126,7 @@ class Band:
 def shift_band(
     state: Trend, capped: bool, halted: bool, level: float, cfg: PortfolioConfig
 ) -> Band:
-    """The core levels the LLM may choose around the rule ``level`` (README §5.4)."""
+    """The core levels the LLM may choose around the rule ``level`` (spec §5.4)."""
     low = max(cfg.min_level, level - cfg.max_shift)
     upward = state is Trend.UP and not capped and not halted
     high = min(cfg.max_level, level + cfg.max_shift) if upward else level
@@ -153,7 +153,7 @@ def exposure(weights: Mapping[str, float], cfg: PortfolioConfig) -> float:
 
 
 def twin_targets(level: float, cfg: PortfolioConfig) -> dict[str, float]:
-    """The twin: the rule level on the whole account (README §5.5)."""
+    """The twin: the rule level on the whole account (spec §5.5)."""
     return core_weights(level, cfg)
 
 

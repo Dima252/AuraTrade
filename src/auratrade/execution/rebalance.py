@@ -1,4 +1,4 @@
-"""The rebalance's orders (README §5.6.3, §7.1), pure: targets → whole-share orders.
+"""The rebalance's orders (spec §5.6.3, §7.1), pure: targets → whole-share orders.
 
 From the enforced targets (fractions of equity), the broker's holdings and the decision prices:
 - **The drift band.** A holding is traded only if its target changed from last month's or its
@@ -6,12 +6,12 @@ From the enforced targets (fractions of equity), the broker's holdings and the d
   targets) trades every holding. The same rule as the simulated book (`sim/portfolio.py`).
 - **Sells** go to the target value ÷ the decision price, floored (a target of 0 sells all).
 - **Buys** go to the target value ÷ the limit price (the worst fill), floored, and together fit
-  the cash the sales left at their limits: the account never borrows (README §5.6.6).
-- **What may be bought** (README §5.9): nothing in a fund with an open mismatch; never the
+  the cash the sales left at their limits: the account never borrows (spec §5.6.6).
+- **What may be bought** (spec §5.9): nothing in a fund with an open mismatch; never the
   leveraged fund while the drawdown halt is on; and while increases are blocked (the kill
   switch, a repaired invariant, incomplete data, a calendar disagreement) only the cash fund,
   and only if it is already held. Sales toward a lower target are never blocked.
-- **The leveraged fund's stop** (README §7.2): ``1 - portfolio.stop_fraction`` of its decision
+- **The leveraged fund's stop** (spec §7.2): ``1 - portfolio.stop_fraction`` of its decision
   price, rounded down to the tick, when it is bought from flat; raised to that on each later E
   while it is held, never lowered.
 
@@ -88,7 +88,7 @@ class Blocks:
 
 
 def buy_block(symbol: str, held: int, blocks: Blocks, cfg: PortfolioConfig) -> str | None:
-    """Why `symbol` may not be bought, or None (README §5.9)."""
+    """Why `symbol` may not be bought, or None (spec §5.9)."""
     if symbol in blocks.mismatched:
         return "an open mismatch in the fund"
     if blocks.halted and symbol == cfg.leveraged:
@@ -100,7 +100,7 @@ def buy_block(symbol: str, held: int, blocks: Blocks, cfg: PortfolioConfig) -> s
 
 def halted_targets(targets: Mapping[str, float], cfg: PortfolioConfig) -> dict[str, float]:
     """The targets while the drawdown halt is on: the leveraged fund's weight in the market
-    fund, as the halt's sale moves it (README §7.3)."""
+    fund, as the halt's sale moves it (spec §7.3)."""
     out = dict(targets)
     weight = out.pop(cfg.leveraged, 0.0)
     if weight > WEIGHT_TOLERANCE:
@@ -109,7 +109,7 @@ def halted_targets(targets: Mapping[str, float], cfg: PortfolioConfig) -> dict[s
 
 
 def leveraged_stop(price: float, current: float | None, cfg: PortfolioConfig) -> float:
-    """The leveraged fund's stop level for an E at `price` (README §7.2): the fraction of the
+    """The leveraged fund's stop level for an E at `price` (spec §7.2): the fraction of the
     price rounded down to the tick, or the `current` level of a fund still held if higher."""
     level = round_down(price * (1 - cfg.stop_fraction))
     return level if current is None else max(current, level)

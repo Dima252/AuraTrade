@@ -1,4 +1,4 @@
-"""Rebalance orders (task 5.1, README §5.6, §7.2): fund_stops (the leveraged fund's stop level,
+"""Rebalance orders (task 5.1, spec §5.6, §7.2): fund_stops (the leveraged fund's stop level,
 tighten-only) and each rebalance's runs on portfolio_targets (executions, executed_at) for the
 retry.
 

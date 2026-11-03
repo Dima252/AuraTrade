@@ -1,4 +1,4 @@
-"""Drop the tables and columns nothing reads or writes (README §10): the stock-selection
+"""Drop the tables and columns nothing reads or writes (spec §10): the stock-selection
 tables, the regime's two pillars without inputs, the order layer's links to them, and the
 weekly job's status. Buys are recorded as BUY.
 

@@ -1,1 +1,1 @@
-"""Market regime classifier and state machine (README §5.2)."""
+"""Market regime classifier and state machine (spec §5.2)."""

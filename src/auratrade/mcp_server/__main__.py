@@ -1,4 +1,4 @@
-"""Run the read-only MCP server over stdio (README §5.10).
+"""Run the read-only MCP server over stdio (spec §5.10).
 
     uv run --env-file .env.paper python -m auratrade.mcp_server --snapshot <url or file>
     uv run python -m auratrade.mcp_server --public --snapshot <url or file>

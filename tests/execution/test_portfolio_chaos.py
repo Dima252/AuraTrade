@@ -4,7 +4,7 @@ split on the leveraged fund, the halt's sale under the kill switch, a rebalance 
 buy and run again; and the order layer's own : two jobs at once, a 500, a dropped
 connection.
 
-Each ends with the order layer's two properties (README §5.6, CLAUDE.md §3.5):
+Each ends with the order layer's two properties (spec §5.6, CLAUDE.md §3.5):
 - **the leveraged fund is protected**: its live GTC stops cover its full quantity at or above
   its level, nothing is partly filled or working, and no other fund carries a stop
 - **no duplicates**: nothing bought twice, no stops for more shares than are held

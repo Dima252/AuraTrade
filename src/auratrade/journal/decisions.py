@@ -1,4 +1,4 @@
-"""The Portfolio Manager's decision on the database (README §5.4, §5.7, §9).
+"""The Portfolio Manager's decision on the database (spec §5.4, §5.7, §9).
 
 - **On E** the ALLOCATED row `allocate` wrote on R gives the facts; the headlines are fetched
   now. The tools read the funds' bars through R, Alpaca's news and the decision history.
@@ -9,7 +9,7 @@
   clips (`portfolio_targets`), and for a rebalance the month's journal row.
 
 Increases are allowed only with the kill switch off, R's data COMPLETE and E's calendar
-cross-checked (README §8); otherwise the guardrails hold every fund at its current weight.
+cross-checked (spec §8); otherwise the guardrails hold every fund at its current weight.
 """
 
 from __future__ import annotations
@@ -124,7 +124,7 @@ def increases_allowed(
 
 
 def deadline(risk: RiskConfig, session: date, now: datetime) -> datetime | None:
-    """12:00 ET on E (README §3). A replay of an earlier session (``--session`` in the past)
+    """12:00 ET on E (spec §3). A replay of an earlier session (``--session`` in the past)
     has none: its deadline passed before it ran."""
     if now.astimezone(NY).date() > session:
         return None

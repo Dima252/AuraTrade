@@ -1,4 +1,4 @@
-"""The portfolio simulation (README §5.5, §15; `docs/backtests/portfolio-preregistration.md` §3),
+"""The portfolio simulation (spec §5.5, §15; `docs/backtests/portfolio-preregistration.md` §3),
 pure: no I/O.
 
 One account through daily closes, on the shared fill model (`sim/fills.py`) and the live pure
@@ -25,7 +25,7 @@ The invariants of the pre-registration §7 raise `PortfolioInvariantError`.
 **The live book** (#31) runs on the same steps with options that are all off in
 the backtest. ``book`` gives the targets the Portfolio Manager set for each E (satellite funds
 included, their prices in the market; an E without targets takes the rules'), and trades
-each holding only if its own target changed or it drifted past the band (README §7.1, as the
+each holding only if its own target changed or it drifted past the band (spec §7.1, as the
 order layer does; the hold rule of #4 relies on it), where the rules' runs rebalance the
 whole account when any target changed.
 ``sell_at_end=False`` stops at T's close without the final sale, leaving the account in

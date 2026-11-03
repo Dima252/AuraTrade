@@ -1,5 +1,5 @@
-"""The project's documents as MCP resources (README §5.10): the README by section, the decision
-log by entry, the runbook and the backtest's report. Pure over the files' text."""
+"""The project's documents as MCP resources (spec §5.10): the specification by section, the
+decision log by entry, the runbook and the backtest's report. Pure over the files' text."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from auratrade.config import REPO_ROOT
 
 # The remote server's image keeps the documents beside the package, not two levels above it.
 DOCS_ROOT = Path(os.environ.get("AURATRADE_DOCS_ROOT") or REPO_ROOT)
-README = DOCS_ROOT / "README.md"
+SPEC = DOCS_ROOT / "docs" / "specification.md"
 RUNBOOK = DOCS_ROOT / "docs" / "runbook.md"
 BACKTEST = DOCS_ROOT / "docs" / "backtests" / "portfolio.md"
 DECISION_LOG = "16"
@@ -32,9 +32,9 @@ class Section:
     text: str
 
 
-def sections(readme: str) -> dict[str, Section]:
+def sections(spec: str) -> dict[str, Section]:
     """Each numbered `##`/`###` heading to the next heading of the same or a higher level."""
-    lines = readme.splitlines()
+    lines = spec.splitlines()
     heads = [
         (i, len(m.group(1)), m.group(2), m.group(3).strip())
         for i, line in enumerate(lines)
@@ -48,9 +48,9 @@ def sections(readme: str) -> dict[str, Section]:
     return out
 
 
-def decisions(readme: str) -> dict[int, tuple[str, str]]:
+def decisions(spec: str) -> dict[int, tuple[str, str]]:
     """The decision log's rows: number → (title, text)."""
-    log = sections(readme).get(DECISION_LOG)
+    log = sections(spec).get(DECISION_LOG)
     if log is None:
         return {}
     return {
@@ -60,33 +60,33 @@ def decisions(readme: str) -> dict[int, tuple[str, str]]:
     }
 
 
-def readme_index(readme: str) -> str:
-    rows = [f"- {s.number} {s.title}" for s in sections(readme).values()]
+def spec_index(spec: str) -> str:
+    rows = [f"- {s.number} {s.title}" for s in sections(spec).values()]
     return (
-        "# README sections\n\nRead one as auratrade://readme/{section} (e.g. 5.4). The "
+        "# Specification sections\n\nRead one as auratrade://spec/{section} (e.g. 5.4). The "
         "decision log (16) is read by entry: auratrade://decision/{number}.\n\n" + "\n".join(rows)
     )
 
 
-def readme_section(readme: str, number: str) -> str:
+def spec_section(spec: str, number: str) -> str:
     if number.strip() == DECISION_LOG:
-        return decision_index(readme)
-    found = sections(readme).get(number.strip())
+        return decision_index(spec)
+    found = sections(spec).get(number.strip())
     if found is None:
-        raise NotFoundError(f"no README section {number}: see auratrade://readme")
+        raise NotFoundError(f"no spec section {number}: see auratrade://spec")
     return found.text
 
 
-def decision_index(readme: str) -> str:
-    rows = [f"- #{n} {title}" for n, (title, _) in sorted(decisions(readme).items())]
+def decision_index(spec: str) -> str:
+    rows = [f"- #{n} {title}" for n, (title, _) in sorted(decisions(spec).items())]
     return (
         "# Decision log\n\nWhy things are the way they are. Read one as "
         "auratrade://decision/{number}.\n\n" + "\n".join(rows)
     )
 
 
-def decision(readme: str, number: int) -> str:
-    found = decisions(readme).get(number)
+def decision(spec: str, number: int) -> str:
+    found = decisions(spec).get(number)
     if found is None:
         raise NotFoundError(f"no decision #{number}: see auratrade://decisions")
     title, text = found

@@ -1,4 +1,4 @@
-"""Historical backfill for the portfolio's backtest (README §5.1): free vendor calls
+"""Historical backfill for the portfolio's backtest (spec §5.1): free vendor calls
 only (Kenneth French's library, Robert Shiller's dividends, Alpaca market data); no orders.
 
     uv run python scripts/backfill.py longhistory         # the long history and SPY/SSO/BIL

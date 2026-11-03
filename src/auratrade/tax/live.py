@@ -1,16 +1,16 @@
-"""The live account's tax book from the broker's activity record (README §5.7, #35).
+"""The live account's tax book from the broker's activity record (spec §5.7, #35).
 
 Pure: no I/O. `post_market` replays the whole record each evening (as `twin_book` is rewritten
 whole), so the lots are never out of step with the broker:
 
 - **Fills** in the funds open lots (each fill its own lot, tagged with its order) and close them
   FIFO through `TaxBook`; a fill outside the funds is not the portfolio's (a mismatch,
-  README §5.6) and is skipped.
+  spec §5.6) and is skipped.
 - **Distributions and interest** (``DIV*``, ``INT*``) received are income. Negative entries (a
   withholding, a fee on a distribution) are skipped: the model taxes the gross amount, and a
   foreign withholding is credited against it. Fees, deposits and journals aren't taxed.
 - **Anything else in a fund** (a split, a merger, ...) is reported, not applied: the order layer
-  handles a split by hand (README §5.6).
+  handles a split by hand (spec §5.6).
 - **A sale beyond the known lots** realizes all its proceeds as gain on the units without a
   cost (as `fifo_gain`: an estimate is never low), and is reported.
 - **Years** close when the record crosses into the next, and up to ``as_of``'s year.
@@ -35,7 +35,7 @@ CASH = "CASH"
 
 @dataclass(frozen=True, slots=True)
 class LotRow:
-    """One `tax_lots` row: an open lot, a closed piece of one, or income (README §10)."""
+    """One `tax_lots` row: an open lot, a closed piece of one, or income (spec §10)."""
 
     kind: str
     """``LOT`` or ``INCOME``."""
@@ -148,7 +148,7 @@ def values_for_tax(book: TaxBook, values: Mapping[str, float]) -> dict[str, floa
 
 
 def carried_loss(realized_by_year: Mapping[int, float], year: int) -> float:
-    """The loss carried into ``year`` from the years before it (README §5.7: a net loss is
+    """The loss carried into ``year`` from the years before it (spec §5.7: a net loss is
     carried forward without limit, against gains only)."""
     carry = 0.0
     for y in sorted(realized_by_year):

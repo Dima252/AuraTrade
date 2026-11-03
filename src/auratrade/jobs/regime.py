@@ -9,7 +9,7 @@ The first form is the evening step: it continues the state machine from the last
 starts `regime.replay_warmup_sessions` before `--from` in `CORRECTION` and writes the rows from
 `--from` through `--session`. The replay doesn't go through the job runner (no heartbeat).
 
-A fact for the Portfolio Manager; no rule reads it (README §5.2). Three pillars: index trend,
+A fact for the Portfolio Manager; no rule reads it (spec §5.2). Three pillars: index trend,
 volatility, distribution.
 """
 

@@ -1,5 +1,5 @@
 """One session of the regime classifier: pillars -> score -> state machine, plus the crisis
-override (README §5.2). Pure: the job and the backtest supply the inputs.
+override (spec §5.2). Pure: the job and the backtest supply the inputs.
 """
 
 from collections.abc import Mapping, Sequence

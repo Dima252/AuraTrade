@@ -1,4 +1,4 @@
-"""IBD distribution days and follow-through days, per index (README §5.2).
+"""IBD distribution days and follow-through days, per index (spec §5.2).
 
 These are the per-index signals. Combining SPY and QQQ (higher distribution count, an FTD on
 either index), deciding when ``CORRECTION`` starts and what happens after an FTD belong to the
@@ -33,7 +33,7 @@ def distribution_count(
     """Distribution days among the last ``window`` sessions up to and including ``at``.
 
     ``reset_after`` is the session of the latest follow-through day: the count restarts after it
-    (README §5.2). ``excluded`` marks sessions not to count (option-expiration or index-rebalance
+    (spec §5.2). ``excluded`` marks sessions not to count (option-expiration or index-rebalance
     sessions, if the regime backtest decides to drop them).
     """
     check_window(window)

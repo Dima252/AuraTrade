@@ -1,4 +1,4 @@
-"""Order sequences (README §5.6): protect a position, the sell sequence, and selling at once
+"""Order sequences (spec §5.6): protect a position, the sell sequence, and selling at once
 when the price is already through the stop. Every method runs under the single-writer lock
 (`execution.lock`), so no other job changes orders meanwhile.
 
@@ -200,7 +200,7 @@ class OrderDesk:
 
     def protect(self, symbol: str, level: float) -> ProtectResult:
         """Make the position's live GTC stops cover its full quantity at `level` or above
-        (README §5.6.1, #18): cancel the unfilled rest of a partly filled buy and any stray
+        (spec §5.6.1, #18): cancel the unfilled rest of a partly filled buy and any stray
         sale, fix or cancel stops that are below the level or not GTC, then place a standalone
         GTC stop for whatever is uncovered. If the price is already through the level, the
         uncovered shares are sold at once instead (step 2)."""
@@ -289,7 +289,7 @@ class OrderDesk:
     # --- sales ---------------------------------------------------------------------------
 
     def sell(self, symbol: str, qty: int, reason: str, level: float) -> SaleResult:
-        """The sell sequence (README §5.6.2): reduce the stop (swapping legs for one standalone
+        """The sell sequence (spec §5.6.2): reduce the stop (swapping legs for one standalone
         stop, #18), sell with a marketable limit, and restore the stop at once if the sale is
         rejected or doesn't fill. A full exit cancels the stops instead of reducing them."""
         if not self.market_open or symbol in self.blocked_sales:
@@ -349,7 +349,7 @@ class OrderDesk:
 
     def sell_now(self, symbol: str, qty: int, reason: str) -> SaleResult:
         """Sell shares that have no stop at once, escalating within the run: a marketable
-        limit, one re-price, then a market order (README §5.6.2). Before the open or after the
+        limit, one re-price, then a market order (spec §5.6.2). Before the open or after the
         close nothing is sold: the 09:31 check run sells (#21)."""
         if qty <= 0:
             return SaleResult(symbol, 0, 0, SaleStatus.NOTHING)
@@ -357,7 +357,7 @@ class OrderDesk:
             self.alert(f"{symbol} is through its stop level; {qty} shares owed a sale")
             return SaleResult(symbol, qty, 0, SaleStatus.DEFERRED)
         if reason == "STOP":
-            # What the stop would have done, done now: as loud as a stop fill (README §5.9).
+            # What the stop would have done, done now: as loud as a stop fill (spec §5.9).
             self.alert(f"{symbol} is through its stop level: selling {qty} at once")
         sold = 0
         order: BrokerOrder | None = None
@@ -393,7 +393,7 @@ class OrderDesk:
         return result
 
     def sell_plain(self, symbol: str, qty: int, reason: str) -> SaleResult:
-        """The sale of a fund that carries no stop (README §5.6.2, #5): a marketable limit;
+        """The sale of a fund that carries no stop (spec §5.6.2, #5): a marketable limit;
         what hasn't filled after the wait is cancelled and owed."""
         if not self.market_open or symbol in self.blocked_sales:
             return SaleResult(symbol, qty, 0, SaleStatus.DEFERRED)
@@ -418,7 +418,7 @@ class OrderDesk:
         return _result(symbol, qty, sold)
 
     def buy(self, symbol: str, qty: int, limit: float, *, stop: float | None) -> BuyResult:
-        """A marketable limit buy (README §5.6.3); never a market buy. With `stop` it is an OTO
+        """A marketable limit buy (spec §5.6.3); never a market buy. With `stop` it is an OTO
         whose GTC stop leg rests at that level (the leveraged fund: Alpaca refuses a plain buy
         while a sell stop rests, #18). What hasn't filled after the wait is cancelled, and a
         stopped fund is then protected at `stop` for what did fill (a partly filled OTO's leg

@@ -1,4 +1,4 @@
-"""The Parquet history in the object store (README §5.1, §10): its layout, writes and reads.
+"""The Parquet history in the object store (spec §5.1, §10): its layout, writes and reads.
 
 - **Bars:** `parquet/daily_bars/year=YYYY/YYYY-MM-DD.parquet`, one object per session, keyed by
   `security` (an Alpaca asset id, or the symbol and first session for a security no asset

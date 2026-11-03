@@ -1,5 +1,5 @@
 """Macro series: CBOE VIX/VIX3M (delayed quotes and history files) and FRED (spike 0.3d,
-docs/spikes/macro.md; source order in README §5.1, #26).
+docs/spikes/macro.md; source order in spec §5.1, #26).
 
 - **Delayed-quote JSON** (`_VIX.json`): 15 minutes delayed. `last_trade_time` is New York
   wall-clock time with no zone; the final close shows `last_trade_time` 16:15:01 (the

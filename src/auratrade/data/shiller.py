@@ -1,4 +1,4 @@
-"""Robert Shiller's monthly S&P 500 data: prices and dividends from 1871 (README §5.1,
+"""Robert Shiller's monthly S&P 500 data: prices and dividends from 1871 (spec §5.1,
 `docs/backtests/portfolio-preregistration.md` §4.2). Free, no key.
 
 Read from the Open Knowledge "s-and-p-500" dataset, which republishes Shiller's `ie_data.xls`

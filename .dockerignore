@@ -7,7 +7,7 @@
 !uv.lock
 !config/
 !src/
-!README.md
+!docs/specification.md
 !docs/runbook.md
 !docs/backtests/portfolio.md
 !web/chart.js

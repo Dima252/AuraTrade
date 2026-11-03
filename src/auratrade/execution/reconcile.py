@@ -1,4 +1,4 @@
-"""Reconciliation (README §5.6.1): the broker is the truth and the database follows it.
+"""Reconciliation (spec §5.6.1): the broker is the truth and the database follows it.
 
 Run first in every order-touching job, under the lock:
 1. Broker positions: the portfolio's funds (`funds`) are its holdings; any other position (not

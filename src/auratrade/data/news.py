@@ -3,7 +3,7 @@ docs/spikes/news.md). It shares the market-data rate limit, so it takes the same
 `VendorHttp` as `AlpacaDataClient` (`alpaca_http`).
 
 Headlines and summaries are third-party text: callers pass them to the LLM only as
-delimited data (README §9).
+delimited data (spec §9).
 """
 
 from __future__ import annotations

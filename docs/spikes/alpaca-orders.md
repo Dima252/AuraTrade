@@ -2,7 +2,7 @@
 
 **Run:** 2026-10-08 to 10-15 on the `dev` paper account, in market hours, after hours and over a weekend, with real orders in small positions (F, DXJ, QDTE, SOFI). Every step was recorded; the raw events are kept locally, not in git.
 
-**Result: Alpaca's OTO orders can carry the design's broker stop, with five adjustments**, all in the order layer today (README §5.6, decisions #18, #21, #22).
+**Result: Alpaca's OTO orders can carry the design's broker stop, with five adjustments**, all in the order layer today (spec §5.6, decisions #18, #21, #22).
 
 ## What the broker does
 
@@ -39,7 +39,7 @@
 
 ## Accounts
 
-- The `dev` and `paper` keys reach independent accounts: an order on one isn't visible on the other (README §12).
+- The `dev` and `paper` keys reach independent accounts: an order on one isn't visible on the other (spec §12).
 - The account API has no pattern-day-trader fields; FINRA's amended Rule 4210 (effective 2026-06-04) replaced the day-trading test. The design never uses margin, so nothing depends on it.
 
 ## Not tested

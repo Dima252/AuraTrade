@@ -1,4 +1,4 @@
-"""The server end to end through the SDK's in-memory client (README §5.10)."""
+"""The server end to end through the SDK's in-memory client (spec §5.10)."""
 
 from collections.abc import Iterator
 from datetime import UTC, datetime
@@ -22,7 +22,7 @@ from tests.mcp_server.test_operator import Reader
 PUBLIC_TOOLS = {"performance", "decisions", "exposure", "scorecard", "dashboard"}
 OPERATOR_TOOLS = {"status", "jobs", "logs", "portfolio", "trend", "tax", "decision"}
 NOW = datetime(2026, 10, 28, 17, 0, tzinfo=UTC)
-README = (
+SPEC = (
     "## 5. Components\n\n### 5.4 Portfolio Manager\n\nThe LLM.\n\n"
     "## 16. Decision log\n\n| 37 | The MCP server | Read-only. |\n"
 )
@@ -49,7 +49,7 @@ def _public(doc: dict[str, Any] | None = None) -> ServerDeps:
         snapshot=_Snapshot(snapshot() if doc is None else doc),
         redact=Redactor(["s3cret"]),
         now=lambda: NOW,
-        readme=lambda: README,
+        spec=lambda: SPEC,
     )
 
 
@@ -237,8 +237,8 @@ async def test_logs_without_cloudwatch(operator_deps: ServerDeps) -> None:
 @pytest.mark.anyio
 async def test_the_documents() -> None:
     async with Client(build_server(_public())) as client:
-        index = await client.read_resource("auratrade://readme")
-        section = await client.read_resource("auratrade://readme/5.4")
+        index = await client.read_resource("auratrade://spec")
+        section = await client.read_resource("auratrade://spec/5.4")
         entry = await client.read_resource("auratrade://decision/37")
         decisions = await client.read_resource("auratrade://decisions")
         runbook = await client.read_resource("auratrade://runbook")
@@ -258,7 +258,7 @@ async def test_the_documents() -> None:
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "uri", ["auratrade://readme/9.9", "auratrade://decision/1", "auratrade://decision/abc"]
+    "uri", ["auratrade://spec/9.9", "auratrade://decision/1", "auratrade://decision/abc"]
 )
 async def test_a_missing_document(uri: str) -> None:
     from mcp.shared.exceptions import MCPError

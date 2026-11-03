@@ -1,1 +1,1 @@
-"""The Claude client and the Portfolio Manager: its facts, tools, schema and prompt (README §9)."""
+"""The Claude client and the Portfolio Manager: its facts, tools, schema and prompt (spec §9)."""

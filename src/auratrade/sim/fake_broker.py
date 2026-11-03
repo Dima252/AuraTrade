@@ -1,6 +1,6 @@
 """The in-memory broker: the order layer's `Broker` and `PriceSource`, for tests.
 
-It models what spike 0.3b found on Alpaca paper (README #18-116, #21):
+It models what the orders spike (`docs/spikes/alpaca-orders.md`) found on Alpaca paper (#18, #21):
 - an OTO's stop leg takes the parent's time-in-force and quantity; neither can change later,
   only the stop price (`422 qty cannot be changed for advanced orders`)
 - the leg stays `held` while the parent is partly filled, and goes live when it fills

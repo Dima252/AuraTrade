@@ -1,4 +1,4 @@
-"""The Portfolio Manager's system prompt (README §5.4, §9; #4).
+"""The Portfolio Manager's system prompt (spec §5.4, §9; #4).
 
 Versioned: ``VERSION`` changes with the wording, and the id stored with each decision is the
 version plus a hash of the rendered text, so a change to the limits it quotes (filled from

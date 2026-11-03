@@ -1,4 +1,4 @@
-"""`portfolio_manager` (08:45 on E, and on events; README §3, §5.4): the LLM's decision,
+"""`portfolio_manager` (08:45 on E, and on events; spec §3, §5.4): the LLM's decision,
 through the guardrails, into `portfolio_targets`.
 
     uv run python -m auratrade.jobs.portfolio_manager --session 2026-11-02 --dry-run
@@ -7,7 +7,7 @@ through the guardrails, into `portfolio_targets`.
 
 On E it decides from the facts `allocate` wrote on R; on other sessions it does nothing. An
 event (raised by hand, `--event`) decides at once and may only reduce risk. **A
-paid Claude call** (about $0.15-0.30, README §9). A failure holds (#6) and alerts; so do
+paid Claude call** (about $0.15-0.30, spec §9). A failure holds (#6) and alerts; so do
 the guardrails' clips and a decision above `llm.cost_alert_usd`. It sends no orders: it writes
 the targets, and `execute_close` trades them.
 """

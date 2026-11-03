@@ -1,4 +1,4 @@
-"""Trading sessions and the session-counting helpers (README §4).
+"""Trading sessions and the session-counting helpers (spec §4).
 
 Every market window counts sessions, never calendar days. A date outside the synced range
 is *unknown*, not closed: the helpers raise `CalendarUnavailableError`, so jobs fail closed

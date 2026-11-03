@@ -1,4 +1,4 @@
-"""The live drawdown halt (README §7.3), on the account the order layer trades.
+"""The live drawdown halt (spec §7.3), on the account the order layer trades.
 
 The state is the `halt_drawdown` flag in `system_flags`, with its running peak (and the session
 it turned on) in the flag's details, moved only by `core_allocation`'s pure functions, the same

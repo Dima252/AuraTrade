@@ -1,17 +1,17 @@
-"""`execute_close` (15:40; README §3, §5.6.3, §7): the portfolio's trades.
+"""`execute_close` (15:40; spec §3, §5.6.3, §7): the portfolio's trades.
 
     uv run python -m auratrade.jobs.execute_close --session 2026-11-02 --dry-run
 
 Under the order lock: reconcile and enforce the stop invariant (the kill switch cancels resting
 buys), then
 - **the drawdown halt's sale**, on any session while the halt is on and the leveraged fund is
-  held: into the market fund (README §7.3)
+  held: into the market fund (spec §7.3)
 - **the rebalance** on E, and on its retry (`portfolio.retry_sessions`) while E's run didn't
   finish: toward the decided targets (`execution.portfolio`). Each run is recorded on its
   `portfolio_targets` row; one that finished sets `executed_at`, so a second run that day, or
   the retry, does nothing.
 - **the stop's proceeds**, on any session after the rebalance finished: a stop fill of the
-  leveraged fund since then goes into the cash fund until the next E (README §7.2).
+  leveraged fund since then goes into the cash fund until the next E (spec §7.2).
 
 No trades on a half day: its 15:40 is after the close, and E has moved past it. In dry_run the
 plan is reported and recorded, and no order is sent.

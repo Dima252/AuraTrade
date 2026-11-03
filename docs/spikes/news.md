@@ -1,7 +1,7 @@
 # Spike 0.3f: news
 
 **Run:** 2026-10-08 after the close (Alpaca `GET /v1beta1/news`, free plan, `dev` keys).
-**Result:** Alpaca's news API serves the Portfolio Manager's headlines on demand (README §5.4), with the notes below.
+**Result:** Alpaca's news API serves the Portfolio Manager's headlines on demand (spec §5.4), with the notes below.
 
 ## Results
 

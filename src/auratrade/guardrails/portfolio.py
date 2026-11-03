@@ -1,4 +1,4 @@
-"""The portfolio's guardrails (README §8; #5, #4), pure.
+"""The portfolio's guardrails (spec §8; #5, #4), pure.
 
 They run on every Portfolio Manager decision before its targets reach `portfolio_targets`:
 - **The level:** the rule level from code (`strategies/core_allocation.py`) plus the LLM's
@@ -45,7 +45,7 @@ TAX_SEARCH_STEPS = 40
 
 @dataclass(frozen=True, slots=True)
 class PortfolioDecision:
-    """What the Portfolio Manager proposes (README §9)."""
+    """What the Portfolio Manager proposes (spec §9)."""
 
     core_shift: float
     satellite: Mapping[str, float]

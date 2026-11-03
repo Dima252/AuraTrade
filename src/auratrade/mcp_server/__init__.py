@@ -1,1 +1,1 @@
-"""The read-only MCP server (README §5.10, #37)."""
+"""The read-only MCP server (spec §5.10, #37)."""

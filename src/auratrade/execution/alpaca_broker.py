@@ -1,4 +1,4 @@
-"""`Broker` and `PriceSource` on Alpaca (README §5.6): orders through alpaca-py's trading client,
+"""`Broker` and `PriceSource` on Alpaca (spec §5.6): orders through alpaca-py's trading client,
 always on the paper endpoint (CLAUDE.md §3.1); prices from IEX (#23).
 
 Errors are mapped to the order layer's: a 5xx or a lost connection is `BrokerUnavailableError`

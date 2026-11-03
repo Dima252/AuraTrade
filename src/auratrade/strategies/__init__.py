@@ -1,1 +1,1 @@
-"""The portfolio's trend dial (`core_allocation`, README §6)."""
+"""The portfolio's trend dial (`core_allocation`, spec §6)."""
