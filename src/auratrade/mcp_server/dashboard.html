@@ -360,8 +360,8 @@ button:focus-visible, .hit:focus-visible, summary:focus-visible { outline: 2px s
         C.lineChart(host, {
           days,
           lines,
-          format: (v) => fmtPct(v),
-          axisFormat: (v) => fmtPct(v, Math.abs(v) < 0.1 && v !== 0 ? 1 : 0),
+          format: C.pctValue,
+          axisFormat: C.pctAxis,
           label: `Return since the trial began, ${afterTax ? "after" : "before"} tax`,
           zero: true,
         }),
@@ -506,14 +506,16 @@ button:focus-visible, .hit:focus-visible, summary:focus-visible { outline: 2px s
     const latest = doc.exposure[doc.exposure.length - 1];
     const byDay = Object.fromEntries(doc.exposure.map((e) => [e.session, e]));
     const entry = doc.journal[doc.journal.length - 1];
-    root.replaceChildren(
+    // A part without data is null; replaceChildren would print it as the text "null".
+    const parts = [
       header(doc, toggle),
       hero(doc),
       returnsHost,
       latest ? el("div", { class: "pair" }, exposure(latest), satellite(latest)) : null,
       entry ? decision(entry, byDay[entry.session], doc.decisions_total || doc.journal.length) : null,
       el("p", { class: "foot", text: doc.note || "" }),
-    );
+    ];
+    root.replaceChildren(...parts.filter(Boolean));
     returns();
   }
 })();

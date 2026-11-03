@@ -54,18 +54,36 @@ window.AuraChart = (() => {
     return `${MONTHS[m - 1]} ${y}`;
   }
 
-  function fmtPct(x, digits = 1, signed = true) {
-    if (!isNum(x)) return "–";
+  // x × 100 at `digits` decimals, signed by the rounded value: a small loss that rounds to
+  // zero reads 0.0, not −0.0.
+  function hundredths(x, digits, signed) {
     const v = (x * 100).toFixed(digits);
-    const sign = signed && x > 0 ? "+" : "";
-    return `${sign}${v.replace("-", "−")}%`;
+    if (Number(v) === 0) return v.replace("-", "");
+    return `${signed && Number(v) > 0 ? "+" : ""}${v.replace("-", "−")}`;
+  }
+
+  function fmtPct(x, digits = 1, signed = true) {
+    return isNum(x) ? `${hundredths(x, digits, signed)}%` : "–";
   }
 
   function fmtPts(x, digits = 1) {
-    if (!isNum(x)) return "–";
-    const v = (x * 100).toFixed(digits);
-    return `${x > 0 ? "+" : ""}${v.replace("-", "−")} pts`;
+    return isNum(x) ? `${hundredths(x, digits, true)} pts` : "–";
   }
+
+  // The fewest decimals that show a step exactly (0.05 → 2, 2.5 → 1, 10 → 0), so adjacent
+  // ticks never print the same label.
+  function stepDigits(step) {
+    for (let d = 0; d < 4; d++) {
+      const s = step * 10 ** d;
+      if (Math.abs(s - Math.round(s)) < 1e-6) return d;
+    }
+    return 4;
+  }
+
+  // A return chart's formats, given its tick step: the axis at the step's precision; the
+  // values (line ends, tooltip) at one decimal, or the axis's precision when that is finer.
+  const pctAxis = (v, step) => fmtPct(v, stepDigits(step * 100));
+  const pctValue = (v, step) => fmtPct(v, Math.max(1, stepDigits(step * 100)));
 
   function fmtLevel(x) {
     return isNum(x) ? `${x.toFixed(2).replace(/0$/, "")}x` : "–";
@@ -171,7 +189,7 @@ window.AuraChart = (() => {
         const isZero = zero && Math.abs(v) < stepY / 1000;
         chart.append(
           svg("line", { x1: m.left, x2: m.left + w, y1: yy, y2: yy, class: isZero ? "axis" : "grid" }),
-          svg("text", { x: m.left - 8, y: yy, class: "tick", "text-anchor": "end", dy: "0.32em", text: axisFormat(v) }),
+          svg("text", { x: m.left - 8, y: yy, class: "tick", "text-anchor": "end", dy: "0.32em", text: axisFormat(v, stepY) }),
         );
       }
 
@@ -238,7 +256,7 @@ window.AuraChart = (() => {
         if (overflow > 0) ends.forEach((e) => (e.yy -= overflow));
         for (const e of ends) {
           const t = svg("text", { x: m.left + w + 8, y: e.yy, dy: "0.32em", class: "end" });
-          t.append(svg("tspan", { class: "end-value", text: format(e.v) }), svg("tspan", { dx: "6", text: e.l.label }));
+          t.append(svg("tspan", { class: "end-value", text: format(e.v, stepY) }), svg("tspan", { dx: "6", text: e.l.label }));
           chart.append(t);
         }
       }
@@ -278,7 +296,7 @@ window.AuraChart = (() => {
         tip.replaceChildren(
           el("div", { class: "tip-day", text: fmtDay(days[at]) }),
           ...rows.map(({ l, v }) =>
-            el("div", { class: "tip-row" }, el("span", { class: `key ${l.cls}` }), el("strong", { text: format(v) }), el("span", { text: l.label })),
+            el("div", { class: "tip-row" }, el("span", { class: `key ${l.cls}` }), el("strong", { text: format(v, stepY) }), el("span", { text: l.label })),
           ),
         );
         tip.hidden = false;
@@ -358,6 +376,9 @@ window.AuraChart = (() => {
     fmtPts,
     fmtLevel,
     fmtUsd,
+    stepDigits,
+    pctAxis,
+    pctValue,
     returns,
     present,
     last,
