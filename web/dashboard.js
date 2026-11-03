@@ -128,8 +128,8 @@
       C.lineChart(host, {
         days,
         lines,
-        format: (v) => fmtPct(v),
-        axisFormat: (v) => fmtPct(v, Math.abs(v) < 0.1 && v !== 0 ? 1 : 0),
+        format: C.pctValue,
+        axisFormat: C.pctAxis,
         label: `Return since the trial began, ${afterTax ? "after" : "before"} tax`,
         zero: true,
       });
@@ -358,7 +358,8 @@
     const latest = doc.exposure[doc.exposure.length - 1];
     const byDay = Object.fromEntries(doc.exposure.map((e) => [e.session, e]));
     const entry = doc.journal[doc.journal.length - 1];
-    root.replaceChildren(
+    // A part without data is null; replaceChildren would print it as the text "null".
+    const parts = [
       el("div", { class: "dash-meta" }, el("p", { text: `Through ${fmtDay(doc.through)} · ${where}` }), toggle),
       balance(doc),
       returnsHost,
@@ -368,7 +369,8 @@
       doc.exposure.length ? exposureHistory(doc) : null,
       earlier(doc, byDay),
       doc.note ? el("p", { class: "note", text: doc.note }) : null,
-    );
+    ];
+    root.replaceChildren(...parts.filter(Boolean));
     returns();
   }
 
